@@ -1811,6 +1811,7 @@
   var examProtocol = { name: "", data: null, refresh: null };
   var tableDriveApi = null; // preenchida pela cena 3D (aquisição dirigida pela mesa)
   var consoleUiApi = null;  // preenchida pelo console guiado (modo/etapa atuais)
+  var acquisitionUiApi = null; // sincroniza os quatro quadrantes da aquisição
 
   function initPatients() {
     var fPront = document.getElementById("pac-prontuario");
@@ -2154,6 +2155,7 @@
       examProtocol.name = p ? p.nome : "";
       examProtocol.data = p || null;
       if (examProtocol.refresh) examProtocol.refresh();
+      if (acquisitionUiApi && acquisitionUiApi.refresh) acquisitionUiApi.refresh();
     }
 
     function setupIsEditable() {
@@ -2169,6 +2171,7 @@
       var p = byId(currentId); if (!p) { closeEditor(); return; }
       FIELDS.forEach(function (f) { var el = inputEl(f); if (el) p[FIELD_KEYS[f]] = el.value.trim(); });
       if (examSessionApi && examSessionApi.setProtocol) examSessionApi.setProtocol(p);
+      if (acquisitionUiApi && acquisitionUiApi.refresh) acquisitionUiApi.refresh();
       persist(p).then(function () { closeEditor(); showMessage("Protocolo \"" + p.nome + "\" salvo" + (memoryFallback ? " (temporário)." : "."), "success"); });
     });
     if (btnNew) btnNew.addEventListener("click", function () {
@@ -2228,7 +2231,17 @@
     var topo = document.getElementById("ws-topo");
     var topoImg = document.getElementById("ws-topo-img");
     var topoBox = document.getElementById("ws-topo-box");
+    var topoHost = document.getElementById("acq-topogram-body");
+    var topoStatus = document.getElementById("acq-topogram-status");
     var readout = document.getElementById("ws-topo-readout");
+    var sequenceList = document.getElementById("acq-sequence-list");
+    var techName = document.getElementById("acq-tech-name");
+    var techKv = document.getElementById("acq-tech-kv");
+    var techMas = document.getElementById("acq-tech-mas");
+    var techPitch = document.getElementById("acq-tech-pitch");
+    var techColim = document.getElementById("acq-tech-colim");
+    var techThick = document.getElementById("acq-tech-thick");
+    var techDirection = document.getElementById("acq-tech-direction");
     var lines = topoBox ? topoBox.querySelectorAll(".ws-topo__line") : [];
     if (!box || !img || !slider || !startBtn) return;
 
@@ -2261,10 +2274,51 @@
     var lastSlice = 0; // último corte pintado na aquisição (p/ review)
     var lastAcq = null; // parâmetros da última aquisição (p/ relatório)
 
+    function renderTechnique() {
+      var p = (examProtocol && examProtocol.data) || {};
+      if (techName) techName.textContent = p.nome || "—";
+      if (techKv) techKv.textContent = p.kv || "—";
+      if (techMas) techMas.textContent = p.mas || "—";
+      if (techPitch) techPitch.textContent = p.pitch || "—";
+      if (techColim) techColim.textContent = p.colimacao || "—";
+      if (techThick) techThick.textContent = p.espessura || "—";
+      if (techDirection) techDirection.textContent = p.direcao === "craniocaudal" ? "Crânio-caudal" : (p.direcao ? "Caudo-cranial" : "—");
+    }
+
+    function renderSequence(currentPhase) {
+      if (!sequenceList) return;
+      var order = { topogram: 0, volume: 1, review: 2 };
+      var currentStage = (currentPhase === "review") ? "review"
+        : ((currentPhase === "plan" || currentPhase === "moving" || currentPhase === "volAcq") ? "volume" : "topogram");
+      var currentIndex = order[currentStage];
+      var items = sequenceList.querySelectorAll("[data-acq-stage]");
+      Array.prototype.forEach.call(items, function (item) {
+        var index = order[item.getAttribute("data-acq-stage")];
+        item.classList.toggle("is-current", index === currentIndex);
+        item.classList.toggle("is-complete", index < currentIndex || (currentPhase === "review" && index < 2));
+      });
+      if (topoStatus) {
+        var labels = {
+          idle: "Aguardando", topoAcq: "Em aquisição", plan: "Planejamento",
+          moving: "Posicionando mesa", volAcq: "Concluído", review: "Concluído"
+        };
+        topoStatus.textContent = labels[currentPhase] || "Aguardando";
+      }
+    }
+
+    function renderAcquisitionPanels() {
+      renderTechnique();
+      renderSequence(phase);
+    }
+
+    acquisitionUiApi = { refresh: renderAcquisitionPanels };
+    renderAcquisitionPanels();
+
     // Anuncia a fase do exame (idle/topoAcq/plan/moving/volAcq/review)
     // para módulos desacoplados — ex.: o PiP da sala 3D no modo console.
     function announcePhase(p, skipSession) {
       if (!skipSession && examSessionApi && examSessionApi.setPhase) examSessionApi.setPhase(p);
+      renderAcquisitionPanels();
       try { document.dispatchEvent(new CustomEvent("ct:phase", { detail: { phase: p } })); } catch (e) { /* sem suporte */ }
     }
     // Referência espacial do topograma: onde a mesa ESTAVA quando cada
@@ -2296,7 +2350,7 @@
       if (!topo || topo.hidden || !box) return;
       var natW = topoImg.naturalWidth || 814;
       var natH = topoImg.naturalHeight || 700;
-      var r = box.getBoundingClientRect();
+      var r = (topoHost || box).getBoundingClientRect();
       var availW = Math.max(60, r.width - 24);
       var availH = Math.max(60, r.height - 24);
       var s = Math.min(availW / natW, availH / natH);
@@ -2693,7 +2747,8 @@
     function toVolAcq() {
       phase = "volAcq"; loaded = false;
       announcePhase("volAcq");
-      if (topo) topo.hidden = true;
+      if (topo && !(document.body.classList.contains("workflow-exam") && !document.body.classList.contains("is-mobile"))) topo.hidden = true;
+      if (topoBox) topoBox.hidden = true;
       if (readout) readout.hidden = true;
       img.hidden = false; ctrl.hidden = false;
       slider.disabled = true;
@@ -3352,6 +3407,7 @@
       if (checkPositionText) checkPositionText.textContent = positionLabel(position);
       startBtn.disabled = !validation.ok;
       startBtn.title = validation.ok ? "Abrir a tela de aquisição" : validation.errors.map(function (error) { return error.message; }).join(" ");
+      if (acquisitionUiApi && acquisitionUiApi.refresh) acquisitionUiApi.refresh();
     }
 
     function setWorkflow(mode) {
@@ -3426,7 +3482,7 @@
     var pipHide = document.getElementById("pip-hide");
     var acq3d = document.getElementById("acq3d");
     var acq3dBody = document.getElementById("acq3d-body");
-    var viewer = document.getElementById("ws-slice-viewer");
+    var viewer = document.querySelector(".acq-image-body") || document.getElementById("ws-slice-viewer");
     var vp = document.querySelector("#pane-sim .viewport");
     if (!pip || !pipBody || !viewer || !vp) return;
 

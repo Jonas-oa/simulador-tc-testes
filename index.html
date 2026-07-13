@@ -171,49 +171,76 @@
       <header class="dash-pane__head"><h2 class="dash-pane__title">Aquisição de exames</h2></header>
       <div class="dash-pane__body dash-pane__body--acq">
         <div class="acq3d" id="acq3d" hidden><span class="acq3d__tag">Sala 3D — mesa em movimento</span><div class="acq3d__body" id="acq3d-body"></div></div>
-        <div class="ws-viewer ws-viewer--full" id="ws-slice-viewer" aria-label="Área de aquisição e visualização de imagens">
-          <img id="ws-slice-img" class="ws-viewer__img" alt="Corte axial de TC de crânio" hidden>
-          <div class="ws-topo" id="ws-topo" hidden>
-            <img id="ws-topo-img" class="ws-topo__img" alt="Topograma lateral de crânio">
-            <div class="ws-topo__box" id="ws-topo-box" aria-hidden="true">
-              <div class="ws-topo__rect" id="ws-topo-rect"></div>
-              <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-top" data-edge="top" title="FOV — limite anterior"></div>
-              <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-bottom" data-edge="bottom" title="FOV — limite posterior"></div>
-              <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-left" data-edge="left" title="Limite da faixa — vértice"></div>
-              <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-right" data-edge="right" title="Limite da faixa — base do crânio"></div>
+        <div class="ws-viewer ws-viewer--full acq-workspace" id="ws-slice-viewer" aria-label="Aquisição em quatro quadrantes">
+          <section class="acq-quadrant acq-quadrant--topogram" aria-labelledby="acq-title-topogram">
+            <header class="acq-quadrant__head"><h3 id="acq-title-topogram">Topograma</h3><span id="acq-topogram-status">Aguardando</span></header>
+            <div class="acq-quadrant__body" id="acq-topogram-body">
+              <div class="ws-topo" id="ws-topo" hidden>
+                <img id="ws-topo-img" class="ws-topo__img" alt="Topograma lateral de crânio">
+                <div class="ws-topo__box" id="ws-topo-box" aria-hidden="true">
+                  <div class="ws-topo__rect" id="ws-topo-rect"></div>
+                  <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-top" data-edge="top" title="FOV — limite anterior"></div>
+                  <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-bottom" data-edge="bottom" title="FOV — limite posterior"></div>
+                  <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-left" data-edge="left" title="Limite da faixa — vértice"></div>
+                  <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-right" data-edge="right" title="Limite da faixa — base do crânio"></div>
+                </div>
+              </div>
+              <span class="ws-viewer__placeholder" id="ws-viewer-placeholder">Exame não iniciado</span>
             </div>
-          </div>
-          <span class="ws-viewer__placeholder" id="ws-viewer-placeholder">Exame não iniciado</span>
+          </section>
 
-          <div class="pip" id="pip-3d" hidden>
-            <div class="pip__bar" id="pip-bar"><span>Sala 3D — mesa em movimento</span><button class="pip__hide" id="pip-hide" type="button" title="Ocultar janela">—</button></div>
-            <div class="pip__body" id="pip-body"></div>
-          </div>
-
-          <div class="ws-report" id="ws-report" hidden>
-            <h3 class="ws-report__title">Relatório do exame — didático</h3>
-            <div class="ws-report__body" id="ws-report-body"></div>
-                        <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="ws-report-close" type="button">Ver cortes</button></div>
-          </div>
-
-          <div class="ws-overlay ws-overlay--top" aria-label="Paciente em exame">
-            <ul class="ws-list ws-list--overlay" id="ws-patient-list"></ul>
-          </div>
-
-          <div class="ws-overlay ws-overlay--bottom">
-            <p class="ws-topo-readout" id="ws-topo-readout" hidden></p>
-            <div class="ws-viewer-ctrl" id="ws-viewer-ctrl" hidden>
-              <input type="range" id="ws-slice-slider" min="0" max="0" value="0" step="1" aria-label="Navegar cortes">
-              <span class="ws-slice-counter" id="ws-slice-counter">—</span>
+          <section class="acq-quadrant acq-quadrant--image" aria-labelledby="acq-title-image">
+            <header class="acq-quadrant__head"><h3 id="acq-title-image">Aquisição</h3><ul class="ws-list ws-list--overlay" id="ws-patient-list"></ul></header>
+            <div class="acq-quadrant__body acq-image-body">
+              <img id="ws-slice-img" class="ws-viewer__img" alt="Corte axial de TC de crânio" hidden>
+              <div class="ws-viewer-ctrl" id="ws-viewer-ctrl" hidden>
+                <input type="range" id="ws-slice-slider" min="0" max="0" value="0" step="1" aria-label="Navegar cortes">
+                <span class="ws-slice-counter" id="ws-slice-counter">—</span>
+              </div>
+              <div class="pip" id="pip-3d" hidden>
+                <div class="pip__bar" id="pip-bar"><span>Sala 3D — mesa em movimento</span><button class="pip__hide" id="pip-hide" type="button" title="Ocultar janela">—</button></div>
+                <div class="pip__body" id="pip-body"></div>
+              </div>
+              <div class="ws-report" id="ws-report" hidden>
+                <h3 class="ws-report__title">Relatório do exame — didático</h3>
+                <div class="ws-report__body" id="ws-report-body"></div>
+                <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="ws-report-close" type="button">Ver cortes</button></div>
+              </div>
             </div>
-            <div class="ws-actions ws-actions--center">
-              <button class="ws-btn" id="ws-exam-move" type="button" hidden>Mover</button>
-              <button class="ws-btn" id="ws-exam-report" type="button" hidden>Relatório</button>
-              <button class="ws-btn ws-btn--primary" id="ws-exam-start" type="button">Iniciar</button>
-              <button class="ws-btn ws-btn--danger" id="ws-exam-stop" type="button" disabled>Stop</button>
+          </section>
+
+          <section class="acq-quadrant acq-quadrant--sequences" aria-labelledby="acq-title-sequences">
+            <header class="acq-quadrant__head"><h3 id="acq-title-sequences">Sequências do exame</h3></header>
+            <div class="acq-quadrant__body">
+              <ol class="acq-sequences" id="acq-sequence-list">
+                <li data-acq-stage="topogram"><span>1</span><strong>Topograma</strong><small>Localização e planejamento</small></li>
+                <li data-acq-stage="volume"><span>2</span><strong>Volume helicoidal</strong><small>Série axial programada</small></li>
+                <li data-acq-stage="review"><span>3</span><strong>Revisão</strong><small>Navegação dos cortes</small></li>
+              </ol>
+              <p class="ws-note" id="ws-viewer-caption">Volume anonimizado de TC de crânio para visualização educacional. Não constitui interpretação diagnóstica.</p>
             </div>
-            <p class="ws-note ws-note--overlay" id="ws-viewer-caption">Ao iniciar: volume real anonimizado de TC de crânio, de licença livre. A janela é apenas de exibição — não constitui interpretação diagnóstica.</p>
-          </div>
+          </section>
+
+          <section class="acq-quadrant acq-quadrant--technique" aria-labelledby="acq-title-technique">
+            <header class="acq-quadrant__head"><h3 id="acq-title-technique">Técnica do protocolo</h3><strong id="acq-tech-name">—</strong></header>
+            <div class="acq-quadrant__body acq-technique-body">
+              <dl class="acq-technique">
+                <div><dt>kV</dt><dd id="acq-tech-kv">—</dd></div>
+                <div><dt>mAs</dt><dd id="acq-tech-mas">—</dd></div>
+                <div><dt>Pitch</dt><dd id="acq-tech-pitch">—</dd></div>
+                <div><dt>Colimação</dt><dd id="acq-tech-colim">—</dd></div>
+                <div><dt>Espessura</dt><dd id="acq-tech-thick">—</dd></div>
+                <div><dt>Direção</dt><dd id="acq-tech-direction">—</dd></div>
+              </dl>
+              <p class="ws-topo-readout" id="ws-topo-readout" hidden></p>
+              <div class="ws-actions ws-actions--center acq-actions">
+                <button class="ws-btn" id="ws-exam-move" type="button" hidden>Mover mesa</button>
+                <button class="ws-btn" id="ws-exam-report" type="button" hidden>Relatório</button>
+                <button class="ws-btn ws-btn--primary" id="ws-exam-start" type="button">Iniciar</button>
+                <button class="ws-btn ws-btn--danger" id="ws-exam-stop" type="button" disabled>Stop</button>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </section>

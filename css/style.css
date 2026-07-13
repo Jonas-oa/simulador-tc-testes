@@ -1377,3 +1377,87 @@ body.workflow-exam:not(.is-mobile) .console-steps { display: none !important; }
   .prep-status__item { padding-inline: 10px; }
   .prep-readiness { grid-template-columns: repeat(3, 1fr) minmax(240px, 1.05fr); gap: 7px; padding-inline: 8px; }
 }
+
+/* =====================================================================
+   AQUISIÇÃO — quatro quadrantes simples
+   1 Topograma · 2 Aquisição · 3 Sequências · 4 Técnica do protocolo.
+   ===================================================================== */
+body.workflow-exam:not(.is-mobile) #pane-acq > .dash-pane__head { display: none; }
+body.workflow-exam:not(.is-mobile) #pane-acq .dash-pane__body--acq { padding: 6px; background: var(--bg-void); }
+body.workflow-exam:not(.is-mobile) .acq-workspace {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  gap: 6px; min-height: 0; align-items: stretch; justify-content: stretch;
+  background: var(--bg-void); overflow: hidden;
+}
+.acq-quadrant {
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  overflow: hidden; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--bg-display); color: #e8edf2;
+}
+.acq-quadrant__head {
+  flex: 0 0 auto; min-height: 38px; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 7px 11px; border-bottom: 1px solid var(--border-subtle);
+  background: rgba(18, 28, 39, 0.96);
+}
+.acq-quadrant__head h3 { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.035em; text-transform: uppercase; }
+.acq-quadrant__head > span,
+.acq-quadrant__head > strong { color: var(--text-secondary); font-size: 0.68rem; font-weight: 500; }
+.acq-quadrant__body {
+  position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 8px; overflow: hidden;
+}
+.acq-quadrant--topogram .ws-topo { max-width: 100%; max-height: 100%; }
+.acq-quadrant--image .acq-quadrant__head { align-items: flex-start; }
+.acq-quadrant--image .ws-list--overlay { margin: 0; max-width: 70%; text-align: right; }
+.acq-quadrant--image .ws-list--overlay .ws-list__name { font-size: 0.74rem; }
+.acq-quadrant--image .ws-list--overlay .ws-list__meta { font-size: 0.62rem; }
+.acq-image-body { padding-bottom: 38px; }
+.acq-image-body .ws-viewer__img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.acq-image-body .ws-viewer-ctrl {
+  position: absolute; left: 9px; right: 9px; bottom: 7px; z-index: 3;
+  padding: 5px 8px; border-radius: 5px; background: rgba(4, 9, 14, 0.78);
+}
+
+.acq-sequences { width: 100%; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.acq-sequences li {
+  min-width: 0; min-height: 82px; display: grid; grid-template-columns: 28px 1fr; align-content: center;
+  column-gap: 8px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 6px;
+  color: var(--text-muted); background: rgba(255,255,255,0.018);
+}
+.acq-sequences li > span {
+  grid-row: 1 / 3; display: grid; place-items: center; align-self: center; width: 26px; height: 26px;
+  border: 1px solid currentColor; border-radius: 50%; font-size: 0.68rem;
+}
+.acq-sequences li strong { align-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.72rem; }
+.acq-sequences li small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.61rem; }
+.acq-sequences li.is-current { color: var(--accent-cyan); border-color: var(--accent-cyan); background: rgba(53,197,224,0.09); }
+.acq-sequences li.is-current strong { color: #fff; }
+.acq-sequences li.is-complete { color: #37d67a; border-color: rgba(55,214,122,0.45); }
+.acq-quadrant--sequences .ws-note { width: 100%; margin-top: 10px; text-align: center; }
+
+.acq-technique-body { align-items: stretch; justify-content: flex-start; gap: 8px; }
+.acq-technique { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.acq-technique > div { min-width: 0; padding: 7px 9px; border: 1px solid var(--border-subtle); border-radius: 5px; background: rgba(255,255,255,0.018); }
+.acq-technique dt { margin: 0 0 3px; color: var(--text-muted); font-size: 0.59rem; text-transform: uppercase; }
+.acq-technique dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e8edf2; font: 0.72rem var(--font-mono); }
+.acq-technique-body .ws-topo-readout { width: 100%; min-height: 30px; padding: 6px 8px; border-radius: 5px; background: rgba(255,255,255,0.025); font-size: 0.66rem; }
+.acq-actions { margin-top: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 7px; }
+.acq-actions .ws-btn { min-height: 38px; margin: 0; }
+.acq-actions #ws-exam-stop { grid-column: 1 / -1; }
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .acq-sequences { gap: 5px; }
+  .acq-sequences li { grid-template-columns: 22px 1fr; padding: 7px; }
+  .acq-sequences li > span { width: 21px; height: 21px; }
+  .acq-technique { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+body.is-mobile .acq-workspace {
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+  gap: 8px; min-height: 0; overflow: visible; background: var(--bg-void);
+}
+body.is-mobile .acq-quadrant { flex: 0 0 auto; width: 100%; min-height: 230px; }
+body.is-mobile .acq-quadrant--sequences,
+body.is-mobile .acq-quadrant--technique { min-height: 180px; }
+body.is-mobile .acq-sequences { grid-template-columns: 1fr; }
+body.is-mobile .acq-technique { grid-template-columns: repeat(2, minmax(0, 1fr)); }
