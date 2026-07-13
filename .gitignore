@@ -1,0 +1,5 @@
+node_modules/
+package.json
+package-lock.json
+
+# esbuild cache/temp (mantemos apenas o script.js final gerado)

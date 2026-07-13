@@ -1,0 +1,1232 @@
+/* =====================================================================
+   SIMULADOR TC — FOLHA DE ESTILOS PRINCIPAL
+   Organização: 1) Tokens  2) Reset  3) Layout  4) Componentes  5) Estados
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1) DESIGN TOKENS
+   Paleta inspirada em consoles reais de TC: corpo grafite/preto,
+   acentos ciano (lasers/indicadores) e âmbar (avisos), com um
+   tema claro equivalente para ambientes de sala bem iluminada.
+--------------------------------------------------------------------- */
+:root {
+  /* Tema escuro (padrão) */
+  --bg-void: #0a0e14;
+  --bg-panel: #151b24;
+  --bg-panel-raised: #1c2430;
+  --bg-display: #060a10;
+  --border-subtle: #2a3342;
+  --border-strong: #3a4658;
+
+  --text-primary: #e8edf2;
+  --text-secondary: #9aa7b8;
+  --text-muted: #5f6c7d;
+
+  --accent-cyan: #35c5e0;
+  --accent-cyan-dim: #1c6b7a;
+  --accent-amber: #ffb020;
+  --accent-red: #ff4444;
+  --accent-green: #3ddc84;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --transition-fast: 120ms ease;
+  --transition-medium: 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tema claro */
+:root[data-theme="light"],
+body[data-theme="light"] {
+  --bg-void: #e9edf2;
+  --bg-panel: #f5f7f9;
+  --bg-panel-raised: #ffffff;
+  --bg-display: #0e1620;
+  --border-subtle: #d3d9e0;
+  --border-strong: #b7c0cc;
+
+  --text-primary: #1a222c;
+  --text-secondary: #4d5a6a;
+  --text-muted: #8792a0;
+
+  --accent-cyan-dim: #cfeef5;
+  --shadow-panel: 0 6px 18px rgba(30, 40, 55, 0.12);
+}
+
+/* ---------------------------------------------------------------------
+   2) RESET MÍNIMO
+--------------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  max-width: 100%;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+button { font-family: inherit; }
+h1, h2, h3, p { margin: 0; }
+svg { display: block; }
+
+/* Foco visível para acessibilidade de teclado */
+button:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Respeita preferência do usuário por menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   3) LAYOUT GERAL
+--------------------------------------------------------------------- */
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: 1fr min(340px, 38%);
+  min-height: 0;
+  gap: 1px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+/* Breakpoint alto de propósito: cobre tanto telas de tablet quanto o
+   modo "Solicitar site para computador" do Chrome no Android, que força
+   uma largura de viewport maior mesmo em telas físicas estreitas. */
+@media (max-width: 1280px) {
+  .app-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(200px, 38vh) auto;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   4) BARRA DE STATUS
+--------------------------------------------------------------------- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 18px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.status-bar__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.status-bar__logo {
+  color: var(--accent-cyan);
+  font-size: 1.2rem;
+}
+.status-bar__title {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+}
+.status-bar__subtitle {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-bar__indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .status-bar__subtitle { display: none; }
+  .status-bar__indicators { gap: 8px; }
+}
+@media (max-width: 420px) {
+  .status-bar { padding: 8px 10px; gap: 8px; }
+  .status-bar__title { font-size: 0.8rem; }
+  .indicator__label { font-size: 0.6rem; }
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.indicator__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: none;
+  transition: var(--transition-medium);
+}
+.indicator[data-state="on"] .indicator__dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px 1px var(--accent-green);
+}
+.indicator[data-indicator="laser"][data-state="on"] .indicator__dot {
+  background: var(--accent-red);
+  box-shadow: 0 0 6px 1px var(--accent-red);
+}
+.indicator[data-indicator="motion"][data-state="on"] .indicator__dot {
+  background: var(--accent-amber);
+  box-shadow: 0 0 6px 1px var(--accent-amber);
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.indicator__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.icon-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan-dim); }
+.icon-btn__icon { width: 18px; height: 18px; fill: currentColor; }
+
+/* ---------------------------------------------------------------------
+   5) VIEWPORT 3D
+--------------------------------------------------------------------- */
+.viewport {
+  position: relative;
+  background: radial-gradient(circle at 50% 35%, #0d1622 0%, var(--bg-void) 70%);
+  min-height: 0;
+  overflow: hidden;
+}
+:root[data-theme="light"] .viewport {
+  background: radial-gradient(circle at 50% 35%, #dfe6ec 0%, var(--bg-void) 70%);
+}
+
+#scene-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* impede que o navegador aplique zoom/pan nativo da página sobre o canvas */
+}
+
+.viewport__overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.viewport__hud {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  background: rgba(10, 14, 20, 0.55);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(6px);
+}
+.viewport__hud--unified {
+  gap: 2px;
+  padding: 6px 10px;
+  min-width: 132px;
+}
+.hud__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.hud__label {
+  font-size: 0.55rem;
+  letter-spacing: 0.07em;
+  color: var(--accent-cyan);
+}
+.hud__value {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+.hud__value small { font-size: 0.58rem; color: var(--text-muted); }
+
+.viewport__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  background: var(--bg-void);
+  transition: opacity var(--transition-medium);
+}
+.viewport__loading[data-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------------
+   6) CONSOLE / PAINEL DE OPERAÇÃO
+--------------------------------------------------------------------- */
+.console {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: var(--bg-panel);
+  overflow-y: auto;
+}
+
+/* Display digital compacto e semitransparente */
+.display {
+  background: var(--bg-display);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.display--compact {
+  background: rgba(6, 10, 16, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 5px 10px;
+}
+.display--compact .display__row {
+  flex-direction: row;
+  gap: 4px;
+}
+.display--compact .display__label {
+  font-size: 0.52rem;
+}
+.display--compact .display__value {
+  font-size: 0.72rem;
+}
+.display__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.display__label {
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan-dim);
+}
+.display__value {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+  text-shadow: 0 0 8px rgba(53, 197, 224, 0.5);
+}
+.display__value--mono { letter-spacing: 0.03em; }
+
+/* Painel de comandos (caixa semitransparente) */
+.panel {
+  position: relative; /* âncora do popover de decúbito */
+  background: rgba(28, 36, 48, 0.72);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel__row {
+  display: grid;
+  gap: 8px;
+}
+.panel__row--top { grid-template-columns: 1fr 1fr 1fr; }
+.panel__row--bottom { grid-template-columns: 1fr 1fr; }
+
+/* Botões gerais do painel */
+.pad-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-panel-raised), var(--bg-panel));
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.pad-btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.pad-btn:active { transform: translateY(1px) scale(0.98); }
+.pad-btn__icon { font-size: 0.95rem; line-height: 1; }
+.pad-btn__label { font-size: 0.66rem; }
+.pad-btn__icon svg { width: 24px; height: 16px; }
+
+.pad-btn--toggle[aria-pressed="true"] {
+  background: var(--accent-cyan-dim);
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+.pad-btn--stop {
+  background: linear-gradient(180deg, var(--accent-red), #c62828);
+  border-color: #c62828;
+  color: #fff;
+  font-weight: 800;
+}
+
+/* D-pad direcional (cruz com Iniciar no centro) */
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 5px;
+  width: min(168px, 58%);
+  aspect-ratio: 1 / 1;
+  margin: 2px auto 0;
+}
+.dpad__btn {
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-panel-raised), var(--bg-panel));
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.dpad__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.dpad__btn:active,
+.dpad__btn.is-active {
+  background: var(--accent-cyan-dim);
+  border-color: var(--accent-cyan);
+  transform: scale(0.96);
+}
+.dpad__btn--up { grid-area: 1 / 2 / 2 / 3; }
+.dpad__btn--left { grid-area: 2 / 1 / 3 / 2; }
+.dpad__btn--center { grid-area: 2 / 2 / 3 / 3; }
+.dpad__btn--right { grid-area: 2 / 3 / 3 / 4; }
+.dpad__btn--down { grid-area: 3 / 2 / 4 / 3; }
+
+/* Botão central Iniciar (verde, destaque) */
+.dpad__btn--center {
+  background: linear-gradient(180deg, var(--accent-green), #2bb86c);
+  border-color: #2bb86c;
+  color: #06210f;
+  font-weight: 800;
+  border-radius: 50%;
+}
+.dpad__btn--center:active { transform: scale(0.94); }
+
+/* ---------------------------------------------------------------------
+   7) PAINEL DE MENSAGENS
+--------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   SELETOR DE POSICIONAMENTO DO PACIENTE
+--------------------------------------------------------------------- */
+.pose-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-panel-raised), var(--bg-panel));
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.pose-toggle:hover { border-color: var(--accent-cyan-dim); }
+.pose-toggle__icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+.pose-toggle__icon svg { width: 100%; height: 100%; }
+.pose-toggle__text {
+  flex: 1;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.pose-toggle__chevron {
+  color: var(--text-muted);
+  transition: transform var(--transition-medium);
+}
+.pose-toggle[aria-expanded="true"] .pose-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+.pose-panel {
+  position: absolute;
+  top: 60px;      /* logo abaixo da linha superior (onde está o botão Decúbito) */
+  left: 10px;
+  right: 10px;
+  z-index: 60;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-display);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.pose-panel[hidden] { display: none; }
+
+.pose-panel__section-title {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-cyan-dim);
+  margin: 4px 0 8px;
+}
+.pose-panel__section-title:not(:first-child) { margin-top: 14px; }
+
+.pose-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.pose-grid--2 { grid-template-columns: 1fr 1fr; }
+
+.pose-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.pose-option:hover { border-color: var(--accent-cyan-dim); color: var(--text-primary); }
+.pose-option[aria-pressed="true"] {
+  border-color: var(--accent-cyan);
+  background: var(--accent-cyan-dim);
+  color: var(--text-primary);
+}
+.pose-option__icon {
+  width: 100%;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+.pose-option__icon svg { width: auto; height: 100%; }
+.pose-option__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.message-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.message-panel__icon {
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+/* =====================================================================
+   AMBIENTE B — ESTAÇÃO DE AQUISIÇÃO (workstation) + ALTERNADOR DE AMBIENTE
+   Adicionado na etapa de workstation. Bloco ADITIVO: não altera as regras
+   acima. Reutiliza os design tokens (tema claro/escuro) já definidos.
+   ===================================================================== */
+
+/* O body é uma grade de 3 linhas: barra de status (1), área central (2) e
+   rodapé (3). Os dois ambientes ocupam a MESMA célula central e só um fica
+   visível por vez (o outro recebe o atributo [hidden]). */
+.status-bar { grid-row: 1; }
+.app-main,
+.workstation-main { grid-row: 2; min-height: 0; }
+.message-panel { grid-row: 3; }
+
+/* Alternador de ambiente (segmented control) na barra de status */
+.env-switch {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-panel-raised);
+}
+.env-switch__btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.env-switch__btn + .env-switch__btn { border-left: 1px solid var(--border-strong); }
+.env-switch__btn--active { background: var(--accent-cyan-dim); color: var(--text-primary); }
+@media (max-width: 420px) {
+  .env-switch__btn { padding: 5px 8px; font-size: 0.68rem; }
+}
+
+/* Container da workstation (rola verticalmente dentro da área central) */
+.workstation-main {
+  display: block;
+  overflow-y: auto;
+  background: var(--bg-void);
+}
+.ws {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ws__topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.ws__title { font-size: 1.05rem; letter-spacing: 0.04em; }
+.ws__subtitle { color: var(--text-muted); font-size: 0.75rem; margin-top: 3px; max-width: 62ch; line-height: 1.4; }
+
+.ws__grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr minmax(200px, 300px);
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .ws__grid { grid-template-columns: 1fr; }
+}
+
+.ws-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ws-card__title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.ws-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ws-list__item {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ws-list__item--active { border-color: var(--accent-cyan-dim); background: var(--bg-panel-raised); }
+.ws-list__name { font-size: 0.82rem; }
+.ws-list__meta { font-size: 0.68rem; color: var(--text-muted); }
+
+.ws-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.ws-field { display: flex; flex-direction: column; gap: 3px; }
+.ws-field--full { grid-column: 1 / -1; }
+.ws-field__label { font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase; }
+.ws-input {
+  background: var(--bg-display);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  width: 100%;
+}
+.ws-input:disabled { color: var(--text-muted); cursor: not-allowed; }
+
+.ws-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.ws-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: var(--radius-md);
+  padding: 9px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
+}
+.ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ws-btn--primary { background: var(--accent-cyan-dim); border-color: var(--accent-cyan); }
+.ws-btn--ghost { background: transparent; }
+
+.ws-viewer {
+  aspect-ratio: 1 / 1;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-display);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ws-viewer__placeholder { color: var(--text-muted); font-size: 0.78rem; }
+
+.ws-note { font-size: 0.68rem; color: var(--text-muted); line-height: 1.35; }
+
+/* Botão de ação destrutiva (excluir protocolo) — herda de .ws-btn */
+.ws-btn--danger { color: var(--accent-red); border-color: var(--accent-red); background: transparent; }
+
+/* Viewer de cortes reais (workstation) */
+.ws-viewer { position: relative; overflow: hidden; }
+.ws-viewer__img { max-width: 100%; max-height: 100%; width: auto; height: auto; background: #000; display: block; }
+.ws-viewer-ctrl { display: flex; align-items: center; gap: 10px; }
+.ws-viewer-ctrl input[type="range"] { flex: 1; min-width: 0; }
+.ws-slice-counter { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-secondary); min-width: 84px; text-align: right; }
+
+/* =====================================================================
+   PAINEL DE 4 QUADRANTES (dashboard) + DIVISÓRIAS ARRASTÁVEIS
+   Substitui o antigo alternador de ambiente: sala 3D, aquisição,
+   protocolos e um quadrante a definir, todos visíveis e redimensionáveis.
+   ===================================================================== */
+.dashboard {
+  grid-row: 2;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  background: var(--bg-void);
+}
+/* Colunas independentes (Opção B): cada coluna tem a própria divisória
+   horizontal; a vertical separa as colunas. As frações são aplicadas pelo
+   JS via flex-basis nos itens "superiores" (coluna esquerda / quadrante de
+   cima); os vizinhos têm flex:1 e preenchem o restante proporcionalmente. */
+.dash-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+}
+.dash-pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+.dash-pane--sim   { background: var(--bg-void); }
+
+.dash-pane__head {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-panel-raised);
+}
+.dash-pane__title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+.dash-pane__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dash-pane__body--tbd { align-items: center; justify-content: center; text-align: center; }
+.dash-tbd-note { font-size: 0.72rem; color: var(--text-muted); }
+
+/* Simulador 3D preenche todo o seu quadrante (sem cabeçalho) */
+#pane-sim .app-main { flex: 1 1 auto; min-height: 0; height: auto; }
+
+/* Divisórias (gutters) */
+.dash-gutter { z-index: 5; flex: 0 0 6px; background: var(--border-strong); transition: background var(--transition-fast); }
+.dash-gutter:hover { background: var(--accent-cyan); }
+.dash-gutter--v { cursor: col-resize; }
+.dash-gutter--h { cursor: row-resize; }
+.dashboard--dragging { user-select: none; -webkit-user-select: none; }
+
+/* Empilha em telas estreitas; divisórias somem; colunas viram transparentes
+   ao layout (display:contents) para os quadrantes empilharem direto. */
+@media (max-width: 900px) {
+  .dashboard { flex-direction: column; overflow-y: auto; }
+  .dash-col { display: contents; }
+  .dash-gutter { display: none; }
+  .dash-pane { flex: 0 0 auto; min-height: 62vh; }
+}
+
+/* Cadastro de pacientes (quadrante inferior esquerdo) */
+.pac-form { display: flex; flex-direction: column; gap: 8px; }
+.pac-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pac-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pac-list__empty { font-size: 0.72rem; color: var(--text-muted); }
+.pac-list__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.pac-list__info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.pac-list__name { font-size: 0.82rem; }
+.pac-list__meta { font-size: 0.68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+.pac-list__del { flex: 0 0 auto; appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: transparent; color: var(--accent-red); border-radius: var(--radius-sm); width: 26px; height: 26px; cursor: pointer; line-height: 1; }
+
+/* Modelo do corpo + lista de protocolos por região (quadrante inf. direito) */
+.proto2 { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
+@media (max-width: 560px) { .proto2 { gap: 8px; } .bodymap { width: 84px; } }
+.proto2__model { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bodymap { width: 96px; height: auto; display: block; }
+.bodymap__zone { fill: var(--bg-panel-raised); stroke: var(--border-strong); stroke-width: 1; transition: fill .15s, stroke .15s; }
+.bodymap__zone:hover { fill: var(--accent-cyan-dim); }
+.bodymap__zone.is-active { fill: var(--accent-cyan); stroke: var(--accent-cyan); }
+.bodymap__chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.bodymap__chip { appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: var(--bg-panel-raised); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 3px 8px; font-size: 0.68rem; cursor: pointer; }
+.bodymap__chip:hover { color: var(--text-primary); }
+.bodymap__chip.is-active { background: var(--accent-cyan); color: var(--text-primary); border-color: var(--accent-cyan); }
+.proto2__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%; }
+.proto2__region { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); }
+.proto-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.proto-list__item { padding: 7px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); font-size: 0.8rem; cursor: pointer; transition: border-color .15s, background .15s; }
+.proto-list__item:hover { border-color: var(--accent-cyan-dim); }
+.proto-list__item.is-active { border-color: var(--accent-cyan); background: var(--bg-panel-raised); }
+.proto2__new { align-self: flex-start; }
+.proto2__editor { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-subtle); padding-top: 8px; margin-top: 2px; }
+
+/* =====================================================================
+   MODO CELULAR — duas telas: "Sala 3D" (3D + comandos do aparelho
+   flutuantes/semitransparentes) e "Aquisição" (cadastro do paciente,
+   protocolo, exame). Otimizado para paisagem.
+   ===================================================================== */
+/* Seletor flutuante discreto no topo */
+.mobile-switch {
+  position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: flex; align-items: center; gap: 2px;
+  background: rgba(6, 12, 20, 0.62); border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 3px; backdrop-filter: blur(5px);
+}
+.mobile-switch__btn {
+  appearance: none; -webkit-appearance: none; border: 0; background: transparent;
+  color: var(--text-secondary); font-size: 0.72rem; font-weight: 600;
+  padding: 5px 14px; border-radius: 999px; cursor: pointer;
+}
+.mobile-switch__btn.is-active { background: var(--accent-cyan); color: #00131c; }
+.mobile-switch__exit { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 4px 10px; font-size: 0.8rem; }
+
+/* Dica de girar (só no modo celular em retrato) */
+.mobile-rotate { display: none; }
+@media (orientation: portrait) {
+  body.is-mobile .mobile-rotate {
+    display: block; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    z-index: 60; background: rgba(6, 12, 20, 0.62); border: 1px solid var(--border-strong);
+    border-radius: 999px; padding: 5px 12px; font-size: 0.7rem; color: var(--text-secondary);
+    backdrop-filter: blur(5px);
+  }
+}
+
+/* Base do modo celular */
+body.is-mobile .status-bar,
+body.is-mobile .message-panel { display: none; }
+body.is-mobile .dash-gutter { display: none !important; }
+body.is-mobile .dash-col { display: contents; }
+body.is-mobile .dashboard {
+  display: flex !important; flex-direction: column; height: 100%;
+  grid-template-columns: none !important; grid-template-rows: none !important;
+  overflow-y: auto; background: var(--bg-void);
+}
+body.is-mobile .dash-pane { border: 0; min-height: 0; }
+
+/* --- TELA "SALA 3D": simulador em tela cheia + comandos flutuantes --- */
+body.is-mobile.mob-3d #pane-sim { display: flex; flex: 1 1 auto; }
+body.is-mobile.mob-3d #pane-acq,
+body.is-mobile.mob-3d #pane-proto,
+body.is-mobile.mob-3d #pane-pac { display: none; }
+body.is-mobile.mob-3d #pane-sim .app-main { display: block; position: relative; height: 100%; }
+body.is-mobile.mob-3d #pane-sim .viewport { position: absolute; inset: 0; height: 100%; width: 100%; }
+/* o HUD do viewport já mostra os dados; oculta o display do console p/ limpar */
+body.is-mobile.mob-3d #pane-sim .console .display--compact { display: none; }
+/* console = camada de comandos flutuantes; não bloqueia o arraste do 3D */
+body.is-mobile.mob-3d #pane-sim .console {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  display: block; background: transparent; padding: 0; overflow: visible;
+}
+body.is-mobile.mob-3d #pane-sim .console .panel {
+  position: absolute; right: 12px; bottom: 12px; width: auto; margin: 0; pointer-events: auto;
+  background: rgba(6, 12, 20, 0.42); backdrop-filter: blur(7px);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  padding: 10px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+/* --- TELA "AQUISIÇÃO": workstation empilhada (cadastro > protocolo > exame) --- */
+body.is-mobile.mob-aq #pane-sim { display: none; }
+body.is-mobile.mob-aq #pane-pac { display: flex; order: 1; }
+body.is-mobile.mob-aq #pane-proto { display: flex; order: 2; }
+body.is-mobile.mob-aq #pane-acq { display: flex; order: 3; }
+body.is-mobile.mob-aq .dash-pane { flex: 0 0 auto; overflow: visible; }
+body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
+
+/* =====================================================================
+   ETAPA F — Topograma + caixa de planejamento (4 linhas: range + FOV)
+   Range = superior/inferior (base↔vértice); FOV = anterior/posterior.
+   Posições em % via CSS vars no #ws-topo-box; linhas arrastáveis (JS).
+   ===================================================================== */
+/* Dimensões definidas por JS (fitTopo) para caber SEMPRE no quadrante,
+   preservando a proporção — o box das linhas casa exatamente com a imagem. */
+.ws-topo { position: relative; line-height: 0; }
+.ws-topo__img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; user-select: none; }
+.ws-topo__box {
+  position: absolute; inset: 0;
+  /* Topograma HORIZONTAL (decúbito dorsal, vértice à direita):
+     faixa CC = linhas VERTICAIS (left/right); FOV A-P = HORIZONTAIS (top/bottom) */
+  --edge-top: 6%; --edge-bottom: 58%; --edge-left: 34%; --edge-right: 93%;
+}
+.ws-topo__rect {
+  position: absolute; pointer-events: none;
+  top: var(--edge-top); bottom: calc(100% - var(--edge-bottom));
+  left: var(--edge-left); right: calc(100% - var(--edge-right));
+  border: 1px dashed rgba(120, 200, 255, 0.55);
+  background: rgba(120, 200, 255, 0.06);
+}
+.ws-topo__line { position: absolute; touch-action: none; z-index: 2; }
+.ws-topo__line--h { left: 0; right: 0; height: 18px; margin-top: -9px; cursor: ns-resize; }
+.ws-topo__line--v { top: 0; bottom: 0; width: 18px; margin-left: -9px; cursor: ew-resize; }
+.ws-topo__line::before { content: ""; position: absolute; opacity: 0.92; }
+.ws-topo__line--h::before { left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; }
+.ws-topo__line--v::before { top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; }
+.ws-topo__line--range::before { background: var(--accent-cyan); }
+.ws-topo__line--fov::before { background: var(--accent-amber); }
+#ws-topo-top { top: var(--edge-top); }
+#ws-topo-bottom { top: var(--edge-bottom); }
+#ws-topo-left { left: var(--edge-left); }
+#ws-topo-right { left: var(--edge-right); }
+.ws-topo__box.is-invalid .ws-topo__rect { border-color: var(--accent-red); background: rgba(255, 80, 80, 0.08); }
+
+.ws-topo-readout {
+  margin: 6px 0 0; font-size: 0.78rem; line-height: 1.35;
+  color: var(--text-secondary, #9aa6b2);
+}
+.ws-topo-readout .is-bad { color: var(--accent-red); }
+
+/* =====================================================================
+   LAYOUT PC — 4 ajustes (aditivos):
+   1) seletor rápido de telas exclusivo do modo celular;
+   2) quadrante 3D do PC com painel de comandos flutuante (mesmo conceito
+      da tela "Sala" do celular, com alça de arraste e canto de escala);
+   3) quadrante Aquisição em tela cheia com paciente e comandos sobrepostos;
+   4) quadrante Protocolos sem rolagem — editor abre no quadrante inteiro.
+   ===================================================================== */
+
+/* --- 1) Seletor Sala/Paciente/Protocolo/Exame só aparece no celular --- */
+body:not(.is-mobile) .mobile-switch { display: none !important; }
+
+/* --- 2) 3D do PC: viewport ocupa o quadrante; console vira camada flutuante --- */
+body:not(.is-mobile) #pane-sim .app-main { display: block; position: relative; height: 100%; }
+body:not(.is-mobile) #pane-sim .viewport { position: absolute; inset: 0; height: 100%; width: 100%; }
+/* HUD do viewport já mostra os dados; display do console fica oculto (paridade com o celular) */
+body:not(.is-mobile) #pane-sim .console .display--compact { display: none; }
+body:not(.is-mobile) #pane-sim .console {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  display: block; background: transparent; padding: 0; overflow: visible;
+}
+body:not(.is-mobile) #pane-sim .console .panel {
+  position: absolute; width: auto; margin: 0; pointer-events: auto;
+  left: var(--panel-left, auto); top: var(--panel-top, auto);
+  right: var(--panel-right, 12px); bottom: var(--panel-bottom, 12px);
+  transform: scale(var(--panel-scale, 1)); transform-origin: top left;
+  touch-action: none;
+  background: rgba(6, 12, 20, 0.42); backdrop-filter: blur(7px);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  padding: 10px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+body:not(.is-mobile) #pane-sim .console .panel .panel__grip {
+  display: flex; align-items: center; justify-content: center;
+  height: 20px; margin: -4px -4px 4px; cursor: grab; touch-action: none;
+}
+body:not(.is-mobile) #pane-sim .console .panel .panel__grip span {
+  display: block; width: 34px; height: 4px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.42);
+}
+body:not(.is-mobile) #pane-sim .console .panel .panel__grip:active { cursor: grabbing; }
+body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
+  display: block; position: absolute; right: 3px; bottom: 3px;
+  width: 18px; height: 18px; cursor: nwse-resize; touch-action: none;
+  opacity: 0.55;
+  background:
+    linear-gradient(135deg,
+      transparent 0 46%, rgba(255,255,255,0.7) 46% 56%,
+      transparent 56% 68%, rgba(255,255,255,0.7) 68% 78%,
+      transparent 78%);
+}
+
+/* --- 3) Aquisição: imagem em tela cheia + sobreposições --- */
+.dash-pane__body--acq { padding: 0; gap: 0; }
+.ws-viewer--full {
+  flex: 1 1 auto; width: 100%; min-height: 320px;
+  aspect-ratio: auto; border: 0; border-radius: 0;
+  background: #000; /* fundo de workstation em ambos os temas */
+}
+.ws-overlay {
+  position: absolute; left: 0; right: 0; z-index: 5;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 14px; pointer-events: none;
+}
+.ws-overlay > * { pointer-events: auto; }
+.ws-overlay--top { top: 0; }
+.ws-overlay--bottom { bottom: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.45)); }
+/* Nome do paciente sobre a imagem, fundo transparente */
+.ws-list--overlay { pointer-events: none; }
+.ws-list--overlay .ws-list__item,
+.ws-list--overlay .ws-list__item--active {
+  background: transparent; border: 0; padding: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.ws-list--overlay .ws-list__name { font-size: 0.92rem; font-weight: 600; color: #fff; }
+.ws-list--overlay .ws-list__meta { color: rgba(255, 255, 255, 0.78); }
+.ws-actions--center { justify-content: center; margin-top: 0; }
+.ws-note--overlay { color: rgba(255, 255, 255, 0.55); text-align: center; margin: 0; }
+.ws-viewer--full .ws-topo-readout { margin: 0; color: rgba(255, 255, 255, 0.82); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
+.ws-viewer--full .ws-viewer__placeholder { color: rgba(255, 255, 255, 0.4); }
+
+/* --- 4) Protocolos: editor ocupa o quadrante inteiro --- */
+#pane-proto.is-editing .proto2 { display: none; }
+.proto-editor--full { border-top: 0; padding-top: 0; margin-top: 0; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.proto-editor__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Correção: classes com display definido venciam o atributo [hidden]
+   (ex.: o topograma "vazava" no quadrante antes do exame começar).
+   Esta guarda garante que [hidden] sempre oculte esses elementos. */
+.ws-viewer__img[hidden],
+.ws-topo[hidden],
+.ws-viewer-ctrl[hidden],
+.ws-topo-readout[hidden],
+.ws-actions[hidden],
+.proto2__editor[hidden] { display: none !important; }
+
+/* =====================================================================
+   CONSOLE GUIADO (desktop) — como nos consoles reais (Somaris/IACI):
+   fluxo linear por etapas, cada uma em tela cheia, com banner do paciente
+   sempre visível. O modo painel (4 quadrantes) continua disponível pelo
+   botão de alternância. Exclusivo do desktop (o celular tem o seletor).
+   ===================================================================== */
+.console-steps {
+  position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: flex; align-items: center; gap: 2px;
+  background: var(--bg-panel); border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 4px 12px 4px 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  max-width: min(94vw, 980px);
+}
+.cstep {
+  position: relative; display: inline-flex; align-items: center; gap: 7px;
+  border: 0; background: transparent; color: var(--text-secondary);
+  padding: 7px 13px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 0.85rem; white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.cstep:hover { background: var(--bg-hover, rgba(120, 200, 255, 0.08)); color: var(--text-primary); }
+.cstep.is-active { background: var(--accent-cyan); color: #04222b; font-weight: 600; }
+.cstep__num {
+  display: inline-flex; width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid currentColor; align-items: center; justify-content: center;
+  font-size: 0.68rem;
+}
+.cstep__dot {
+  position: absolute; top: 3px; right: 5px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent-amber);
+  box-shadow: 0 0 5px var(--accent-amber);
+}
+.console-banner {
+  margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--border-strong);
+  font-size: 0.78rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px;
+}
+body.is-mobile .console-steps { display: none !important; }
+
+/* Modo console: mostra UMA etapa por vez, em tela cheia */
+body.console-mode:not(.is-mobile) .dashboard { display: flex; }
+body.console-mode:not(.is-mobile) .dash-col { display: contents; }
+body.console-mode:not(.is-mobile) .dash-gutter { display: none; }
+body.console-mode:not(.is-mobile) .dash-pane { display: none; flex: 1 1 auto; }
+body.console-mode.cstep-sim:not(.is-mobile) #pane-sim { display: flex; }
+body.console-mode.cstep-pac:not(.is-mobile) #pane-pac { display: flex; }
+body.console-mode.cstep-proto:not(.is-mobile) #pane-proto { display: flex; }
+body.console-mode.cstep-acq:not(.is-mobile) #pane-acq { display: flex; }
+/* Etapas de formulário centralizadas e legíveis em tela cheia */
+body.console-mode:not(.is-mobile) #pane-pac .dash-pane__body,
+body.console-mode:not(.is-mobile) #pane-proto .dash-pane__body {
+  max-width: 880px; width: 100%; margin: 0 auto;
+}
+
+/* Picture-in-picture da sala 3D durante a aquisição (modo console):
+   o .viewport REAL é reparentado para cá — o ResizeObserver do renderer
+   reajusta o canvas sozinho. Arrastável pela barra; "—" oculta. */
+.pip {
+  position: absolute; z-index: 8; right: 14px; top: 14px;
+  width: min(360px, 44%); height: min(250px, 44%);
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  background: #0a1018; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.pip__bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 4px 9px; font-size: 0.72rem; color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06); cursor: grab;
+  user-select: none; -webkit-user-select: none; touch-action: none;
+}
+.pip__bar:active { cursor: grabbing; }
+.pip__hide { border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; padding: 0 5px; line-height: 1; }
+.pip__body { position: relative; flex: 1 1 auto; min-height: 0; }
+.pip__body .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Relatório didático do exame + fixação rápida (fase de revisão) */
+.ws-report {
+  position: absolute; z-index: 9; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 92%); max-height: 88%; overflow: auto;
+  background: rgba(10, 16, 24, 0.96);
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  padding: 16px 18px; color: var(--text-primary);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+.ws-report__title { margin: 0 0 10px; font-size: 0.95rem; }
+.ws-report__body { font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
+.ws-report__body strong { color: var(--text-primary); }
+.ws-report__body .is-bad { color: var(--accent-red); }
+.ws-report__body .is-good { color: #37d67a; }
+.ws-quiz { margin-top: 12px; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.ws-quiz__title { margin: 0 0 8px; font-size: 0.8rem; color: var(--text-secondary); }
+.ws-quiz__list { margin: 0; padding-left: 18px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary); }
+.ws-quiz__list label { display: block; margin-top: 4px; cursor: pointer; color: var(--text-secondary); }
+.ws-quiz__list label.q-ok { color: #37d67a; }
+.ws-quiz__list label.q-bad { color: var(--accent-red); }
+.ws-quiz__result { font-size: 0.8rem; align-self: center; color: var(--text-secondary); }
+.ws-report[hidden] { display: none !important; }
+
+/* Correções mobile/tela estreita (console guiado):
+   1) [hidden] sempre vence display de classe (PiP aparecia vazio);
+   2) a barra de etapas do console é EXCLUSIVA de telas largas — em
+      telefones o controle é o seletor fixo inferior do modo celular;
+   3) em tela estreita o modo console não esconde quadrantes: vale o
+      empilhamento normal. */
+.pip[hidden], .console-steps[hidden] { display: none !important; }
+@media (max-width: 900px) {
+  .console-steps { display: none !important; }
+  body.console-mode:not(.is-mobile) .dash-pane { display: flex !important; }
+}
+
+/* PiP no modo celular (aba Exame): a sala 3D fica sempre visível no topo
+   do viewer de aquisição. Fixa uma altura confortável e garante que as
+   regras de mob-aq (que ocultam #pane-sim) não escondam o viewport
+   reparentado para dentro do PiP. */
+body.is-mobile.mob-aq #ws-slice-viewer { flex-direction: column; align-items: stretch; justify-content: flex-start; aspect-ratio: auto; min-height: 0; overflow: visible; }
+/* Topograma limitado em altura para sobrar espaço aos controles; largura
+   ajustada ao conteúdo para as linhas (box) permanecerem alinhadas. */
+body.is-mobile.mob-aq .ws-topo { align-self: center; width: fit-content; max-width: 100%; max-height: 42vh; }
+body.is-mobile.mob-aq .ws-topo__img { width: auto; height: auto; max-width: 100%; max-height: 42vh; }
+/* Controles em fluxo normal, sempre acessíveis abaixo do topograma. */
+body.is-mobile.mob-aq .ws-overlay--bottom { position: static; margin-top: 8px; pointer-events: auto; }
+body.is-mobile.mob-aq .pip { position: relative; right: auto; top: auto; left: auto; width: 100%; height: 240px; margin: 0 0 10px; flex: 0 0 auto; }
+body.is-mobile.mob-aq .pip__body .viewport { display: block !important; }
+body.is-mobile.mob-aq .ws-overlay { position: static; }
+body.is-mobile.mob-aq .ws-overlay--bottom { background: none; margin-top: auto; }
+
+/* =====================================================================
+   CORREÇÕES MOBILE — aquisição (2026-07d)
+   1) O quadrante de aquisição recebe ALTURA explícita no celular para o
+      topograma horizontal caber e o fitTopo medir corretamente.
+   2) A sala 3D fica sempre visível durante a aquisição: uma faixa 3D no
+      topo do quadrante de exame (o PiP desktop não vale no celular).
+   ===================================================================== */
+body.is-mobile.mob-aq #pane-acq { min-height: auto; }
+body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
+
+/* Faixa 3D fixa no topo da aquisição (mobile): o .viewport REAL é
+   reparentado para cá durante topograma/posicionamento/volume. */
+.acq3d {
+  position: relative; width: 100%; height: 19vh; min-height: 116px;
+  border-bottom: 1px solid var(--border-strong);
+  background: #0a1018; overflow: hidden; flex: 0 0 auto;
+}
+.acq3d .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
+.acq3d__tag {
+  position: absolute; top: 6px; left: 8px; z-index: 2;
+  font-size: 0.7rem; color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.4); padding: 2px 7px; border-radius: 6px;
+  pointer-events: none;
+}
+.acq3d[hidden] { display: none !important; }
+
+/* Contador em destaque durante a aquisição do volume */
+.ws-viewer-ctrl.is-acquiring .ws-slice-counter {
+  font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  animation: acq-pulse 1s ease-in-out infinite;
+}
+@keyframes acq-pulse { 50% { opacity: 0.55; } }
