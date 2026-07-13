@@ -300,7 +300,7 @@
         reportError("promise rejeitada: " + reason);
       });
 
-      var criticalFiles = ["js/vendor/three.min.js", "script.js"];
+      var criticalFiles = ["js/vendor/three.min.js", "js/exam-session.js", "script.js"];
       setTimeout(function () {
         if (window.__ctSimulator || window.__ctSimulatorErrorReported) return;
         Promise.all(criticalFiles.map(function (path) {
@@ -315,6 +315,7 @@
   </script>
 
   <script src="js/vendor/three.min.js"></script>
+  <script src="js/exam-session.js"></script>
   <script src="script.js"></script>
   <script src="js/mobile-tabs.js"></script>
 </body>
