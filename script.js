@@ -940,6 +940,9 @@
         patient.rotation.set(-Math.PI / 2, 0, 0);
         patient.position.set(0, 0.85, 0); // eleva para os pés tocarem o chão
         if (displayPositionEl) displayPositionEl.textContent = "AGUARDANDO";
+        if (examSessionApi && examSessionApi.setPosition) {
+          examSessionApi.setPosition({ onTable: false, decubito: currentDecubito, entrada: currentEntrada });
+        }
       }
 
       function applyPatientPose() {
@@ -966,6 +969,14 @@
 
         if (displayPositionEl) {
           displayPositionEl.textContent = decubitoLabel(currentDecubito) + " / " + entradaLabel(currentEntrada);
+        }
+        if (examSessionApi && examSessionApi.setPosition) {
+          examSessionApi.setPosition({
+            onTable: true,
+            decubito: currentDecubito,
+            entrada: currentEntrada,
+            isoOffsetCm: (patientPose.position.y + tableY - ISO_Y) * 100
+          });
         }
       }
 
@@ -1295,6 +1306,10 @@
 
       if (btnReset) {
         btnReset.addEventListener("click", function () {
+          if (examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked()) {
+            showMessage("Use Stop para encerrar o exame antes de reiniciar a sala.", "warning");
+            return;
+          }
           tableY = 0.80;
           tableZ = TABLE_Z_MAX;
           tableZeroRef = null;
@@ -1414,6 +1429,10 @@
             decubitoGrid.appendChild(buildPoseOption(
               d, DECUBITO_FULL[d], svgDecubito(d), patientPlaced && d === currentDecubito,
               function () {
+                if (examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked()) {
+                  showMessage("O posicionamento está bloqueado durante o exame.", "warning");
+                  return;
+                }
                 currentDecubito = d;
                 placePatient();
                 updatePoseToggleFace();
@@ -1429,6 +1448,10 @@
             entradaGrid.appendChild(buildPoseOption(
               e, ENTRADA_FULL[e], svgEntrada(e), patientPlaced && e === currentEntrada,
               function () {
+                if (examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked()) {
+                  showMessage("O posicionamento está bloqueado durante o exame.", "warning");
+                  return;
+                }
                 currentEntrada = e;
                 placePatient();
                 updatePoseToggleFace();
@@ -1542,6 +1565,14 @@
 
       tableDriveApi = {
         isPatientOnTable: function () { return !!patientPlaced; },
+        getPositioning: function () {
+          return {
+            onTable: !!patientPlaced,
+            decubito: currentDecubito,
+            entrada: currentEntrada,
+            isoOffsetCm: patientPlaced ? (patientPose.position.y + tableY - ISO_Y) * 100 : null
+          };
+        },
         isBusy: function () { return !!autoDrive; },
         // opts: { distanceMm, direction: "in"|"out", speedMmS, rotTimeS (0 = topograma), onProgress, onDone, onAbort }
         start: function (opts) {
@@ -1713,11 +1744,13 @@
 
   // =================================================================
   // BANCO DO APP (IndexedDB) + REGIÕES — infraestrutura compartilhada
-  // Banco único "simuladorTC" (v2) com stores "protocolos" e "pacientes",
+  // Banco único "simuladorTC" (v3) com pacientes, protocolos e exames
+  // encerrados. O histórico é imutável: finalizar um exame não apaga o
+  // cadastro do paciente e uma nova execução recebe outro ID de sessão.
   // usado pelos módulos de protocolos e de cadastro de pacientes.
   // =================================================================
   var REGIOES = ["Crânio", "Pescoço", "Tórax", "Abdome", "Pelve", "Coluna", "Membros"];
-  var APP_DB_NAME = "simuladorTC", APP_DB_VER = 2;
+  var APP_DB_NAME = "simuladorTC", APP_DB_VER = 3;
   function openAppDB() {
     return new Promise(function (resolve, reject) {
       if (!("indexedDB" in window) || !window.indexedDB) { reject(new Error("IndexedDB indisponível")); return; }
@@ -1726,9 +1759,11 @@
         var db = req.result;
         if (!db.objectStoreNames.contains("protocolos")) db.createObjectStore("protocolos", { keyPath: "id" });
         if (!db.objectStoreNames.contains("pacientes")) db.createObjectStore("pacientes", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("exames")) db.createObjectStore("exames", { keyPath: "id" });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error || new Error("Falha ao abrir IndexedDB")); };
+      req.onblocked = function () { reject(new Error("Atualização do banco bloqueada. Feche outras abas do simulador e recarregue.")); };
     });
   }
   function dbStoreAll(store) {
@@ -1765,9 +1800,13 @@
   // Os pacientes cadastrados alimentam a lista "Exames" da aquisição.
   // Nenhum dado clínico é presumido.
   // =================================================================
-  // Ponte entre cadastro e aquisição: UM exame por vez, sem memória —
-  // ao encerrar a simulação o registro do paciente é apagado.
-  var examSessionApi = null;
+  // Sessão única compartilhada por Pacientes, Protocolos, Sala e Aquisição.
+  // Mantém snapshots do paciente/protocolo e arquiva exames encerrados.
+  var examSessionApi = window.CTExamSession ? window.CTExamSession.create({
+    supportedRegions: ["Crânio"],
+    supportedProtocolIds: ["cranio"],
+    persist: function (exam) { return dbStorePut("exames", exam); }
+  }) : null;
   // Protocolo selecionado para o exame (nome exibido na tela de aquisição).
   var examProtocol = { name: "", data: null, refresh: null };
   var tableDriveApi = null; // preenchida pela cena 3D (aquisição dirigida pela mesa)
@@ -1785,6 +1824,7 @@
     if (!fNome || !btnAdd || !listEl) return;
 
     var pacientes = [];
+    var activePatientId = null;
     var memoryFallback = false;
 
     if (fRegiao && !fRegiao.options.length) {
@@ -1798,7 +1838,27 @@
     function persist(o) { if (memoryFallback) return Promise.resolve(); return dbStorePut("pacientes", o).catch(function () { memoryFallback = true; }); }
     function persistDel(id) { if (memoryFallback) return Promise.resolve(); return dbStoreDel("pacientes", id).catch(function () { memoryFallback = true; }); }
 
-    function currentPatient() { return pacientes.length ? pacientes[pacientes.length - 1] : null; }
+    function currentPatient() {
+      for (var i = 0; i < pacientes.length; i++) {
+        if (pacientes[i].id === activePatientId) return pacientes[i];
+      }
+      return null;
+    }
+
+    function selectPatient(id, silent) {
+      var selected = null;
+      for (var i = 0; i < pacientes.length; i++) if (pacientes[i].id === id) selected = pacientes[i];
+      if (!selected) return false;
+      var result = examSessionApi && examSessionApi.setPatient ? examSessionApi.setPatient(selected) : { ok: true };
+      if (!result.ok) {
+        if (!silent) showMessage(result.message, "warning");
+        return false;
+      }
+      activePatientId = selected.id;
+      renderList(); renderExamList();
+      if (!silent) showMessage("Paciente \"" + selected.nome + "\" selecionado para o exame.", "success");
+      return true;
+    }
 
     function renderExamList() {
       if (!examList) return;
@@ -1822,19 +1882,6 @@
     }
     examProtocol.refresh = renderExamList;
 
-    // API usada pelo viewer: um exame por vez; encerrar apaga o registro.
-    examSessionApi = {
-      get: currentPatient,
-      end: function () {
-        var p = currentPatient();
-        if (!p) return Promise.resolve();
-        return persistDel(p.id).then(function () {
-          pacientes = pacientes.filter(function (x) { return x.id !== p.id; });
-          renderList(); renderExamList();
-        });
-      }
-    };
-
     function renderList() {
       listEl.innerHTML = "";
       if (pacientes.length === 0) {
@@ -1846,7 +1893,10 @@
       }
       pacientes.forEach(function (p) {
         var li = document.createElement("li");
-        li.className = "pac-list__item";
+        li.className = "pac-list__item" + (p.id === activePatientId ? " is-active" : "");
+        li.tabIndex = 0;
+        li.setAttribute("aria-current", p.id === activePatientId ? "true" : "false");
+        li.setAttribute("aria-label", "Selecionar " + p.nome + " para o exame");
         var info = document.createElement("div"); info.className = "pac-list__info";
         var nm = document.createElement("span"); nm.className = "pac-list__name"; nm.textContent = p.nome;
         var meta = document.createElement("span"); meta.className = "pac-list__meta";
@@ -1854,12 +1904,25 @@
         info.appendChild(nm); info.appendChild(meta);
         var del = document.createElement("button");
         del.type = "button"; del.className = "pac-list__del"; del.setAttribute("aria-label", "Excluir paciente"); del.textContent = "✕";
-        del.addEventListener("click", function () {
+        del.addEventListener("click", function (event) {
+          event.stopPropagation();
+          if (examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked()) {
+            showMessage("Finalize ou interrompa o exame antes de excluir pacientes.", "warning");
+            return;
+          }
           if (!window.confirm("Excluir o paciente \"" + p.nome + "\"?")) return;
           persistDel(p.id).then(function () {
             pacientes = pacientes.filter(function (x) { return x.id !== p.id; });
+            if (activePatientId === p.id) {
+              activePatientId = null;
+              if (examSessionApi && examSessionApi.setPatient) examSessionApi.setPatient(null);
+            }
             renderList(); renderExamList();
           });
+        });
+        li.addEventListener("click", function () { selectPatient(p.id); });
+        li.addEventListener("keydown", function (event) {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPatient(p.id); }
         });
         li.appendChild(info); li.appendChild(del);
         listEl.appendChild(li);
@@ -1879,12 +1942,12 @@
       };
       pacientes.push(novo);
       persist(novo).then(function () {
-        renderList(); renderExamList();
+        selectPatient(novo.id, true);
         if (fPront) fPront.value = "";
         fNome.value = "";
         if (fIdade) fIdade.value = "";
         fNome.focus();
-        showMessage("Paciente \"" + novo.nome + "\" cadastrado" + (memoryFallback ? " (temporário)." : "."), "success");
+        showMessage("Paciente \"" + novo.nome + "\" cadastrado e selecionado" + (memoryFallback ? " (temporariamente)." : "."), "success");
       });
     }
 
@@ -2070,6 +2133,10 @@
       renderList();
     }
     function selectProtocol(id) {
+      if (examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked()) {
+        showMessage("Finalize ou interrompa o exame antes de trocar o protocolo.", "warning");
+        return;
+      }
       currentId = id;
       renderList();
       var p = byId(id);
@@ -2077,19 +2144,35 @@
       // O editor só abre pelo botão Editar (quadrante inteiro).
       if (btnEdit) btnEdit.hidden = !p;
       // Este é o protocolo que será usado no exame (aparece na aquisição).
+      if (examSessionApi && examSessionApi.setProtocol) {
+        var result = examSessionApi.setProtocol(p || null);
+        if (!result.ok) {
+          showMessage(result.message, "warning");
+          return;
+        }
+      }
       examProtocol.name = p ? p.nome : "";
       examProtocol.data = p || null;
       if (examProtocol.refresh) examProtocol.refresh();
     }
 
-    if (btnEdit) btnEdit.addEventListener("click", function () { if (currentId) openEditor(); });
+    function setupIsEditable() {
+      if (!(examSessionApi && examSessionApi.isLocked && examSessionApi.isLocked())) return true;
+      showMessage("Finalize ou interrompa o exame antes de editar protocolos.", "warning");
+      return false;
+    }
+
+    if (btnEdit) btnEdit.addEventListener("click", function () { if (currentId && setupIsEditable()) openEditor(); });
     if (btnCancel) btnCancel.addEventListener("click", function () { fillFields(byId(currentId)); closeEditor(); });
     if (btnSave) btnSave.addEventListener("click", function () {
+      if (!setupIsEditable()) return;
       var p = byId(currentId); if (!p) { closeEditor(); return; }
       FIELDS.forEach(function (f) { var el = inputEl(f); if (el) p[FIELD_KEYS[f]] = el.value.trim(); });
+      if (examSessionApi && examSessionApi.setProtocol) examSessionApi.setProtocol(p);
       persist(p).then(function () { closeEditor(); showMessage("Protocolo \"" + p.nome + "\" salvo" + (memoryFallback ? " (temporário)." : "."), "success"); });
     });
     if (btnNew) btnNew.addEventListener("click", function () {
+      if (!setupIsEditable()) return;
       if (!currentRegion) { showMessage("Selecione uma região no modelo primeiro.", "warning"); return; }
       var nome = window.prompt("Nome do novo protocolo (" + currentRegion + "):", "");
       if (nome === null) return; nome = nome.trim(); if (!nome) return;
@@ -2180,7 +2263,8 @@
 
     // Anuncia a fase do exame (idle/topoAcq/plan/moving/volAcq/review)
     // para módulos desacoplados — ex.: o PiP da sala 3D no modo console.
-    function announcePhase(p) {
+    function announcePhase(p, skipSession) {
+      if (!skipSession && examSessionApi && examSessionApi.setPhase) examSessionApi.setPhase(p);
       try { document.dispatchEvent(new CustomEvent("ct:phase", { detail: { phase: p } })); } catch (e) { /* sem suporte */ }
     }
     // Referência espacial do topograma: onde a mesa ESTAVA quando cada
@@ -2405,10 +2489,10 @@
       // checam a fase — como ela já foi trocada, viram no-op (sem eco).
       if (tableDriveApi && tableDriveApi.isBusy && tableDriveApi.isBusy()) tableDriveApi.stop();
     }
-    function toIdle() {
+    function toIdle(skipSession) {
       phase = "idle"; loaded = false; lastSlice = 0; lastAcq = null;
       if (ctrl) ctrl.classList.remove("is-acquiring");
-      announcePhase("idle");
+      announcePhase("idle", skipSession);
       topoRef = null; atStart = false; isMoving = false;
       stopAnimations();
       img.hidden = true; ctrl.hidden = true;
@@ -2707,12 +2791,15 @@
         return;
       }
       if (phase !== "idle") return;
-      if (examSessionApi && !examSessionApi.get()) {
-        showMessage("Cadastre o paciente antes de iniciar o exame.", "warning");
-        return;
-      }
-      if (tableDriveApi && !tableDriveApi.isPatientOnTable()) {
-        showMessage("Posicione o paciente na mesa (botão Decúbito, na sala 3D) antes de iniciar a aquisição.", "warning");
+      var positioning = tableDriveApi && tableDriveApi.getPositioning
+        ? tableDriveApi.getPositioning()
+        : { onTable: !tableDriveApi };
+      if (examSessionApi && examSessionApi.setPosition) examSessionApi.setPosition(positioning);
+      var readiness = examSessionApi && examSessionApi.validateForAcquisition
+        ? examSessionApi.validateForAcquisition(positioning)
+        : { ok: !!(examSessionApi && examSessionApi.get()), errors: [{ message: "Selecione um paciente e um protocolo antes de iniciar." }] };
+      if (!readiness.ok) {
+        showMessage(readiness.errors.map(function (error) { return error.message; }).join(" "), "warning");
         return;
       }
       if (manifest) {
@@ -2742,17 +2829,24 @@
       });
     }
 
-    // Stop encerra a simulação em QUALQUER fase e apaga o registro do
-    // paciente (um exame por vez, sem memória entre simulações).
+    // Stop encerra e arquiva a sessão. O cadastro do paciente permanece;
+    // uma nova sessão independente é preparada para um eventual reexame.
     function onStop() {
       if (phase === "idle") return;
       var wasDone = (phase === "review");
-      toIdle();
-      var finish = (examSessionApi && examSessionApi.end) ? examSessionApi.end() : Promise.resolve();
+      var outcome = wasDone ? "finalizado" : "interrompido";
+      var details = lastAcq ? { scanLengthMm: lastAcq.scanLen, speedMmS: lastAcq.speed, lastSlice: lastSlice } : null;
+      toIdle(true);
+      var finish = (examSessionApi && examSessionApi.close)
+        ? examSessionApi.close(outcome, details, { retainPatient: true, retainProtocol: true, retainPosition: true })
+        : Promise.resolve();
       finish.then(function () {
+        if (examSessionApi && examSessionApi.setPhase) examSessionApi.setPhase("idle");
         showMessage(wasDone
-          ? "Exame finalizado — registro do paciente removido."
-          : "Exame interrompido — registro do paciente removido.", "info");
+          ? "Exame finalizado e arquivado. O cadastro do paciente foi preservado."
+          : "Exame interrompido e arquivado. O cadastro do paciente foi preservado.", "info");
+      }).catch(function (error) {
+        showMessage("O exame foi encerrado, mas não pôde ser arquivado: " + error.message, "error");
       });
     }
 

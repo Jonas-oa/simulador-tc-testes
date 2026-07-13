@@ -833,7 +833,10 @@ body {
 .pac-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pac-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .pac-list__empty { font-size: 0.72rem; color: var(--text-muted); }
-.pac-list__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.pac-list__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); cursor: pointer; }
+.pac-list__item:hover { border-color: var(--border-strong); background: var(--bg-panel-raised); }
+.pac-list__item:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; }
+.pac-list__item.is-active { border-color: var(--accent-cyan); background: var(--accent-cyan-dim); box-shadow: inset 3px 0 0 var(--accent-cyan); }
 .pac-list__info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .pac-list__name { font-size: 0.82rem; }
 .pac-list__meta { font-size: 0.68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
