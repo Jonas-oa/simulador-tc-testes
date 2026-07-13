@@ -18,7 +18,7 @@
   <header id="status-bar" class="status-bar" role="banner">
     <div class="status-bar__brand">
       <span class="status-bar__logo" aria-hidden="true">⌬</span>
-      <span class="status-bar__title">SIMULADOR TC</span>
+      <span class="status-bar__title" id="app-stage-title">PREPARAÇÃO DO EXAME</span>
       <span class="status-bar__subtitle">Uso educacional — não clínico</span>
     </div>
 
@@ -37,7 +37,15 @@
       </div>
     </div>
 
+    <div class="prep-status" id="prep-status" aria-label="Resumo do exame">
+      <div class="prep-status__item"><span>Paciente</span><strong id="prep-status-patient">Não selecionado</strong></div>
+      <div class="prep-status__item"><span>Protocolo</span><strong id="prep-status-protocol">Não selecionado</strong></div>
+      <div class="prep-status__item"><span>Posição</span><strong id="prep-status-position">Aguardando</strong></div>
+      <div class="prep-status__item prep-status__item--ready"><span>Prontidão</span><strong id="prep-status-ready">0/3</strong></div>
+    </div>
+
     <div class="status-bar__actions">
+      <button id="prep-back" class="icon-btn prep-back" type="button" aria-label="Voltar à preparação" title="Voltar à preparação" hidden>←</button>
       <button id="mobile-toggle" class="icon-btn" type="button" aria-label="Modo celular" title="Modo celular" aria-pressed="false">
         <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 18H7V5h10v14zm-3.5 3h-3a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5z"/></svg>
       </button>
@@ -78,6 +86,7 @@
   <main class="dashboard" id="dashboard">
     <div class="dash-col dash-col--left" id="dash-col-left">
     <section class="dash-pane dash-pane--sim" id="pane-sim" aria-label="Simulador 3D">
+      <header class="dash-pane__head prep-only"><h2 class="dash-pane__title">Orientação do paciente</h2></header>
       <div class="app-main" id="sala-view">
         <section class="viewport" aria-label="Visualização 3D do equipamento">
           <canvas id="scene-canvas" aria-hidden="true"></canvas>
@@ -136,7 +145,7 @@
     <div class="dash-gutter dash-gutter--h" id="dash-gutter-h-left" role="separator" aria-orientation="horizontal" aria-label="Redimensionar altura da coluna esquerda"></div>
 
     <section class="dash-pane dash-pane--pac" id="pane-pac" aria-label="Cadastro de pacientes">
-      <header class="dash-pane__head"><h2 class="dash-pane__title">Cadastro de pacientes</h2></header>
+      <header class="dash-pane__head prep-pane-head"><h2 class="dash-pane__title">Lista de pacientes</h2><button class="ws-btn ws-btn--primary prep-only" id="pac-new-toggle" type="button">+ Novo paciente</button></header>
       <div class="dash-pane__body">
         <div class="pac-form" id="pac-form">
           <label class="ws-field ws-field--full"><span class="ws-field__label">Prontuário</span><input class="ws-input" id="pac-prontuario" type="text" placeholder="nº do prontuário"></label>
@@ -212,8 +221,9 @@
     <div class="dash-gutter dash-gutter--h" id="dash-gutter-h-right" role="separator" aria-orientation="horizontal" aria-label="Redimensionar altura da coluna direita"></div>
 
     <section class="dash-pane dash-pane--proto" id="pane-proto" aria-label="Cadastro e seleção de protocolos">
-      <header class="dash-pane__head"><h2 class="dash-pane__title">Protocolos</h2></header>
+      <header class="dash-pane__head"><h2 class="dash-pane__title">Procedimento e protocolos</h2></header>
       <div class="dash-pane__body">
+        <div class="prep-procedure prep-only"><span>Procedimento solicitado</span><strong id="prep-procedure-name">Selecione um protocolo</strong></div>
         <div class="proto2">
           <div class="proto2__model">
             <svg class="bodymap" viewBox="0 0 140 320" role="group" aria-label="Modelo do corpo — toque numa região">
@@ -269,6 +279,13 @@
     </section>
     </div>
   </main>
+
+  <section class="prep-readiness" id="prep-readiness" aria-label="Confirmação da preparação">
+    <div class="prep-check" id="prep-check-patient"><span class="prep-check__icon">✓</span><span><strong>Paciente</strong><small id="prep-check-patient-text">Selecione um paciente</small></span></div>
+    <div class="prep-check" id="prep-check-protocol"><span class="prep-check__icon">✓</span><span><strong>Protocolo</strong><small id="prep-check-protocol-text">Selecione um protocolo</small></span></div>
+    <div class="prep-check" id="prep-check-position"><span class="prep-check__icon">✓</span><span><strong>Orientação</strong><small id="prep-check-position-text">Posicione o paciente</small></span></div>
+    <button class="prep-start" id="prep-start-exam" type="button" disabled><span aria-hidden="true">▶</span> INICIAR EXAME</button>
+  </section>
 
   <footer class="message-panel" aria-label="Painel de mensagens" role="status" aria-live="polite">
     <span class="message-panel__icon" aria-hidden="true">ℹ</span>

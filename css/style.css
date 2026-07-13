@@ -153,6 +153,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.status-bar__actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 
 .status-bar__indicators {
   display: flex;
@@ -1233,3 +1234,146 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
   animation: acq-pulse 1s ease-in-out infinite;
 }
 @keyframes acq-pulse { 50% { opacity: 0.55; } }
+
+/* =====================================================================
+   FLUXO INTEGRADO — PREPARAÇÃO DO EXAME
+   Desktop em três áreas: pacientes, protocolos e orientação. O modo
+   celular preserva as quatro abas independentes e ignora estas regras.
+   ===================================================================== */
+.prep-only, .prep-readiness, .prep-status { display: none; }
+
+body.workflow-preparation:not(.is-mobile) {
+  grid-template-rows: auto 1fr 104px auto;
+}
+body.workflow-preparation:not(.is-mobile) .console-steps,
+body.workflow-preparation:not(.is-mobile) #console-toggle,
+body.workflow-preparation:not(.is-mobile) .status-bar__indicators { display: none !important; }
+body.workflow-preparation:not(.is-mobile) .prep-only { display: flex; }
+body.workflow-preparation:not(.is-mobile) .prep-status { display: grid; }
+body.workflow-preparation:not(.is-mobile) .prep-readiness { display: grid; }
+body.workflow-preparation:not(.is-mobile) .message-panel { grid-row: 4; }
+
+.prep-status {
+  flex: 1 1 auto; min-width: 0;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  align-self: stretch; border-left: 1px solid var(--border-subtle);
+}
+.prep-status__item {
+  min-width: 0; display: flex; flex-direction: column; justify-content: center;
+  gap: 2px; padding: 4px 18px; border-right: 1px solid var(--border-subtle);
+}
+.prep-status__item span { font-size: 0.64rem; color: var(--text-muted); }
+.prep-status__item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; font-weight: 600; }
+.prep-status__item--ready strong { color: var(--accent-amber); }
+.prep-status__item--ready.is-ready strong { color: #37d67a; }
+
+body.workflow-preparation:not(.is-mobile) .dashboard {
+  grid-row: 2; display: grid !important;
+  grid-template-columns: minmax(270px, 0.92fr) minmax(400px, 1.55fr) minmax(340px, 1.12fr);
+  gap: 6px; padding: 6px; min-height: 0; overflow: hidden;
+}
+body.workflow-preparation:not(.is-mobile) .dash-col { display: contents !important; }
+body.workflow-preparation:not(.is-mobile) .dash-gutter,
+body.workflow-preparation:not(.is-mobile) #pane-acq { display: none !important; }
+body.workflow-preparation:not(.is-mobile) #pane-pac,
+body.workflow-preparation:not(.is-mobile) #pane-proto,
+body.workflow-preparation:not(.is-mobile) #pane-sim {
+  display: flex !important; min-height: 0; border-radius: 7px; overflow: hidden;
+}
+body.workflow-preparation:not(.is-mobile) #pane-pac { grid-column: 1; grid-row: 1; }
+body.workflow-preparation:not(.is-mobile) #pane-proto { grid-column: 2; grid-row: 1; }
+body.workflow-preparation:not(.is-mobile) #pane-sim { grid-column: 3; grid-row: 1; }
+
+.prep-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.prep-pane-head .ws-btn { min-height: 34px; padding: 5px 10px; font-size: 0.72rem; }
+body.workflow-preparation:not(.is-mobile) .dash-pane__head { min-height: 44px; display: flex; align-items: center; }
+body.workflow-preparation:not(.is-mobile) .dash-pane__title { font-size: 0.82rem; color: var(--text-primary); }
+body.workflow-preparation:not(.is-mobile) #pane-pac .dash-pane__body,
+body.workflow-preparation:not(.is-mobile) #pane-proto .dash-pane__body {
+  max-width: none; width: auto; margin: 0; padding: 12px; overflow: auto;
+}
+
+body.workflow-preparation:not(.is-mobile) #pane-pac.is-form-collapsed #pac-form { display: none; }
+body.workflow-preparation:not(.is-mobile) #pane-pac:not(.is-form-collapsed) #pac-list { max-height: 35%; }
+body.workflow-preparation:not(.is-mobile) .pac-list { margin-top: 0; }
+body.workflow-preparation:not(.is-mobile) .pac-list__item { min-height: 50px; background: rgba(255,255,255,0.018); }
+body.workflow-preparation:not(.is-mobile) .pac-list__item.is-active { background: rgba(0, 194, 255, 0.12); }
+
+.prep-procedure {
+  flex: 0 0 auto; flex-direction: column; gap: 5px; padding: 10px 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--bg-display);
+}
+.prep-procedure span { font-size: 0.65rem; color: var(--text-muted); }
+.prep-procedure strong { font-size: 0.82rem; font-weight: 500; }
+body.workflow-preparation:not(.is-mobile) #pane-proto .proto2 {
+  flex: 1 1 auto; grid-template-columns: minmax(100px, 0.42fr) minmax(250px, 1.58fr); min-height: 0;
+}
+body.workflow-preparation:not(.is-mobile) #pane-proto .proto-list__item {
+  min-height: 42px; display: flex; align-items: center; padding: 8px 12px;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+}
+body.workflow-preparation:not(.is-mobile) #pane-proto .proto-list__item.is-active {
+  border-color: var(--accent-cyan); background: var(--accent-cyan-dim);
+}
+
+body.workflow-preparation:not(.is-mobile) #pane-sim .app-main { position: relative; flex: 1 1 auto; min-height: 0; }
+body.workflow-preparation:not(.is-mobile) #pane-sim .viewport { position: absolute; inset: 0; }
+body.workflow-preparation:not(.is-mobile) #pane-sim .viewport__hud { display: none; }
+body.workflow-preparation:not(.is-mobile) #pane-sim .console { position: absolute; inset: 0; pointer-events: none; }
+body.workflow-preparation:not(.is-mobile) #pane-sim .console .panel {
+  --panel-scale: 1 !important; --panel-left: auto !important; --panel-top: auto !important;
+  position: absolute; left: 10px !important; right: 10px !important; top: 10px !important; bottom: auto !important;
+  width: auto; max-width: none; transform: none; padding: 10px;
+  background: rgba(6, 15, 23, 0.9); pointer-events: auto;
+}
+body.workflow-preparation:not(.is-mobile) #pane-sim .panel__grip,
+body.workflow-preparation:not(.is-mobile) #pane-sim .panel__resize,
+body.workflow-preparation:not(.is-mobile) #pane-sim .panel__row,
+body.workflow-preparation:not(.is-mobile) #pane-sim .dpad { display: none; }
+body.workflow-preparation:not(.is-mobile) #pane-sim #pose-panel {
+  position: static; display: block !important; width: auto; max-height: none; padding: 0;
+  border: 0; background: transparent; box-shadow: none;
+}
+body.workflow-preparation:not(.is-mobile) #pane-sim .pose-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body.workflow-preparation:not(.is-mobile) #pane-sim .pose-option { min-height: 58px; }
+
+.prep-readiness {
+  grid-row: 3; grid-template-columns: repeat(3, minmax(180px, 1fr)) minmax(300px, 1.2fr);
+  gap: 12px; padding: 10px 18px; align-items: stretch;
+  border-top: 1px solid var(--border-strong); background: var(--bg-panel);
+}
+.prep-check {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 14px;
+  border: 1px solid var(--border-subtle); border-radius: 8px; color: var(--text-muted);
+}
+.prep-check__icon {
+  flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px;
+  border: 2px solid currentColor; border-radius: 50%; font-size: 0; opacity: 0.45;
+}
+.prep-check > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.prep-check strong { color: var(--text-primary); font-size: 0.8rem; }
+.prep-check small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; }
+.prep-check.is-complete { color: #37d67a; border-color: rgba(55,214,122,0.42); }
+.prep-check.is-complete .prep-check__icon { font-size: 0.9rem; opacity: 1; }
+.prep-start {
+  appearance: none; border: 1px solid #16c5f2; border-radius: 8px;
+  background: linear-gradient(135deg, #00aee8, #10c9f4); color: #00151e;
+  font: inherit; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.02em; cursor: pointer;
+}
+.prep-start:disabled { opacity: 0.38; filter: saturate(0.35); cursor: not-allowed; }
+.prep-start:not(:disabled):hover { filter: brightness(1.08); }
+
+body.workflow-exam:not(.is-mobile) .prep-readiness { display: none; }
+body.workflow-exam:not(.is-mobile) .prep-back { display: inline-grid; }
+body.workflow-exam:not(.is-mobile) .prep-status { display: grid; }
+body.workflow-exam:not(.is-mobile) .status-bar__indicators,
+body.workflow-exam:not(.is-mobile) .console-steps { display: none !important; }
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  body.workflow-preparation:not(.is-mobile) .dashboard {
+    grid-template-columns: minmax(230px, 0.9fr) minmax(330px, 1.35fr) minmax(290px, 1fr);
+  }
+  .prep-status__item { padding-inline: 10px; }
+  .prep-readiness { grid-template-columns: repeat(3, 1fr) minmax(240px, 1.05fr); gap: 7px; padding-inline: 8px; }
+}

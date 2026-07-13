@@ -3273,6 +3273,146 @@
   }
 
   // =================================================================
+  // PREPARAÇÃO INTEGRADA (desktop) — paciente, protocolo e orientação
+  // simultâneos. No celular, as quatro abas existentes permanecem
+  // independentes e compartilham a mesma examSessionApi.
+  // =================================================================
+  function initPreparationWorkflow() {
+    var body = document.body;
+    var stageTitle = document.getElementById("app-stage-title");
+    var backBtn = document.getElementById("prep-back");
+    var startBtn = document.getElementById("prep-start-exam");
+    var newPatientBtn = document.getElementById("pac-new-toggle");
+    var patientPane = document.getElementById("pane-pac");
+    var posePanel = document.getElementById("pose-panel");
+    var poseToggle = document.getElementById("pose-toggle");
+    var statusPatient = document.getElementById("prep-status-patient");
+    var statusProtocol = document.getElementById("prep-status-protocol");
+    var statusPosition = document.getElementById("prep-status-position");
+    var statusReady = document.getElementById("prep-status-ready");
+    var statusReadyItem = statusReady ? statusReady.parentElement : null;
+    var procedureName = document.getElementById("prep-procedure-name");
+    var checkPatient = document.getElementById("prep-check-patient");
+    var checkProtocol = document.getElementById("prep-check-protocol");
+    var checkPosition = document.getElementById("prep-check-position");
+    var checkPatientText = document.getElementById("prep-check-patient-text");
+    var checkProtocolText = document.getElementById("prep-check-protocol-text");
+    var checkPositionText = document.getElementById("prep-check-position-text");
+    if (!startBtn || !patientPane) return;
+
+    function positionSnapshot() {
+      return tableDriveApi && tableDriveApi.getPositioning
+        ? tableDriveApi.getPositioning()
+        : { onTable: false, decubito: null, entrada: null };
+    }
+
+    function positionLabel(position) {
+      if (!position.onTable) return "Aguardando posicionamento";
+      var decubitos = {
+        "dorsal": "Decúbito dorsal", "ventral": "Decúbito ventral",
+        "lateral-d": "Lateral direito", "lateral-e": "Lateral esquerdo"
+      };
+      var entradas = { "cabeca": "cabeça primeiro", "pes": "pés primeiro" };
+      return (decubitos[position.decubito] || "Posicionado") + " · " + (entradas[position.entrada] || "entrada definida");
+    }
+
+    function setCheck(element, complete) {
+      if (element) element.classList.toggle("is-complete", !!complete);
+    }
+
+    function update() {
+      var patient = examSessionApi && examSessionApi.getPatient ? examSessionApi.getPatient() : null;
+      var protocol = examSessionApi && examSessionApi.getProtocol ? examSessionApi.getProtocol() : null;
+      var position = positionSnapshot();
+      var validation = examSessionApi && examSessionApi.validateForAcquisition
+        ? examSessionApi.validateForAcquisition(position)
+        : { ok: false, errors: [] };
+      var protocolErrors = validation.errors.filter(function (error) {
+        return error.code === "protocol_required" || error.code === "region_mismatch" ||
+          error.code === "unsupported_region" || error.code === "unsupported_protocol" ||
+          error.code === "protocol_incomplete" || error.code === "protocol_invalid";
+      });
+      var patientOk = !!patient;
+      var protocolOk = !!protocol && protocolErrors.length === 0;
+      var positionOk = !!position.onTable;
+      var readyCount = (patientOk ? 1 : 0) + (protocolOk ? 1 : 0) + (positionOk ? 1 : 0);
+
+      if (statusPatient) statusPatient.textContent = patient ? patient.nome : "Não selecionado";
+      if (statusProtocol) statusProtocol.textContent = protocol ? protocol.nome : "Não selecionado";
+      if (statusPosition) statusPosition.textContent = positionLabel(position);
+      if (statusReady) statusReady.textContent = readyCount + "/3";
+      if (statusReadyItem) statusReadyItem.classList.toggle("is-ready", validation.ok);
+      if (procedureName) procedureName.textContent = protocol ? protocol.nome + " · " + protocol.regiao : "Selecione um protocolo";
+
+      setCheck(checkPatient, patientOk);
+      setCheck(checkProtocol, protocolOk);
+      setCheck(checkPosition, positionOk);
+      if (checkPatientText) checkPatientText.textContent = patient ? patient.nome + (patient.prontuario ? " · " + patient.prontuario : "") : "Selecione um paciente";
+      if (checkProtocolText) checkProtocolText.textContent = protocolOk ? protocol.nome : (protocolErrors[0] ? protocolErrors[0].message : "Selecione um protocolo");
+      if (checkPositionText) checkPositionText.textContent = positionLabel(position);
+      startBtn.disabled = !validation.ok;
+      startBtn.title = validation.ok ? "Abrir a tela de aquisição" : validation.errors.map(function (error) { return error.message; }).join(" ");
+    }
+
+    function setWorkflow(mode) {
+      var preparation = mode !== "exam";
+      body.classList.toggle("workflow-preparation", preparation);
+      body.classList.toggle("workflow-exam", !preparation);
+      if (stageTitle) stageTitle.textContent = preparation ? "PREPARAÇÃO DO EXAME" : "EXAME EM ANDAMENTO";
+      if (backBtn) backBtn.hidden = preparation;
+      if (preparation) {
+        if (consoleUiApi) consoleUiApi.setStep("sim");
+        patientPane.classList.add("is-form-collapsed");
+        if (!body.classList.contains("is-mobile") && posePanel) posePanel.hidden = false;
+      } else {
+        if (consoleUiApi) consoleUiApi.setStep("acq");
+        if (posePanel) posePanel.hidden = true;
+        if (poseToggle) poseToggle.setAttribute("aria-expanded", "false");
+      }
+      update();
+      requestAnimationFrame(function () { window.dispatchEvent(new Event("resize")); });
+    }
+
+    if (newPatientBtn) newPatientBtn.addEventListener("click", function () {
+      patientPane.classList.toggle("is-form-collapsed");
+      newPatientBtn.textContent = patientPane.classList.contains("is-form-collapsed") ? "+ Novo paciente" : "Fechar cadastro";
+    });
+
+    startBtn.addEventListener("click", function () {
+      var position = positionSnapshot();
+      if (examSessionApi && examSessionApi.setPosition) examSessionApi.setPosition(position);
+      var validation = examSessionApi && examSessionApi.validateForAcquisition
+        ? examSessionApi.validateForAcquisition(position)
+        : { ok: false, errors: [{ message: "Preparação incompleta." }] };
+      if (!validation.ok) {
+        showMessage(validation.errors.map(function (error) { return error.message; }).join(" "), "warning");
+        update();
+        return;
+      }
+      setWorkflow("exam");
+      showMessage("Preparação confirmada. Revise o topograma e inicie a aquisição quando estiver pronto.", "success");
+    });
+
+    if (backBtn) backBtn.addEventListener("click", function () {
+      var state = examSessionApi && examSessionApi.getState ? examSessionApi.getState() : null;
+      if (state && state.phase !== "idle") {
+        showMessage("Finalize ou interrompa o exame antes de voltar à preparação.", "warning");
+        return;
+      }
+      setWorkflow("preparation");
+    });
+
+    if (examSessionApi && examSessionApi.subscribe) examSessionApi.subscribe(update);
+    var classObserver = new MutationObserver(function () {
+      if (!body.classList.contains("workflow-preparation")) return;
+      if (posePanel) posePanel.hidden = body.classList.contains("is-mobile");
+    });
+    classObserver.observe(body, { attributes: true, attributeFilter: ["class"] });
+    setInterval(update, 700);
+    setWorkflow("preparation");
+  }
+
+  // =================================================================
   // PIP DA SALA 3D — no modo console, durante topograma/posicionamento/
   // volume, o .viewport REAL é reparentado para uma janela flutuante
   // sobre o viewer de aquisição (o aluno vê a mesa se movendo enquanto a
@@ -3381,6 +3521,7 @@
     initMobileMode();
     initMobilePanel();
     initConsoleMode();
+    initPreparationWorkflow();
     initAcqPip();
   }
 
