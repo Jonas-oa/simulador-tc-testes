@@ -1,0 +1,28 @@
+{
+  "id": "cranio",
+  "nome": "Crânio",
+  "modalidade": "CT",
+  "plano": "axial",
+  "cortes": 76,
+  "largura": 512,
+  "altura": 507,
+  "padrao": "axial_%03d.png",
+  "topograma": "topograma.png",
+  "espacamento_mm": {
+    "x": 0.4297,
+    "y": 0.4297,
+    "z": 2.528
+  },
+  "janela_exibicao": {
+    "wl": 40.0,
+    "ww": 400.0,
+    "obs": "Janela apenas para visualização; ajustável em etapa futura. Não é interpretação diagnóstica."
+  },
+  "fonte": {
+    "nome": "3D Slicer sample data — CT-brain",
+    "url": "https://github.com/Slicer/SlicerTestingData",
+    "licenca": "Doado ao projeto 3D Slicer pelas pessoas retratadas, sem restrições de uso.",
+    "sha256_origem": "6a5b6caccb76576a863beb095e3bfb910c50ca78f4c9bf043aa42f976cfa53d1"
+  },
+  "topograma_h": "topograma-h.png"
+}

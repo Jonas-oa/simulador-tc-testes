@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Simulador Educacional de Tomografia Computadorizada</title>
+  <meta name="description" content="Simulador educacional de TC para treinamento de estudantes de Radiologia. Não realiza diagnóstico nem orientação clínica." />
+
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0e14" />
+  <link rel="icon" href="icons/icon-192.png" />
+
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/mobile-tabs.css" />
+</head>
+<body data-theme="dark">
+
+  <header id="status-bar" class="status-bar" role="banner">
+    <div class="status-bar__brand">
+      <span class="status-bar__logo" aria-hidden="true">⌬</span>
+      <span class="status-bar__title">SIMULADOR TC</span>
+      <span class="status-bar__subtitle">Uso educacional — não clínico</span>
+    </div>
+
+    <div class="status-bar__indicators" id="status-indicators">
+      <div class="indicator" data-indicator="power" data-state="on" title="Sistema ligado">
+        <span class="indicator__dot"></span><span class="indicator__label">SISTEMA</span>
+      </div>
+      <div class="indicator" data-indicator="ready" data-state="on" title="Pronto para simulação">
+        <span class="indicator__dot"></span><span class="indicator__label">PRONTO</span>
+      </div>
+      <div class="indicator" data-indicator="laser" data-state="off" title="Lasers de posicionamento">
+        <span class="indicator__dot"></span><span class="indicator__label">LASER</span>
+      </div>
+      <div class="indicator" data-indicator="motion" data-state="off" title="Mesa em movimento">
+        <span class="indicator__dot"></span><span class="indicator__label">MOVIMENTO</span>
+      </div>
+    </div>
+
+    <div class="status-bar__actions">
+      <button id="mobile-toggle" class="icon-btn" type="button" aria-label="Modo celular" title="Modo celular" aria-pressed="false">
+        <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 18H7V5h10v14zm-3.5 3h-3a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5z"/></svg>
+      </button>
+      <button id="console-toggle" class="icon-btn" type="button" aria-label="Alternar console guiado / painel de quadrantes" title="Console guiado / Painel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>
+      </button>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Alternar tema claro/escuro" title="Alternar tema">
+        <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.5 5.5 0 0 1 12 3z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="console-steps" id="console-steps" hidden aria-label="Etapas do console de operação">
+    <button class="cstep" data-step="sim" type="button"><span class="cstep__num">1</span>Sala<span class="cstep__dot" id="cdot-sim" hidden></span></button>
+    <button class="cstep" data-step="pac" type="button"><span class="cstep__num">2</span>Paciente<span class="cstep__dot" id="cdot-pac" hidden></span></button>
+    <button class="cstep" data-step="proto" type="button"><span class="cstep__num">3</span>Protocolo<span class="cstep__dot" id="cdot-proto" hidden></span></button>
+    <button class="cstep" data-step="acq" type="button"><span class="cstep__num">4</span>Exame<span class="cstep__dot" id="cdot-acq" hidden></span></button>
+    <div class="console-banner" id="console-banner">Sem paciente em exame</div>
+  </nav>
+
+  <nav class="mobile-switch" id="mobile-switch" hidden aria-label="Navegação do modo celular">
+    <button class="mobile-switch__btn is-active" id="mob-view-pos" type="button" data-mobile-view="3d" aria-current="page">
+      <span class="mobile-switch__icon" aria-hidden="true">◉</span><span>Sala</span>
+    </button>
+    <button class="mobile-switch__btn" id="mob-view-pac" type="button" data-mobile-view="pac">
+      <span class="mobile-switch__icon" aria-hidden="true">♙</span><span>Paciente</span>
+    </button>
+    <button class="mobile-switch__btn" id="mob-view-proto" type="button" data-mobile-view="proto">
+      <span class="mobile-switch__icon" aria-hidden="true">☷</span><span>Protocolo</span>
+    </button>
+    <button class="mobile-switch__btn" id="mob-view-cmd" type="button" data-mobile-view="aq">
+      <span class="mobile-switch__icon" aria-hidden="true">▣</span><span>Exame</span>
+    </button>
+    <button class="mobile-switch__exit" id="mob-exit" type="button" aria-label="Sair do modo celular" title="Sair do modo celular">✕</button>
+  </nav>
+  <div class="mobile-rotate" id="mobile-rotate" aria-hidden="true">↺ Use a horizontal na Sala 3D</div>
+
+  <main class="dashboard" id="dashboard">
+    <div class="dash-col dash-col--left" id="dash-col-left">
+    <section class="dash-pane dash-pane--sim" id="pane-sim" aria-label="Simulador 3D">
+      <div class="app-main" id="sala-view">
+        <section class="viewport" aria-label="Visualização 3D do equipamento">
+          <canvas id="scene-canvas" aria-hidden="true"></canvas>
+          <div class="viewport__overlay">
+            <div class="viewport__hud viewport__hud--unified">
+              <div class="hud__row"><span class="hud__label">MESA</span><span class="hud__value" id="hud-table-position">000.0 <small>mm</small></span></div>
+              <div class="hud__row"><span class="hud__label">VELOC.</span><span class="hud__value" id="hud-table-speed">0.0 <small>mm/s</small></span></div>
+              <div class="hud__row"><span class="hud__label">ALTURA</span><span class="hud__value" id="hud-table-height">80.0 <small>cm</small></span></div>
+            </div>
+          </div>
+          <div class="viewport__loading" id="viewport-loading"><span class="spinner" aria-hidden="true"></span><span>Inicializando cena 3D…</span></div>
+        </section>
+
+        <aside class="console" aria-label="Painel de operação do equipamento">
+          <div class="display display--compact" aria-label="Display digital">
+            <div class="display__row"><span class="display__label">STATUS</span><span class="display__value" id="display-status">AGUARDANDO</span></div>
+            <div class="display__row"><span class="display__label">MESA</span><span class="display__value display__value--mono" id="display-table">000.0 mm</span></div>
+            <div class="display__row"><span class="display__label">ALTURA</span><span class="display__value display__value--mono" id="display-height">80.0 cm</span></div>
+            <div class="display__row"><span class="display__label">DECÚBITO</span><span class="display__value" id="display-position">DORSAL</span></div>
+          </div>
+
+          <div class="panel" id="sala-panel">
+            <div class="panel__grip" id="sala-panel-grip" role="button" tabindex="-1" aria-label="Mover painel de comandos" title="Arraste para mover"><span></span></div>
+            <div class="panel__resize" id="sala-panel-resize" role="button" tabindex="-1" aria-label="Redimensionar painel de comandos" title="Arraste para redimensionar"></div>
+            <div class="panel__row panel__row--top">
+              <button class="pad-btn pad-btn--toggle" id="btn-laser" type="button" data-action="laser-toggle" aria-pressed="false"><span class="pad-btn__icon">✛</span><span class="pad-btn__label">Laser</span></button>
+              <button class="pad-btn pad-btn--stop" id="btn-stop" type="button" data-action="stop"><span class="pad-btn__icon">■</span><span class="pad-btn__label">Stop</span></button>
+              <button class="pad-btn" id="pose-toggle" type="button" aria-expanded="false" aria-controls="pose-panel"><span class="pad-btn__icon" id="pose-current-icon" aria-hidden="true">☰</span><span class="pad-btn__label">Decúbito</span></button>
+            </div>
+
+            <div class="dpad" aria-label="Controle de movimento da mesa">
+              <button class="dpad__btn dpad__btn--up" id="btn-table-up" type="button" data-action="table-up" aria-label="Subir mesa">▲</button>
+              <button class="dpad__btn dpad__btn--left" id="btn-table-out" type="button" data-action="table-out" aria-label="Sair do gantry">◀</button>
+              <button class="dpad__btn dpad__btn--center" id="btn-start" type="button" data-action="start" aria-label="Iniciar">▶</button>
+              <button class="dpad__btn dpad__btn--right" id="btn-table-in" type="button" data-action="table-in" aria-label="Entrar no gantry">▶</button>
+              <button class="dpad__btn dpad__btn--down" id="btn-table-down" type="button" data-action="table-down" aria-label="Descer mesa">▼</button>
+            </div>
+
+            <div class="panel__row panel__row--bottom">
+              <button class="pad-btn" id="btn-reset" type="button" data-action="reset"><span class="pad-btn__icon">↺</span><span class="pad-btn__label">Reiniciar</span></button>
+              <button class="pad-btn" id="btn-zero" type="button" data-action="zero"><span class="pad-btn__icon">⊘</span><span class="pad-btn__label">Zerar</span></button>
+            </div>
+
+            <div class="pose-panel" id="pose-panel" hidden>
+              <span class="pose-toggle__text" id="pose-current-text" hidden>Dorsal · Cabeça primeiro</span>
+              <div class="pose-panel__section-title">Decúbito</div>
+              <div class="pose-grid" id="pose-decubito-grid"></div>
+              <div class="pose-panel__section-title">Entrada no gantry</div>
+              <div class="pose-grid pose-grid--2" id="pose-entrada-grid"></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="dash-gutter dash-gutter--h" id="dash-gutter-h-left" role="separator" aria-orientation="horizontal" aria-label="Redimensionar altura da coluna esquerda"></div>
+
+    <section class="dash-pane dash-pane--pac" id="pane-pac" aria-label="Cadastro de pacientes">
+      <header class="dash-pane__head"><h2 class="dash-pane__title">Cadastro de pacientes</h2></header>
+      <div class="dash-pane__body">
+        <div class="pac-form" id="pac-form">
+          <label class="ws-field ws-field--full"><span class="ws-field__label">Prontuário</span><input class="ws-input" id="pac-prontuario" type="text" placeholder="nº do prontuário"></label>
+          <label class="ws-field ws-field--full"><span class="ws-field__label">Nome</span><input class="ws-input" id="pac-nome" type="text" placeholder="nome do paciente"></label>
+          <div class="pac-form__row">
+            <label class="ws-field"><span class="ws-field__label">Sexo</span>
+              <select class="ws-input" id="pac-sexo"><option value="Feminino">Feminino</option><option value="Masculino">Masculino</option><option value="Outro">Outro</option></select>
+            </label>
+            <label class="ws-field"><span class="ws-field__label">Idade</span><input class="ws-input" id="pac-idade" type="number" min="0" max="130" placeholder="anos"></label>
+          </div>
+          <label class="ws-field ws-field--full"><span class="ws-field__label">Região a examinar</span><select class="ws-input" id="pac-regiao"></select></label>
+          <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="pac-add" type="button">Cadastrar paciente</button></div>
+        </div>
+        <ul class="pac-list" id="pac-list"></ul>
+      </div>
+    </section>
+    </div>
+
+    <div class="dash-gutter dash-gutter--v" id="dash-gutter-v" role="separator" aria-orientation="vertical" aria-label="Redimensionar largura das colunas"></div>
+
+    <div class="dash-col dash-col--right" id="dash-col-right">
+    <section class="dash-pane dash-pane--acq" id="pane-acq" aria-label="Aquisição de exames">
+      <header class="dash-pane__head"><h2 class="dash-pane__title">Aquisição de exames</h2></header>
+      <div class="dash-pane__body dash-pane__body--acq">
+        <div class="acq3d" id="acq3d" hidden><span class="acq3d__tag">Sala 3D — mesa em movimento</span><div class="acq3d__body" id="acq3d-body"></div></div>
+        <div class="ws-viewer ws-viewer--full" id="ws-slice-viewer" aria-label="Área de aquisição e visualização de imagens">
+          <img id="ws-slice-img" class="ws-viewer__img" alt="Corte axial de TC de crânio" hidden>
+          <div class="ws-topo" id="ws-topo" hidden>
+            <img id="ws-topo-img" class="ws-topo__img" alt="Topograma lateral de crânio">
+            <div class="ws-topo__box" id="ws-topo-box" aria-hidden="true">
+              <div class="ws-topo__rect" id="ws-topo-rect"></div>
+              <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-top" data-edge="top" title="FOV — limite anterior"></div>
+              <div class="ws-topo__line ws-topo__line--h ws-topo__line--fov" id="ws-topo-bottom" data-edge="bottom" title="FOV — limite posterior"></div>
+              <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-left" data-edge="left" title="Limite da faixa — vértice"></div>
+              <div class="ws-topo__line ws-topo__line--v ws-topo__line--range" id="ws-topo-right" data-edge="right" title="Limite da faixa — base do crânio"></div>
+            </div>
+          </div>
+          <span class="ws-viewer__placeholder" id="ws-viewer-placeholder">Exame não iniciado</span>
+
+          <div class="pip" id="pip-3d" hidden>
+            <div class="pip__bar" id="pip-bar"><span>Sala 3D — mesa em movimento</span><button class="pip__hide" id="pip-hide" type="button" title="Ocultar janela">—</button></div>
+            <div class="pip__body" id="pip-body"></div>
+          </div>
+
+          <div class="ws-report" id="ws-report" hidden>
+            <h3 class="ws-report__title">Relatório do exame — didático</h3>
+            <div class="ws-report__body" id="ws-report-body"></div>
+                        <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="ws-report-close" type="button">Ver cortes</button></div>
+          </div>
+
+          <div class="ws-overlay ws-overlay--top" aria-label="Paciente em exame">
+            <ul class="ws-list ws-list--overlay" id="ws-patient-list"></ul>
+          </div>
+
+          <div class="ws-overlay ws-overlay--bottom">
+            <p class="ws-topo-readout" id="ws-topo-readout" hidden></p>
+            <div class="ws-viewer-ctrl" id="ws-viewer-ctrl" hidden>
+              <input type="range" id="ws-slice-slider" min="0" max="0" value="0" step="1" aria-label="Navegar cortes">
+              <span class="ws-slice-counter" id="ws-slice-counter">—</span>
+            </div>
+            <div class="ws-actions ws-actions--center">
+              <button class="ws-btn" id="ws-exam-move" type="button" hidden>Mover</button>
+              <button class="ws-btn" id="ws-exam-report" type="button" hidden>Relatório</button>
+              <button class="ws-btn ws-btn--primary" id="ws-exam-start" type="button">Iniciar</button>
+              <button class="ws-btn ws-btn--danger" id="ws-exam-stop" type="button" disabled>Stop</button>
+            </div>
+            <p class="ws-note ws-note--overlay" id="ws-viewer-caption">Ao iniciar: volume real anonimizado de TC de crânio, de licença livre. A janela é apenas de exibição — não constitui interpretação diagnóstica.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="dash-gutter dash-gutter--h" id="dash-gutter-h-right" role="separator" aria-orientation="horizontal" aria-label="Redimensionar altura da coluna direita"></div>
+
+    <section class="dash-pane dash-pane--proto" id="pane-proto" aria-label="Cadastro e seleção de protocolos">
+      <header class="dash-pane__head"><h2 class="dash-pane__title">Protocolos</h2></header>
+      <div class="dash-pane__body">
+        <div class="proto2">
+          <div class="proto2__model">
+            <svg class="bodymap" viewBox="0 0 140 320" role="group" aria-label="Modelo do corpo — toque numa região">
+              <rect class="bodymap__zone" data-region="Membros" x="26" y="68" width="15" height="90" rx="7"><title>Membros</title></rect>
+              <rect class="bodymap__zone" data-region="Membros" x="99" y="68" width="15" height="90" rx="7"><title>Membros</title></rect>
+              <rect class="bodymap__zone" data-region="Membros" x="51" y="185" width="17" height="122" rx="8"><title>Membros</title></rect>
+              <rect class="bodymap__zone" data-region="Membros" x="72" y="185" width="17" height="122" rx="8"><title>Membros</title></rect>
+              <ellipse class="bodymap__zone" data-region="Crânio" cx="70" cy="32" rx="20" ry="24"><title>Crânio</title></ellipse>
+              <rect class="bodymap__zone" data-region="Pescoço" x="61" y="54" width="18" height="12" rx="3"><title>Pescoço</title></rect>
+              <rect class="bodymap__zone" data-region="Tórax" x="44" y="66" width="52" height="46" rx="8"><title>Tórax</title></rect>
+              <rect class="bodymap__zone" data-region="Abdome" x="48" y="113" width="44" height="40" rx="6"><title>Abdome</title></rect>
+              <rect class="bodymap__zone" data-region="Pelve" x="47" y="154" width="46" height="30" rx="7"><title>Pelve</title></rect>
+            </svg>
+            <div class="bodymap__chips"><button type="button" class="bodymap__chip" data-region="Coluna">Coluna</button></div>
+          </div>
+
+          <div class="proto2__side">
+            <div class="proto2__region" id="proto-region-label">Selecione uma região no modelo</div>
+            <ul class="proto-list" id="proto-list"></ul>
+            <p class="ws-note" id="proto-empty" hidden>Nenhum protocolo nesta região ainda.</p>
+            <div class="ws-actions" id="ws-actions-view">
+              <button class="ws-btn" id="ws-protocol-edit" type="button" hidden>Editar</button>
+              <button class="ws-btn ws-btn--ghost" id="proto-new" type="button" hidden>+ Novo protocolo</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="proto2__editor proto-editor--full" id="proto-editor" hidden>
+          <div class="proto-editor__head">
+            <span class="proto2__region" id="proto-editor-title">Protocolo</span>
+          </div>
+          <div class="ws-params">
+                <label class="ws-field"><span class="ws-field__label">kV</span><input class="ws-input" id="ws-param-kv" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">mAs</span><input class="ws-input" id="ws-param-mas" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Pitch</span><input class="ws-input" id="ws-param-pitch" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Direção da varredura</span><select class="ws-input" id="ws-param-direcao" disabled>
+                  <option value="caudocranial">Caudo-cranial (mesa sai do gantry)</option>
+                  <option value="craniocaudal">Crânio-caudal (mesa entra no gantry)</option>
+                </select></label>
+                <label class="ws-field"><span class="ws-field__label">Colimação</span><input class="ws-input" id="ws-param-colim" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Esp. corte</span><input class="ws-input" id="ws-param-thick" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Kernel</span><input class="ws-input" id="ws-param-kernel" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">FOV</span><input class="ws-input" id="ws-param-fov" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">CTDIvol</span><input class="ws-input" id="ws-param-dose" type="text" placeholder="—" disabled></label>
+          </div>
+          <div class="ws-actions" id="ws-actions-edit" hidden>
+            <button class="ws-btn ws-btn--primary" id="ws-protocol-save" type="button">Salvar</button>
+            <button class="ws-btn ws-btn--ghost" id="ws-protocol-cancel" type="button">Cancelar</button>
+          </div>
+          <p class="ws-note">Valores técnicos definidos e validados por você; salvos no dispositivo.</p>
+        </div>
+      </div>
+    </section>
+    </div>
+  </main>
+
+  <footer class="message-panel" aria-label="Painel de mensagens" role="status" aria-live="polite">
+    <span class="message-panel__icon" aria-hidden="true">ℹ</span>
+    <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
+  </footer>
+
+  <script>
+    (function () {
+      function reportError(text) {
+        window.__ctSimulatorErrorReported = true;
+        var el = document.getElementById("message-text");
+        var loading = document.getElementById("viewport-loading");
+        if (el) {
+          el.textContent = "ERRO DE DIAGNÓSTICO: " + text;
+          el.style.color = "#ff6b6b";
+        }
+        if (loading) {
+          var span = loading.querySelector("span:last-child");
+          if (span) span.textContent = "Erro: " + text;
+        }
+      }
+      window.addEventListener("error", function (event) {
+        var msg = event.message || (event.error && event.error.message) || "erro desconhecido (possível falha ao carregar módulo)";
+        var src = event.filename ? " (" + event.filename + ":" + event.lineno + ")" : "";
+        reportError(msg + src);
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        var reason = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+        reportError("promise rejeitada: " + reason);
+      });
+
+      var criticalFiles = ["js/vendor/three.min.js", "script.js"];
+      setTimeout(function () {
+        if (window.__ctSimulator || window.__ctSimulatorErrorReported) return;
+        Promise.all(criticalFiles.map(function (path) {
+          return fetch(path, { cache: "no-store" })
+            .then(function (res) { return path + " → HTTP " + res.status; })
+            .catch(function (err) { return path + " → falha de rede (" + err.message + ")"; });
+        })).then(function (results) {
+          reportError("cena não inicializou (sem exceção JS capturada). Verificação de arquivos: " + results.join(" | "));
+        });
+      }, 5000);
+    })();
+  </script>
+
+  <script src="js/vendor/three.min.js"></script>
+  <script src="script.js"></script>
+  <script src="js/mobile-tabs.js"></script>
+</body>
+</html>
