@@ -127,6 +127,23 @@ body.is-mobile.mob-mpr .dash-pane__body {
   padding: 14px 14px 24px;
 }
 
+/* A workstation MPR já controla internamente viewport, gestos e rolagem.
+   O iframe preenche todo o espaço restante acima da navegação do simulador. */
+body.is-mobile.mob-mpr #pane-mpr .mpr-body--workstation {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+body.is-mobile.mob-mpr .mpr-workstation__head {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+body.is-mobile.mob-mpr .mpr-workstation__status {
+  max-width: 54%;
+  font-size: 0.58rem;
+}
+
 body.is-mobile.mob-aq .ws-card {
   padding: 14px;
 }
@@ -488,4 +505,3 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile.mob-mpr .mpr-view { flex: 1 1 0; min-width: 0; }
   body.is-mobile.mob-mpr .mpr-view__img { max-height: 62vh; }
 }
-

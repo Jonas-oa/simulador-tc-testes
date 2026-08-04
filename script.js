@@ -3186,8 +3186,11 @@
       setPlane(b.getAttribute("data-plane"));
     });
 
-    // API para a aba MPR do celular: expõe o volume reconstruído e gera as
-    // reformatações (coronal/sagital) sob demanda, reaproveitando buildReformat.
+    // API do ambiente de processamento. Além das reformatações simples usadas
+    // internamente, exporta a aquisição para a workstation Leitor-Dicon. Como
+    // os assets do simulador são PNG já janelados, os HU enviados são uma
+    // aproximação inversa da janela de exibição — adequada ao treinamento de
+    // ferramentas, mas explicitamente sem valor diagnóstico/dosimétrico.
     mprApi = {
       hasVolume: function () { return !!vol; },
       count: function (pl) {
@@ -3195,7 +3198,49 @@
         if (pl === "sagital") return vol ? vol.W : 0;
         return manifest ? manifest.cortes : 0;
       },
-      reformat: function (pl, idx) { return buildReformat(pl, idx); }
+      reformat: function (pl, idx) { return buildReformat(pl, idx); },
+      exportVolume: function () {
+        if (!vol) return null;
+        var janela = (manifest && manifest.janela_exibicao) || {};
+        var wl = Number(janela.wl); if (!isFinite(wl)) wl = 40;
+        var ww = Number(janela.ww); if (!isFinite(ww) || ww < 1) ww = 400;
+        var baixo = wl - 0.5 - (ww - 1) / 2;
+        var dados = new Int16Array(vol.W * vol.H * vol.Z);
+        var minimo = 32767, maximo = -32768, o = 0;
+        for (var z = 0; z < vol.Z; z++) {
+          var fatia = vol.slices[z];
+          for (var i = 0; i < fatia.length; i++, o++) {
+            var hu = Math.round(baixo + (fatia[i] / 255) * (ww - 1));
+            hu = Math.max(-32768, Math.min(32767, hu));
+            dados[o] = hu;
+            if (hu < minimo) minimo = hu;
+            if (hu > maximo) maximo = hu;
+          }
+        }
+        var pac = (examSessionApi && examSessionApi.get) ? examSessionApi.get() : null;
+        var prot = examProtocol ? examProtocol.data : null;
+        return {
+          buffer: dados.buffer,
+          dims: [vol.W, vol.H, vol.Z],
+          espacamento: [vol.spX, vol.spY, vol.spZ],
+          origem: [0, 0, 0],
+          minimo: minimo,
+          maximo: maximo,
+          janela: { centro: wl, largura: ww },
+          modalidade: "CT",
+          descricaoSerie: (manifest && manifest.nome ? manifest.nome : "Exame") + " — aquisição simulada",
+          descricaoEstudo: prot && prot.nome ? prot.nome : "Simulação educacional de TC",
+          fabricante: "Simulador TC Educacional",
+          idPaciente: pac && pac.prontuario ? pac.prontuario : "SIMULADO",
+          sintaxe: "Volume didático reconstruído de PNG",
+          numFatias: vol.Z,
+          unidadeHU: true,
+          inverterMonocromatico: false,
+          label: pac && pac.nome ? pac.nome : "Exame simulado",
+          notes: "HU aproximados a partir de imagens PNG já janeladas; use somente para treinamento das ferramentas.",
+          attribution: manifest && manifest.fonte ? manifest.fonte.nome : "Simulador TC Educacional"
+        };
+      }
     };
 
     // Iniciar é contextual: em idle adquire o topograma; em plan (com a
@@ -3624,7 +3669,7 @@
   // =================================================================
   // CONSOLE GUIADO (desktop) — fluxo por etapas como nos consoles reais.
   // Uma etapa por vez em tela cheia (1 Sala → 2 Paciente & Protocolo →
-  // 3 Exame), banner persistente do paciente e indicadores de pendência.
+  // 3 Exame → 4 MPR/3D), banner persistente e indicadores de pendência.
   // O modo painel (4 quadrantes) permanece disponível pelo botão ⊞.
   // Estado (modo + etapa) persistido em localStorage.
   // =================================================================
@@ -3636,7 +3681,7 @@
     if (!bar || !toggle) return;
 
     var KEY = "simuladorTC.console";
-    var STEPS = ["sim", "pacproto", "acq"];
+    var STEPS = ["sim", "pacproto", "acq", "mpr"];
     var state = { on: true, step: "sim" }; // console é o padrão no desktop
     try {
       var saved = JSON.parse(localStorage.getItem(KEY) || "null");
@@ -3675,6 +3720,7 @@
       setDot("pacproto", !(pac && prot));
       setDot("sim", !!(pac && tableDriveApi && !onTable));
       setDot("acq", !!(pac && prot && (!tableDriveApi || onTable)));
+      setDot("mpr", !(mprApi && mprApi.hasVolume && mprApi.hasVolume()));
       var parts = [];
       parts.push(pac ? (pac.nome + " · " + (pac.prontuario || "s/ prontuário")) : "Sem paciente em exame");
       if (prot) parts.push("Prot.: " + prot.nome);
@@ -3724,7 +3770,7 @@
       persist();
       apply();
       showMessage(state.on
-        ? "Console guiado: uma etapa por vez (1 Sala → 2 Paciente & Protocolo → 3 Exame)."
+        ? "Console guiado: uma etapa por vez (1 Sala → 2 Paciente & Protocolo → 3 Exame → 4 MPR/3D)."
         : "Modo painel: 4 quadrantes simultâneos com divisórias ajustáveis.", "info");
     });
 
@@ -3977,67 +4023,70 @@
   }
 
   // =================================================================
-  // ABA MPR (celular) — reformatações coronal/sagital em tela própria
-  // Lê o volume reconstruído via mprApi (exposto pelo viewer). Atualiza ao
-  // entrar na aba e quando um exame é reconstruído (evento ct:phase). Sem
-  // volume, mostra um aviso. No desktop a tela fica oculta (as reformatações
-  // vivem no seletor de plano do quadrante de Volumes).
+  // ABA / ETAPA MPR — workstation Leitor-Dicon em iframe same-origin.
+  // A ponte transfere o ArrayBuffer (sem cópia adicional) quando a leitura
+  // fica pronta ou quando uma nova aquisição termina. O leitor também mantém
+  // sua entrada de arquivos DICOM locais para exercícios externos.
   // =================================================================
   function initMprTab() {
     var pane = document.getElementById("pane-mpr");
-    if (!pane) return;
-    var empty = document.getElementById("mpr-empty");
-    var conf = {
-      coronal: { view: "mpr-coronal-view", img: "mpr-coronal-img", slider: "mpr-coronal-slider", counter: "mpr-coronal-counter", label: "Coronal" },
-      sagital: { view: "mpr-sagital-view", img: "mpr-sagital-img", slider: "mpr-sagital-slider", counter: "mpr-sagital-counter", label: "Sagital" }
-    };
-    function el(id) { return document.getElementById(id); }
-    function renderOne(pl) {
-      var c = conf[pl];
-      var img = el(c.img), slider = el(c.slider), counter = el(c.counter);
-      if (!img || !mprApi) return;
-      var n = mprApi.count(pl);
-      if (!n) return;
-      var idx = Math.max(0, Math.min(n - 1, parseInt(slider.value, 10) || 0));
-      var url = mprApi.reformat(pl, idx);
-      if (url) img.src = url;
-      slider.max = n - 1; slider.value = idx;
-      counter.textContent = c.label + " " + (idx + 1) + " / " + n;
+    var frame = document.getElementById("mpr-workstation");
+    var status = document.getElementById("mpr-status");
+    if (!pane || !frame || !status) return;
+    var ready = false;
+
+    function setStatus(text, kind) {
+      status.textContent = text;
+      status.classList.toggle("is-ready", kind === "ready");
+      status.classList.toggle("is-warning", kind === "warning");
     }
-    function refresh() {
-      var has = !!(mprApi && mprApi.hasVolume && mprApi.hasVolume());
-      if (empty) empty.hidden = has;
-      ["coronal", "sagital"].forEach(function (pl) {
-        var c = conf[pl];
-        var v = el(c.view);
-        if (v) v.hidden = !has;
-        if (has) {
-          var slider = el(c.slider);
-          // Ao surgir um volume novo, começa no corte CENTRAL (a borda é
-          // quase preta). Depois respeita a navegação do usuário.
-          if (slider && !c._init) {
-            slider.max = mprApi.count(pl) - 1;
-            slider.value = Math.floor(mprApi.count(pl) / 2);
-            c._init = true;
-          }
-          renderOne(pl);
-        } else {
-          c._init = false; // volume descartado → recentraliza no próximo
-        }
-      });
+
+    function sendVolume() {
+      if (!ready || !frame.contentWindow) return;
+      if (!(mprApi && mprApi.hasVolume && mprApi.hasVolume())) {
+        setStatus("Adquira um exame ou abra uma série DICOM no leitor", "warning");
+        return;
+      }
+      try {
+        setStatus("Transferindo exame reconstruído…", "warning");
+        var payload = mprApi.exportVolume();
+        frame.contentWindow.postMessage(
+          { type: "ct-simulator:volume", payload: payload },
+          location.origin,
+          [payload.buffer]
+        );
+      } catch (error) {
+        setStatus("Falha ao enviar o volume: " + (error.message || error), "warning");
+      }
     }
-    ["coronal", "sagital"].forEach(function (pl) {
-      var slider = el(conf[pl].slider);
-      if (slider) slider.addEventListener("input", function () { renderOne(pl); });
+
+    frame.addEventListener("load", function () {
+      ready = false;
+      setStatus("Inicializando o ambiente de processamento…", "warning");
     });
-    // Reconstrução concluída (ou reiniciada) reavalia a tela.
-    document.addEventListener("ct:phase", function () { refresh(); });
-    // Abrir a aba MPR reavalia (o volume pode ter mudado).
-    var mo = new MutationObserver(function () {
-      if (document.body.classList.contains("mob-mpr")) refresh();
+
+    window.addEventListener("message", function (event) {
+      if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+      var data = event.data || {};
+      if (data.type === "ct-dicom-viewer:ready") {
+        ready = true;
+        setStatus("Leitor pronto — aguardando exame", "ready");
+        sendVolume();
+      } else if (data.type === "ct-dicom-viewer:volume-applied") {
+        var dims = data.dims && data.dims.join ? data.dims.join(" × ") : "volume";
+        setStatus("Exame disponível para processamento — " + dims, "ready");
+      } else if (data.type === "ct-dicom-viewer:error") {
+        setStatus("Leitor: " + (data.message || "não foi possível abrir o volume"), "warning");
+      }
     });
-    mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    refresh();
+
+    document.addEventListener("ct:phase", function (event) {
+      var phase = event.detail && event.detail.phase;
+      if (phase === "review") sendVolume();
+      if (phase === "idle" && !(mprApi && mprApi.hasVolume && mprApi.hasVolume())) {
+        setStatus("Adquira um exame ou abra uma série DICOM no leitor", "warning");
+      }
+    });
   }
 
   function main() {

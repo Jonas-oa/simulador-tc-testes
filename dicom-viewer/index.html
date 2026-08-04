@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitor DICOM — MPR e 3D</title>
+<script>
+  // Quem chega de um aparelho de toque vai para a interface de celular.
+  // ?pc=1 fica gravado e mantém esta versão no mesmo aparelho.
+  (function () {
+    var busca = new URLSearchParams(location.search);
+    if (busca.has('pc')) { try { localStorage.setItem('leitor-dicom-versao', 'pc'); } catch (e) {} return; }
+    try { if (localStorage.getItem('leitor-dicom-versao') === 'pc') return; } catch (e) {}
+    var toque = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    var estreito = Math.min(window.innerWidth, window.innerHeight) < 820;
+    if (toque && estreito) location.replace('celular.html' + location.search);
+  })();
+</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230b1220'/><path d='M6 16h20M16 6v20' stroke='%234fa8ff' stroke-width='2'/><circle cx='16' cy='16' r='6' fill='none' stroke='%235fd08a' stroke-width='2'/></svg>">
+</head>
+<body>
+
+<header class="topo">
+  <div class="marca">
+    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="6" fill="#0f1a2e"/>
+      <path d="M6 16h20M16 6v20" stroke="#4fa8ff" stroke-width="2"/>
+      <circle cx="16" cy="16" r="6" fill="none" stroke="#5fd08a" stroke-width="2"/>
+    </svg>
+    <div>
+      <strong>Leitor DICOM</strong>
+      <span>Reconstrução multiplanar e volumétrica</span>
+    </div>
+  </div>
+
+  <div class="topo-acoes">
+    <span id="infoSerie" class="info-serie"></span>
+    <a class="botao secundario" href="celular.html" title="Interface para toque">Versão celular</a>
+    <label class="botao">
+      Abrir pasta local
+      <input type="file" id="entradaPasta" webkitdirectory directory multiple hidden>
+    </label>
+    <label class="botao secundario">
+      Abrir arquivos
+      <input type="file" id="entradaArquivos" multiple hidden>
+    </label>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ------------------------------------------------------------------ -->
+  <aside class="painel" id="painel">
+    <section class="bloco">
+      <h2>Exames</h2>
+      <p class="dica">Séries DICOM de exemplo incluídas no projeto.</p>
+      <div id="listaExames" class="lista-exames"></div>
+    </section>
+
+    <section class="bloco" id="blocoControles" hidden>
+      <h2>Janelamento</h2>
+      <div id="presets" class="chips"></div>
+      <label class="campo">
+        <span>Centro <b id="valCentro">0</b></span>
+        <input type="range" id="ctrlCentro" min="-1200" max="3000" value="40">
+      </label>
+      <label class="campo">
+        <span>Largura <b id="valLargura">400</b></span>
+        <input type="range" id="ctrlLargura" min="1" max="4000" value="400">
+      </label>
+      <label class="campo">
+        <span>Paleta</span>
+        <select id="ctrlPaleta"></select>
+      </label>
+      <label class="alternador">
+        <input type="checkbox" id="ctrlSuavizar" checked> Interpolação suave
+      </label>
+      <label class="alternador">
+        <input type="checkbox" id="ctrlCrosshair" checked> Mostrar crosshair
+      </label>
+    </section>
+
+    <section class="bloco" id="bloco3d" hidden>
+      <h2>Reconstrução 3D</h2>
+      <div class="chips" id="modos3d">
+        <button class="chip ativo" data-modo="volume">Volume</button>
+        <button class="chip" data-modo="mip">MIP</button>
+      </div>
+      <label class="campo">
+        <span>Função de transferência</span>
+        <select id="ctrlTransfer"></select>
+      </label>
+      <label class="campo">
+        <span>Opacidade <b id="valOpacidade">1,0</b></span>
+        <input type="range" id="ctrlOpacidade" min="5" max="300" value="100">
+      </label>
+      <label class="campo">
+        <span>Corte superior <b id="valCorte">100%</b></span>
+        <input type="range" id="ctrlCorte" min="5" max="100" value="100">
+      </label>
+      <label class="campo">
+        <span>Qualidade</span>
+        <select id="ctrlQualidade">
+          <option value="0.6">Rápida</option>
+          <option value="0.85" selected>Equilibrada</option>
+          <option value="1">Alta</option>
+        </select>
+      </label>
+      <label class="alternador">
+        <input type="checkbox" id="ctrlSombra" checked> Sombreamento
+      </label>
+      <div class="chips" id="vistas3d">
+        <button class="chip" data-vista="anterior">Ant</button>
+        <button class="chip" data-vista="posterior">Post</button>
+        <button class="chip" data-vista="esquerda">Esq</button>
+        <button class="chip" data-vista="direita">Dir</button>
+        <button class="chip" data-vista="superior">Sup</button>
+        <button class="chip" data-vista="inferior">Inf</button>
+      </div>
+    </section>
+
+    <section class="bloco" id="blocoDetalhes" hidden>
+      <h2>Série</h2>
+      <dl id="detalhes" class="detalhes"></dl>
+    </section>
+  </aside>
+
+  <!-- ------------------------------------------------------------------ -->
+  <section class="grade" id="grade">
+    <figure class="viewport" data-plano="axial">
+      <canvas id="cvAxial"></canvas>
+      <figcaption class="expandir" title="Expandir">⤢</figcaption>
+    </figure>
+    <figure class="viewport" data-plano="coronal">
+      <canvas id="cvCoronal"></canvas>
+      <figcaption class="expandir" title="Expandir">⤢</figcaption>
+    </figure>
+    <figure class="viewport" data-plano="sagital">
+      <canvas id="cvSagital"></canvas>
+      <figcaption class="expandir" title="Expandir">⤢</figcaption>
+    </figure>
+    <figure class="viewport viewport-3d" data-plano="tridi">
+      <canvas id="cv3d"></canvas>
+      <figcaption class="expandir" title="Expandir">⤢</figcaption>
+      <div class="rotulo3d">3D</div>
+      <div class="aviso3d" id="aviso3d" hidden></div>
+    </figure>
+  </section>
+</main>
+
+<footer class="rodape">
+  <span id="statusCursor" class="mono">—</span>
+  <span id="statusJanela" class="mono"></span>
+  <span class="atalhos">
+    arrastar = crosshair · botão direito = janela · roda = corte · Ctrl+roda = zoom · duplo clique = ajustar
+  </span>
+</footer>
+
+<div class="carregando" id="carregando" hidden>
+  <div class="caixa">
+    <div class="barra"><i id="barraProgresso"></i></div>
+    <p id="textoProgresso">Carregando…</p>
+  </div>
+</div>
+
+<div class="erro" id="erro" hidden>
+  <div class="caixa">
+    <h3>Não foi possível abrir</h3>
+    <p id="textoErro"></p>
+    <button class="botao" id="fecharErro">Fechar</button>
+  </div>
+</div>
+
+<div class="modal" id="seletorSerie" hidden>
+  <div class="caixa">
+    <h3>Escolha a série</h3>
+    <div id="listaSeries" class="lista-series"></div>
+    <button class="botao secundario" id="cancelarSerie">Cancelar</button>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260721e" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260721e" />
+  <link rel="stylesheet" href="css/style.css?v=20260804mpr" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260804mpr" />
 </head>
 <body data-theme="dark">
 
@@ -54,6 +54,7 @@
     <button class="cstep" data-step="sim" type="button"><span class="cstep__num">1</span>Sala<span class="cstep__dot" id="cdot-sim" hidden></span></button>
     <button class="cstep" data-step="pacproto" type="button"><span class="cstep__num">2</span>Paciente &amp; Protocolo<span class="cstep__dot" id="cdot-pacproto" hidden></span></button>
     <button class="cstep" data-step="acq" type="button"><span class="cstep__num">3</span>Exame<span class="cstep__dot" id="cdot-acq" hidden></span></button>
+    <button class="cstep" data-step="mpr" type="button"><span class="cstep__num">4</span>MPR / 3D<span class="cstep__dot" id="cdot-mpr" hidden></span></button>
     <div class="console-banner" id="console-banner">Sem paciente em exame</div>
   </nav>
 
@@ -350,29 +351,23 @@
       </div>
     </section>
 
-    <!-- MPR — reformatações coronal/sagital (tela exclusiva do celular). No
-         desktop fica oculta: lá as reformatações vivem no seletor de plano
-         do quadrante de Volumes. -->
-    <section class="dash-pane dash-pane--mpr" id="pane-mpr" aria-label="Reformatações MPR">
-      <header class="dash-pane__head"><h2 class="dash-pane__title">Reformatações — MPR</h2></header>
-      <div class="dash-pane__body mpr-body" id="mpr-body">
-        <p class="mpr-empty" id="mpr-empty">Adquira e reconstrua um exame na aba <strong>Exame</strong> para ver as reformatações coronal e sagital do volume.</p>
-        <div class="mpr-view" id="mpr-coronal-view" hidden>
-          <div class="mpr-view__head">Coronal</div>
-          <div class="mpr-view__imgwrap"><img id="mpr-coronal-img" class="mpr-view__img" alt="Reformatação coronal"></div>
-          <div class="mpr-view__ctrl">
-            <input type="range" id="mpr-coronal-slider" min="0" max="0" value="0" step="1" aria-label="Navegar cortes coronais">
-            <span class="ws-slice-counter" id="mpr-coronal-counter">—</span>
-          </div>
-        </div>
-        <div class="mpr-view" id="mpr-sagital-view" hidden>
-          <div class="mpr-view__head">Sagital</div>
-          <div class="mpr-view__imgwrap"><img id="mpr-sagital-img" class="mpr-view__img" alt="Reformatação sagital"></div>
-          <div class="mpr-view__ctrl">
-            <input type="range" id="mpr-sagital-slider" min="0" max="0" value="0" step="1" aria-label="Navegar cortes sagitais">
-            <span class="ws-slice-counter" id="mpr-sagital-counter">—</span>
-          </div>
-        </div>
+    <!-- Workstation MPR/3D incorporada do Leitor-Dicon. O exame reconstruído
+         no simulador é enviado ao iframe por uma ponte same-origin; arquivos
+         DICOM locais também podem ser abertos diretamente no leitor. -->
+    <section class="dash-pane dash-pane--mpr" id="pane-mpr" aria-label="Processamento MPR e 3D">
+      <header class="dash-pane__head mpr-workstation__head">
+        <h2 class="dash-pane__title">Processamento — MPR / 3D</h2>
+        <span class="mpr-workstation__status" id="mpr-status" role="status" aria-live="polite">Aguardando o leitor…</span>
+      </header>
+      <div class="dash-pane__body mpr-body mpr-body--workstation" id="mpr-body">
+        <iframe
+          class="mpr-workstation__frame"
+          id="mpr-workstation"
+          title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
+          src="dicom-viewer/index.html?embedded=1"
+          loading="eager"
+          allow="fullscreen"
+        ></iframe>
       </div>
     </section>
     </div>
@@ -425,6 +420,6 @@
   <script src="js/vendor/three.min.js"></script>
   <script src="js/phantoms.js?v=20260721e"></script>
   <script src="script.js?v=20260721e"></script>
-  <script src="js/mobile-tabs.js?v=20260721e"></script>
+  <script src="js/mobile-tabs.js?v=20260804mpr"></script>
 </body>
 </html>
