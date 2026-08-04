@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Leitor DICOM — celular</title>
+<link rel="stylesheet" href="css/celular.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230b1220'/><path d='M6 16h20M16 6v20' stroke='%234fa8ff' stroke-width='2'/><circle cx='16' cy='16' r='6' fill='none' stroke='%235fd08a' stroke-width='2'/></svg>">
+</head>
+<body>
+
+<header class="topo">
+  <button class="icone" id="btExames" aria-label="Exames">
+    <svg viewBox="0 0 24 24" width="21" height="21"><path d="M4 7h16M4 12h16M4 17h16"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+  </button>
+  <div class="titulo">
+    <b id="tituloExame">Leitor DICOM</b>
+    <small id="subExame">toque no menu para escolher um exame</small>
+  </div>
+  <button class="icone" id="btAjustes" aria-label="Ajustes">
+    <svg viewBox="0 0 24 24" width="21" height="21"><circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+      <circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="19" r="1.8" fill="currentColor"/></svg>
+  </button>
+</header>
+
+<main class="palco" id="palco">
+  <figure class="vp ativo" data-plano="axial"><canvas id="cvAxial"></canvas></figure>
+  <figure class="vp" data-plano="coronal"><canvas id="cvCoronal"></canvas></figure>
+  <figure class="vp" data-plano="sagital"><canvas id="cvSagital"></canvas></figure>
+  <figure class="vp" data-plano="tridi">
+    <canvas id="cv3d"></canvas>
+    <div class="aviso3d" id="aviso3d" hidden></div>
+  </figure>
+
+  <div class="corte" id="caixaCorte" hidden>
+    <input type="range" id="ctrlCorte" min="0" max="100" value="50" aria-label="Corte">
+    <span id="rotuloCorte">—</span>
+  </div>
+
+  <div class="leitura" id="leitura" hidden></div>
+</main>
+
+<nav class="ferramentas" id="ferramentas">
+  <button class="fer ativo" data-fer="cursor">
+    <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.7"/></svg>
+    <span>Cursor</span>
+  </button>
+  <button class="fer" data-fer="janela" aria-expanded="false" aria-controls="menuJanela">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" fill="none"/>
+      <path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor"/></svg>
+    <span>Janela</span>
+  </button>
+  <button class="fer" data-fer="pan">
+    <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16M9 7l3-3 3 3M9 17l3 3 3-3M7 9l-3 3 3 3M17 9l3 3-3 3"
+      stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Mover</span>
+  </button>
+  <button class="fer" data-fer="corte">
+    <svg viewBox="0 0 24 24"><path d="M5 8h14M5 12h14M5 16h14" stroke="currentColor" stroke-width="1.7"/>
+      <path d="M12 2v3M12 19v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    <span>Cortes</span>
+  </button>
+</nav>
+
+<div class="menu-janela" id="menuJanela" role="toolbar" aria-label="Predefinições de janela" hidden>
+  <div id="presetsRapidos"></div>
+</div>
+
+<nav class="abas" id="abas">
+  <button class="aba ativo" data-plano="axial">Axial</button>
+  <button class="aba" data-plano="coronal">Coronal</button>
+  <button class="aba" data-plano="sagital">Sagital</button>
+  <button class="aba" data-plano="tridi">3D</button>
+  <button class="aba" data-plano="grade">⊞</button>
+</nav>
+
+<!-- ------------------------------------------------------------- folhas -->
+<div class="cortina" id="cortina" hidden></div>
+
+<section class="folha" id="folhaExames" hidden>
+  <div class="puxador"></div>
+  <h2>Exames</h2>
+  <div class="linha-qualidade">
+    <span>Qualidade</span>
+    <div class="segmento" id="segQualidade">
+      <button data-perfil="leve">Leve</button>
+      <button data-perfil="media" class="ativo">Média</button>
+      <button data-perfil="completa">Completa</button>
+    </div>
+  </div>
+  <p class="nota" id="notaQualidade"></p>
+  <div id="listaExames" class="lista"></div>
+  <label class="botao-largo">
+    Abrir arquivos do aparelho
+    <input type="file" id="entradaArquivos" multiple hidden>
+  </label>
+  <a class="link-pc" href="index.html?pc=1">Abrir a versão para computador</a>
+</section>
+
+<section class="folha" id="folhaAjustes" hidden>
+  <div class="puxador"></div>
+  <h2>Janela e cores</h2>
+  <label class="campo">
+    <span>Centro <b id="valCentro">0</b></span>
+    <input type="range" id="ctrlJanelaCentro" min="-1200" max="3000" value="40">
+  </label>
+  <label class="campo">
+    <span>Largura <b id="valLargura">400</b></span>
+    <input type="range" id="ctrlJanelaLargura" min="1" max="4000" value="400">
+  </label>
+  <label class="campo">
+    <span>Paleta</span>
+    <select id="ctrlPaleta"></select>
+  </label>
+
+  <h2 id="tit3d">Reconstrução 3D</h2>
+  <div class="segmento" id="modos3d">
+    <button data-modo="volume" class="ativo">Volume</button>
+    <button data-modo="mip">MIP</button>
+  </div>
+  <label class="campo">
+    <span>Função de transferência</span>
+    <select id="ctrlTransfer"></select>
+  </label>
+  <label class="campo">
+    <span>Opacidade <b id="valOpacidade">1,0</b></span>
+    <input type="range" id="ctrlOpacidade" min="5" max="300" value="100">
+  </label>
+  <label class="campo">
+    <span>Corte superior <b id="valCorte3d">100%</b></span>
+    <input type="range" id="ctrlCorte3d" min="5" max="100" value="100">
+  </label>
+  <div class="chips" id="vistas3d">
+    <button class="chip" data-vista="anterior">Ant</button>
+    <button class="chip" data-vista="posterior">Post</button>
+    <button class="chip" data-vista="esquerda">Esq</button>
+    <button class="chip" data-vista="direita">Dir</button>
+    <button class="chip" data-vista="superior">Sup</button>
+    <button class="chip" data-vista="inferior">Inf</button>
+  </div>
+
+  <h2>Série</h2>
+  <dl id="detalhes" class="detalhes"></dl>
+</section>
+
+<section class="folha" id="folhaSeries" hidden>
+  <div class="puxador"></div>
+  <h2>Escolha a série</h2>
+  <div id="listaSeries" class="lista"></div>
+</section>
+
+<div class="carregando" id="carregando" hidden>
+  <div class="caixa">
+    <div class="barra"><i id="barraProgresso"></i></div>
+    <p id="textoProgresso">Carregando…</p>
+  </div>
+</div>
+
+<div class="carregando" id="erro" hidden>
+  <div class="caixa">
+    <h3>Não foi possível abrir</h3>
+    <p id="textoErro"></p>
+    <button class="botao-largo" id="fecharErro">Fechar</button>
+  </div>
+</div>
+
+<script type="module" src="js/app-celular.js"></script>
+</body>
+</html>
