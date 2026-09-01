@@ -1,29 +1,49 @@
 {
   "id": "cranio",
-  "nome": "Crânio",
   "modalidade": "CT",
-  "plano": "axial",
-  "cortes": 76,
-  "largura": 512,
-  "altura": 507,
-  "padrao": "axial_%03d.png",
-  "topograma": "topograma.png",
+  "formato": "int16-hu-raw-gz",
+  "ordem": "z,y,x",
+  "dims": [
+    256,
+    256,
+    34
+  ],
   "espacamento_mm": {
-    "x": 0.4297,
-    "y": 0.4297,
-    "z": 2.528
+    "x": 0.976562,
+    "y": 0.976562,
+    "z": 5.0
   },
+  "origem_mm": [
+    -124.7559,
+    -367.7559,
+    -201.0
+  ],
+  "orientacao": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+  ],
+  "hu_min": -1024,
+  "hu_max": 1843,
   "janela_exibicao": {
-    "wl": 40.0,
-    "ww": 400.0,
-    "obs": "Janela apenas para visualização; ajustável em etapa futura. Não é interpretação diagnóstica."
+    "wl": 40,
+    "ww": 400
   },
-  "fonte": {
-    "nome": "3D Slicer sample data — CT-brain",
-    "url": "https://github.com/Slicer/SlicerTestingData",
-    "licenca": "Doado ao projeto 3D Slicer pelas pessoas retratadas, sem restrições de uso.",
-    "sha256_origem": "6a5b6caccb76576a863beb095e3bfb910c50ca78f4c9bf043aa42f976cfa53d1"
+  "extensao_mm": {
+    "x": 250.0,
+    "y": 250.0,
+    "z": 170.0
   },
-  "topograma_h": "topograma-h.png",
-  "topograma_ap": "topograma-ap.png"
+  "aquisicao_original": {
+    "kvp": 120.0,
+    "espessura_mm": 5.0,
+    "kernel": "['J30s', '2']",
+    "fabricante": "SIEMENS",
+    "modelo": "SOMATOM Definition Flash"
+  },
+  "convertido_em": "2026-09-01T19:57:29.826647+00:00",
+  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
 }

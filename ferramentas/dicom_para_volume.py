@@ -55,7 +55,7 @@ def falhar(msg):
     sys.exit("FALHOU: " + msg)
 
 
-def ler_series(diretorio):
+def ler_series(diretorio, minimo=40):
     arquivos = []
     for raiz, _dirs, nomes in os.walk(diretorio):
         for n in nomes:
@@ -78,8 +78,8 @@ def ler_series(diretorio):
             falhar("corte sem ImagePositionPatient — impossivel ordenar nem medir")
         fatias.append(ds)
 
-    if len(fatias) < 40:
-        falhar("apenas %d cortes de TC utilizaveis (minimo 40)" % len(fatias))
+    if len(fatias) < minimo:
+        falhar("apenas %d cortes de TC utilizaveis (minimo %d)" % (len(fatias), minimo))
     return fatias
 
 
@@ -116,7 +116,7 @@ def separar_grupos(fatias, espessura_alvo=None):
 
     if len(grupos) > 1:
         print("  usando a de %.2f mm (%d cortes)" % (chave[0], len(escolhido)))
-    if len(escolhido) < 40:
+    if len(escolhido) < 20:
         falhar("grupo escolhido tem so %d cortes" % len(escolhido))
     return escolhido
 
@@ -240,11 +240,13 @@ def main():
     ap.add_argument("--lado", type=int, default=256, help="lado maximo no plano (padrao 256)")
     ap.add_argument("--espessura", type=float, default=None,
                     help="escolhe a reconstrucao com esta espessura (mm) quando a serie traz varias")
+    ap.add_argument("--min-cortes", type=int, default=40, dest="min_cortes",
+                    help="minimo de cortes aceito (padrao 40)")
     ap.add_argument("--saida", default=None)
     args = ap.parse_args()
 
     print("lendo %s ..." % args.diretorio)
-    fatias = ler_series(args.diretorio)
+    fatias = ler_series(args.diretorio, args.min_cortes)
     print("  %d cortes de TC" % len(fatias))
     fatias = separar_grupos(fatias, args.espessura)
 
