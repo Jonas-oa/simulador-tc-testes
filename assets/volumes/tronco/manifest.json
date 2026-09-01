@@ -1,0 +1,49 @@
+{
+  "id": "tronco",
+  "modalidade": "CT",
+  "formato": "int16-hu-raw-gz",
+  "ordem": "z,y,x",
+  "dims": [
+    256,
+    256,
+    144
+  ],
+  "espacamento_mm": {
+    "x": 1.570312,
+    "y": 1.570312,
+    "z": 2.5
+  },
+  "origem_mm": [
+    -192.2,
+    -201.0,
+    -378.75
+  ],
+  "orientacao": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+  ],
+  "hu_min": -1024,
+  "hu_max": 3071,
+  "janela_exibicao": {
+    "wl": 40,
+    "ww": 400
+  },
+  "extensao_mm": {
+    "x": 402.0,
+    "y": 402.0,
+    "z": 360.0
+  },
+  "aquisicao_original": {
+    "kvp": 120.0,
+    "espessura_mm": 2.5,
+    "kernel": "STANDARD",
+    "fabricante": "GE MEDICAL SYSTEMS",
+    "modelo": "BrightSpeed QX/i"
+  },
+  "convertido_em": "2026-09-01T19:51:12.412548+00:00",
+  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
+}

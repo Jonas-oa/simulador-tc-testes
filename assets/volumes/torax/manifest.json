@@ -1,0 +1,49 @@
+{
+  "id": "torax",
+  "modalidade": "CT",
+  "formato": "int16-hu-raw-gz",
+  "ordem": "z,y,x",
+  "dims": [
+    256,
+    256,
+    261
+  ],
+  "espacamento_mm": {
+    "x": 1.820312,
+    "y": 1.820312,
+    "z": 1.25
+  },
+  "origem_mm": [
+    -236.9,
+    -233.0,
+    -325.0
+  ],
+  "orientacao": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+  ],
+  "hu_min": -1024,
+  "hu_max": 1566,
+  "janela_exibicao": {
+    "wl": 40,
+    "ww": 400
+  },
+  "extensao_mm": {
+    "x": 466.0,
+    "y": 466.0,
+    "z": 326.2
+  },
+  "aquisicao_original": {
+    "kvp": 120.0,
+    "espessura_mm": 1.25,
+    "kernel": "STANDARD",
+    "fabricante": "GE MEDICAL SYSTEMS",
+    "modelo": "LightSpeed16"
+  },
+  "convertido_em": "2026-09-01T19:48:46.009974+00:00",
+  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
+}
