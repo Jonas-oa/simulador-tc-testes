@@ -148,10 +148,22 @@
             </label>
             <label class="ws-field"><span class="ws-field__label">Idade</span><input class="ws-input" id="pac-idade" type="number" min="0" max="130" placeholder="anos"></label>
           </div>
+          <!-- Peso e altura alimentam a modulação de corrente por tamanho do
+               paciente (AEC), que é como o equipamento real ajusta a dose. -->
+          <div class="pac-form__row">
+            <label class="ws-field"><span class="ws-field__label">Peso (kg)</span><input class="ws-input" id="pac-peso" type="number" min="0.3" max="400" step="0.1" placeholder="kg"></label>
+            <label class="ws-field"><span class="ws-field__label">Altura (cm)</span><input class="ws-input" id="pac-altura" type="number" min="20" max="260" placeholder="cm"></label>
+          </div>
           <label class="ws-field ws-field--full"><span class="ws-field__label">Região a examinar</span><select class="ws-input" id="pac-regiao"></select></label>
           <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="pac-add" type="button">Cadastrar paciente</button></div>
         </div>
+
+        <h3 class="pac-sub">Lista de trabalho</h3>
+        <p class="pac-hint" id="pac-hint">Clique em um paciente para colocá-lo em exame.</p>
         <ul class="pac-list" id="pac-list"></ul>
+
+        <h3 class="pac-sub">Exames realizados</h3>
+        <ul class="pac-list pac-list--estudos" id="estudo-list"></ul>
       </div>
     </section>
     </div>

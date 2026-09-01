@@ -1025,6 +1025,28 @@
       slider.min = 0; slider.max = manifest.cortes - 1;
       show(lastSlice);
       showVolOrient(true);
+      // Arquiva o exame realizado (B-20): o estudo passa a existir depois
+      // que a aquisicao termina, e fica disponivel em "Exames realizados".
+      if (SimTC.examSessionApi && SimTC.examSessionApi.arquivar) {
+        var protArq = SimTC.examProtocol ? SimTC.examProtocol.data : null;
+        var ppArq = (lastAcq && lastAcq.pp) || protocolParams();
+        var doseArq = NaN;
+        if (protArq && protArq.dose) {
+          var mArq = String(protArq.dose).replace(/,/g, ".").match(/\d+(\.\d+)?/);
+          if (mArq) doseArq = parseFloat(mArq[0]);
+        }
+        var lenArq = lastAcq ? lastAcq.scanLen : 0;
+        SimTC.examSessionApi.arquivar({
+          regiao: protArq ? protArq.regiao : "",
+          protocoloNome: protArq ? protArq.nome : "",
+          modo: ppArq.modo,
+          faixaMm: lenArq,
+          cortes: manifest ? manifest.cortes : null,
+          dlp: (doseArq > 0 && lenArq > 0) ? doseArq * (lenArq / 10) : null,
+          isoOffsetCm: topoRef ? topoRef.isoOff : null
+        });
+      }
+
       SimTC.showMessage("Aquisição concluída (" + manifest.cortes + " cortes)" +
         (vol ? " — reformatações coronal/sagital disponíveis." : ".") + " Navegue e finalize com Stop.", "success");
     }
@@ -1204,8 +1226,8 @@
       var finish = (SimTC.examSessionApi && SimTC.examSessionApi.end) ? SimTC.examSessionApi.end() : Promise.resolve();
       finish.then(function () {
         SimTC.showMessage(wasDone
-          ? "Exame finalizado — registro do paciente removido."
-          : "Exame interrompido — registro do paciente removido.", "info");
+          ? "Exame finalizado e arquivado em \"Exames realizados\". O paciente segue na lista de trabalho."
+          : "Exame interrompido. O paciente segue na lista de trabalho.", "info");
       });
     }
 

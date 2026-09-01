@@ -896,6 +896,38 @@ body.is-mobile .ws-plane { display: none !important; }
 .pac-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .pac-list__empty { font-size: 0.72rem; color: var(--text-muted); }
 .pac-list__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+
+/* Subtítulos e dica da lista de trabalho */
+.pac-sub {
+  margin: 18px 0 2px; font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted);
+}
+.pac-hint { margin: 0; font-size: 0.68rem; color: var(--text-muted); }
+
+/* Seleção explícita: o paciente EM EXAME é escolhido, nunca inferido pelo
+   último cadastro. O item inteiro é o alvo de clique. */
+.pac-list__item--sel { cursor: pointer; }
+.pac-list__item--sel:hover { border-color: var(--accent-cyan-dim); }
+.pac-list__item.is-exame {
+  border-color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
+}
+.pac-list__tag {
+  flex: 0 0 auto; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 2px 6px; border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+}
+.pac-list__acao {
+  flex: 0 0 auto; appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-secondary); border-radius: var(--radius-sm);
+  padding: 3px 8px; font-size: 0.66rem; cursor: pointer; line-height: 1.4;
+}
+.pac-list__acao:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+
+/* Exames realizados — arquivo, não fila de trabalho */
+.pac-list--estudos .pac-list__item { border-style: dashed; }
+.pac-list__quando { font-size: 0.64rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .pac-list__info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .pac-list__name { font-size: 0.82rem; }
 .pac-list__meta { font-size: 0.68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }

@@ -72,7 +72,10 @@
   var REGIOES = ["Cranio", "Pescoco", "Torax", "Abdome", "Pelve", "Coluna", "Membros"];
   // Nomes com acentos para exibicao na UI
   var REGIOES_DISPLAY = ["Crânio", "Pescoço", "Tórax", "Abdome", "Pelve", "Coluna", "Membros"];
-  var APP_DB_NAME = "simuladorTC", APP_DB_VER = 2;
+  // v3: acrescenta "estudos" — o arquivo dos exames já realizados. Antes o
+  // exame não deixava rastro: encerrar apagava o paciente e não havia como
+  // rever nem editar o que foi feito.
+  var APP_DB_NAME = "simuladorTC", APP_DB_VER = 3;
 
   function openAppDB() {
     return new Promise(function (resolve, reject) {
@@ -82,6 +85,7 @@
         var db = req.result;
         if (!db.objectStoreNames.contains("protocolos")) db.createObjectStore("protocolos", { keyPath: "id" });
         if (!db.objectStoreNames.contains("pacientes")) db.createObjectStore("pacientes", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("estudos")) db.createObjectStore("estudos", { keyPath: "studyUID" });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error || new Error("Falha ao abrir IndexedDB")); };
