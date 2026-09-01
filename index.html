@@ -378,48 +378,25 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>
-    (function () {
-      function reportError(text) {
-        window.__ctSimulatorErrorReported = true;
-        var el = document.getElementById("message-text");
-        var loading = document.getElementById("viewport-loading");
-        if (el) {
-          el.textContent = "ERRO DE DIAGNÓSTICO: " + text;
-          el.style.color = "#ff6b6b";
-        }
-        if (loading) {
-          var span = loading.querySelector("span:last-child");
-          if (span) span.textContent = "Erro: " + text;
-        }
-      }
-      window.addEventListener("error", function (event) {
-        var msg = event.message || (event.error && event.error.message) || "erro desconhecido (possível falha ao carregar módulo)";
-        var src = event.filename ? " (" + event.filename + ":" + event.lineno + ")" : "";
-        reportError(msg + src);
-      });
-      window.addEventListener("unhandledrejection", function (event) {
-        var reason = event.reason && event.reason.message ? event.reason.message : String(event.reason);
-        reportError("promise rejeitada: " + reason);
-      });
-
-      var criticalFiles = ["js/vendor/three.min.js", "script.js"];
-      setTimeout(function () {
-        if (window.__ctSimulator || window.__ctSimulatorErrorReported) return;
-        Promise.all(criticalFiles.map(function (path) {
-          return fetch(path, { cache: "no-store" })
-            .then(function (res) { return path + " → HTTP " + res.status; })
-            .catch(function (err) { return path + " → falha de rede (" + err.message + ")"; });
-        })).then(function (results) {
-          reportError("cena não inicializou (sem exceção JS capturada). Verificação de arquivos: " + results.join(" | "));
-        });
-      }, 5000);
-    })();
-  </script>
-
+  <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260721e"></script>
-  <script src="script.js?v=20260721e"></script>
+  <script src="js/phantoms.js?v=20260820a"></script>
+
+  <!-- shared.js PRIMEIRO: define window.SimTC -->
+  <script src="js/shared.js?v=20260820a"></script>
+
+  <!-- Módulos de telas -->
+  <script src="js/sala-exame.js?v=20260820a"></script>
+  <script src="js/cadastro-pacientes.js?v=20260820a"></script>
+  <script src="js/protocolos.js?v=20260820a"></script>
+  <script src="js/aquisicao.js?v=20260820a"></script>
+  <script src="js/mpr.js?v=20260820a"></script>
+  <script src="js/ui-layout.js?v=20260820a"></script>
+
+  <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
+  <script src="script.js?v=20260820a"></script>
+
+  <!-- Controlador de abas mobile (independente) -->
   <script src="js/mobile-tabs.js?v=20260804mpr"></script>
 </body>
 </html>

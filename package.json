@@ -1,0 +1,60 @@
+{
+  "name": "simulador-tc-educacional",
+  "version": "1.0.0",
+  "description": "Simulador web 3D para treinamento de operacao de equipamento de TC e posicionamento de paciente",
+  "main": "electron-main.js",
+  "author": "Jonas-oa",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build-portable": "electron-builder --win portable --x64"
+  },
+  "build": {
+    "appId": "br.edu.simulador-tc",
+    "productName": "Simulador TC Educacional",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron-assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**",
+      "!dist/**",
+      "!*.bak",
+      "!*.bat",
+      "!electron-assets/icon.png"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

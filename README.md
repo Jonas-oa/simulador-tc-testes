@@ -9,25 +9,73 @@ equipamento.
 - **Repositório:** github.com/Jonas-oa/simulador-tc-educacional (branch `main`)
 - **Site (GitHub Pages):** https://jonas-oa.github.io/simulador-tc-educacional/
 
+## Estado real da plataforma
+
+Auditoria de 29/08/2026 (`docs/PROMPT-EVOLUCAO-10-10.md`) mediu o seguinte:
+
+- **Sala, mesa, intertravamentos, laser e sincronia mesa↔topograma são
+  tecnicamente coerentes.** Como simulador de *posicionamento*, funciona.
+- **Aquisição, dose, reconstrução, DICOM e MPR ainda são camada de
+  apresentação.** kV, mAs, espessura, kernel, FOV e matriz não alteram a
+  imagem; a "reconstrução" relê os mesmos PNG; os HU exportados cobrem
+  apenas −160…+223 (TC real: −1024…+3071).
+
+O roteiro de evolução em 12 fases, com critérios de aceite mensuráveis, está
+em [`docs/PROMPT-EVOLUCAO-10-10.md`](docs/PROMPT-EVOLUCAO-10-10.md).
+
 ## Estrutura do projeto
 
 ```
-index.html            → interface (viewport 3D, console, status bar, mensagens)
-script.js             → TODO o código JS (script clássico, sem módulos/bundler)
-manifest.json         → metadados do PWA
-css/style.css         → tokens de design, tema claro/escuro, layout, componentes
-js/vendor/three.min.js → Three.js r128 (build global/UMD), 100% offline
-icons/                → ícones do PWA
-assets/ models/ textures/ sounds/ → (reservados para etapas futuras)
+index.html                  → interface (viewport 3D, console, status bar, mensagens)
+script.js                   → orquestrador: chama o init() de cada módulo na ordem
+manifest.json               → metadados do PWA
+
+js/shared.js                → window.SimTC: tema, mensagens, IndexedDB, ponteiros de API
+js/sala-exame.js            → cena 3D, gantry, mesa, paciente, laser, tableDriveApi
+js/cadastro-pacientes.js    → formulário e lista de pacientes
+js/protocolos.js            → mapa corporal SVG, CRUD de protocolos
+js/aquisicao.js             → topograma, MOVER, volume, reconstrução, relatório
+js/mpr.js                   → ponte postMessage com o iframe do leitor DICOM
+js/ui-layout.js             → console guiado, divisórias, modo celular, PiP
+js/phantoms.js              → fantoma procedural em canvas (CTPhantom)
+js/mobile-tabs.js           → abas do celular (auto-inicializa, fora do SimTC)
+js/vendor/three.min.js      → Three.js r128 (build global/UMD), 100% offline
+
+css/style.css               → tokens de design, tema claro/escuro, layout, componentes
+css/mobile-tabs.css         → layout do modo celular
+
+dicom-viewer/               → sub-app do leitor DICOM (ES modules próprios)
+assets/volumes/<regiao>/    → pilhas axiais + topogramas + manifest.json
+electron-main.js            → empacotamento desktop (protocolo simulador://)
+icons/                      → ícones do PWA
+docs/                       → auditoria e roteiro de evolução
 ```
+
+### Como os módulos conversam
+
+Três mecanismos, nenhum bundler no meio:
+
+1. **Ponteiros em `window.SimTC`** — `shared.js` declara vazios; cada módulo
+   preenche o seu e os outros consomem: `tableDriveApi` (sala → aquisição),
+   `examSessionApi` (cadastro → aquisição), `examProtocol` (protocolos →
+   aquisição), `consoleUiApi` (layout), `mprApi` (aquisição → MPR).
+2. **Evento `ct:phase`** no `document` — a aquisição anuncia
+   `idle → topoAcq → plan → moving → volAcq → recon → review`; layout e MPR escutam.
+3. **`postMessage` same-origin** com `dicom-viewer/index.html?embedded=1` —
+   handshake `hello`/`ready` e transferência do volume.
+
+A ordem dos `<script>` em `index.html` é de dependência: `shared.js` primeiro,
+`script.js` (orquestrador) por último.
 
 ## Arquitetura (decidida após depuração extensa — não mudar sem motivo forte)
 
-- **SEM ES modules, SEM import maps, SEM bundler.** Só scripts clássicos.
-  ES modules falhavam silenciosamente em navegadores/redes reais do
-  usuário, sem erro capturável. `script.js` é um único arquivo clássico,
-  carregado depois do Three.js vendorizado (`js/vendor/three.min.js`,
-  r128, build global `THREE`). Edita e recarrega — sem passo de build.
+- **SEM ES modules, SEM import maps, SEM bundler** no app principal. Só
+  scripts clássicos. ES modules falhavam silenciosamente em navegadores/redes
+  reais do usuário, sem erro capturável. Os módulos em `js/` são IIFEs que se
+  registram em `window.SimTC`, carregados depois do Three.js vendorizado
+  (`js/vendor/three.min.js`, r128, build global `THREE`). Edita e recarrega —
+  sem passo de build. (O sub-app `dicom-viewer/` é a exceção: roda isolado
+  num iframe e usa ES modules próprios.)
 - **Câmera orbital manual** (arrastar p/ girar, pinça/scroll p/ zoom) —
   não usa o addon OrbitControls (mesma razão).
 - **Deploy:** GitHub Pages via Actions. Falhas "Deployment failed, try

@@ -460,6 +460,20 @@ body {
   border-color: var(--accent-cyan);
   transform: scale(0.96);
 }
+/* Realce de recuperação: quando a varredura não pode iniciar por falta de
+   curso, o botão que resolve o impasse pulsa por alguns segundos. */
+.dpad__btn.is-hint {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  animation: dpad-hint 0.9s ease-in-out infinite;
+}
+@keyframes dpad-hint {
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-cyan) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dpad__btn.is-hint { animation: none; box-shadow: 0 0 0 2px var(--accent-cyan); }
+}
+
 .dpad__btn--up { grid-area: 1 / 2 / 2 / 3; }
 .dpad__btn--left { grid-area: 2 / 1 / 3 / 2; }
 .dpad__btn--center { grid-area: 2 / 2 / 3 / 3; }
