@@ -382,6 +382,16 @@
   <script src="js/vendor/three.min.js"></script>
   <script src="js/phantoms.js?v=20260820a"></script>
 
+  <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
+       tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
+       rodam dentro de um Worker em testes/core.html. -->
+  <script src="core/bus.js?v=20260830a"></script>
+  <script src="core/clock.js?v=20260830a"></script>
+  <script src="core/model/patient.js?v=20260830a"></script>
+  <script src="core/model/protocol.js?v=20260830a"></script>
+  <script src="core/model/exam.js?v=20260830a"></script>
+  <script src="core/state.js?v=20260830a"></script>
+
   <!-- shared.js PRIMEIRO: define window.SimTC -->
   <script src="js/shared.js?v=20260820a"></script>
 

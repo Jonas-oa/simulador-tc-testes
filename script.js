@@ -72,7 +72,12 @@
     // 6) Layout e infraestrutura de UI (depende de consoleUiApi)
     if (window.SimTC && SimTC.Layout) SimTC.Layout.init();
 
-    window.__ctSimulator = { version: "modular-20260820a" };
+    // Mescla em vez de sobrescrever: a sala já publicou aqui as referências
+    // de cena/câmera/renderer para diagnóstico, e atribuir um objeto novo as
+    // descartava silenciosamente.
+    window.__ctSimulator = window.__ctSimulator || {};
+    window.__ctSimulator.version = "core-20260830a";
+    window.__ctSimulator.core = window.SimTCCore || null;
   }
 
   if (document.readyState === "loading") {

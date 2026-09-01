@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes do núcleo — Simulador TC</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 32px 24px 64px; background: #0f1312; color: #e2e7e5;
+  }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -.01em; }
+  p.sub { margin: 0 0 24px; color: #8c9793; max-width: 70ch; }
+  #placar {
+    display: inline-flex; gap: 18px; align-items: baseline;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    padding: 12px 18px; border-radius: 4px; margin-bottom: 22px;
+    border: 1px solid #2a3331; background: #161b1a;
+  }
+  #placar b { font-size: 1.5rem; }
+  .verde { color: #79c193; } .vermelho { color: #e98a83; }
+  ol { list-style: none; margin: 0; padding: 0; max-width: 90ch; }
+  li {
+    display: grid; grid-template-columns: 22px 1fr; gap: 10px;
+    padding: 6px 10px; border-bottom: 1px solid #212927;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+  }
+  li .m { font-weight: 700; }
+  li.falhou { background: #34201e; }
+  li .erro { grid-column: 2; color: #e98a83; padding-top: 3px; }
+</style>
+</head>
+<body>
+  <h1>Testes do núcleo</h1>
+  <p class="sub">
+    A suíte roda dentro de um <strong>Web Worker</strong>, que não tem
+    <code>document</code> nem <code>window</code>. Se qualquer arquivo de
+    <code>core/</code> tocar no DOM, o carregamento falha aqui — é a prova do
+    critério de aceite da Fase&nbsp;1. Sirva a pasta do projeto por HTTP e abra
+    <code>testes/core.html</code>.
+  </p>
+  <div id="placar"><span>carregando…</span></div>
+  <ol id="lista"></ol>
+
+<script>
+(function () {
+  "use strict";
+  var placar = document.getElementById("placar");
+  var lista = document.getElementById("lista");
+
+  function render(d) {
+    var passou = d.total - d.falhas;
+    placar.innerHTML =
+      '<span><b class="' + (d.falhas ? "vermelho" : "verde") + '">' + passou + "/" + d.total + "</b> testes</span>" +
+      '<span class="' + (d.falhas ? "vermelho" : "verde") + '">' + (d.falhas ? d.falhas + " falha(s)" : "tudo verde") + "</span>";
+    lista.innerHTML = "";
+    d.resultados.forEach(function (r) {
+      var li = document.createElement("li");
+      if (!r.ok) li.className = "falhou";
+      var m = document.createElement("span");
+      m.className = "m " + (r.ok ? "verde" : "vermelho");
+      m.textContent = r.ok ? "✓" : "✕";
+      var n = document.createElement("span");
+      n.textContent = r.nome;
+      li.appendChild(m); li.appendChild(n);
+      if (!r.ok) {
+        var e = document.createElement("span");
+        e.className = "erro"; e.textContent = r.erro;
+        li.appendChild(e);
+      }
+      lista.appendChild(li);
+    });
+    window.__RESULTADO_TESTES__ = d;
+  }
+
+  try {
+    var w = new Worker("core.worker.js");
+    w.onmessage = function (ev) { render(ev.data); w.terminate(); };
+    w.onerror = function (ev) {
+      placar.innerHTML = '<span class="vermelho">O núcleo não carregou no Worker</span>';
+      lista.innerHTML = '<li class="falhou"><span class="m vermelho">✕</span><span>' +
+        (ev.message || "erro desconhecido") + " (" + (ev.filename || "?") + ":" + (ev.lineno || "?") + ")</span></li>";
+      window.__RESULTADO_TESTES__ = { total: 0, falhas: 1, erroWorker: ev.message };
+    };
+  } catch (e) {
+    placar.textContent = "Não foi possível criar o Worker: " + e.message;
+  }
+})();
+</script>
+</body>
+</html>

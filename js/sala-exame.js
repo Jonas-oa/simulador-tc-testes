@@ -907,8 +907,27 @@
         patientPose.position.y = 0.02 + bodyCenter; // eixo na altura do centro
         patient.position.set(0, -bodyCenter, 0);    // corpo desce até apoiar
 
-        var roll = DECUBITO_ROLL[currentDecubito] || 0;
-        var yaw = (currentEntrada === "pes") ? Math.PI : 0;
+        // ENTRADA = qual extremidade entra PRIMEIRO no gantry.
+        //
+        // O corpo é modelado com a cabeça em z local +0,76 e os pés em ~−0,98.
+        // O gantry está em z = −0,6 e a mesa entra andando para −Z, ou seja,
+        // quem entra primeiro é a extremidade de MENOR z. Logo, "cabeça
+        // primeiro" exige girar 180° para levar a cabeça ao lado negativo.
+        //
+        // O mapeamento estava invertido: com "cabeça primeiro" a cabeça
+        // apontava para +1,66 — para FORA do gantry — e os pés é que entravam.
+        // Pior: com 2,0 m de curso a cabeça só alcançava z = −0,34, parando
+        // 26 cm antes do isocentro. A anatomia de interesse NUNCA chegava ao
+        // plano de corte, e o que era varrido num "exame de crânio" era o
+        // tórax superior.
+        var yaw = (currentEntrada === "cabeca") ? Math.PI : 0;
+
+        // O giro de 180° em Y espelha o eixo lateral: sem compensar, "decúbito
+        // lateral direito" passaria a deitar o paciente sobre o lado esquerdo
+        // quando a entrada fosse cabeça primeiro. O decúbito é uma propriedade
+        // do paciente, não da direção de entrada.
+        var roll = (DECUBITO_ROLL[currentDecubito] || 0) * (yaw ? -1 : 1);
+
         patientPose.rotation.set(0, yaw, roll);
 
         if (displayPositionEl) {
@@ -1599,11 +1618,23 @@
       // -----------------------------------------------------------
       // Loop de animação, física e intertravamento de segurança
       // -----------------------------------------------------------
-      var last = performance.now();
+      // -----------------------------------------------------------
+      // FISICA (passo fixo) x DESENHO (taxa de pintura)
+      //
+      // Antes, tudo isto rodava dentro de requestAnimationFrame: quando o
+      // navegador parava de pintar (aba oculta, janela minimizada, canvas fora
+      // da tela), a AQUISICAO CONGELAVA no meio. Num equipamento real a mesa
+      // nao para porque ninguem esta olhando.
+      //
+      // Agora a fisica e assinante do relogio de passo fixo do nucleo
+      // (core/clock.js), alimentado por rAF quando a pagina pinta e por um
+      // Worker quando nao pinta. O rAF cuida apenas do desenho.
+      // -----------------------------------------------------------
+      var ultimaVelocidadeMmS = 0;
+      var ultimoAlerta = "";
 
-      function animate(now) {
-        var dt = Math.min(0.05, (now - last) / 1000);
-        last = now;
+      function passoFisica(dt) {
+        // dt vem do relógio de passo fixo — não se mede mais o tempo aqui.
 
         var nextY = tableY, nextZ = tableZ;
         alertStatus = "";
@@ -1676,15 +1707,20 @@
           spinArc.rotation.z -= (Math.PI * 2 / spinRotTime) * dt;
         }
 
-        if (alertStatus) {
+        if (alertStatus && alertStatus !== ultimoAlerta) {
           SimTC.showMessage(alertStatus, "warning");
         }
+        ultimoAlerta = alertStatus;
 
         var speedMmS = 0;
         if (autoDrive) speedMmS = autoDrive.speed * 1000;
         else if (moveIn || moveOut) speedMmS = SPEED_Z * 1000;
         else if (moveUp || moveDown) speedMmS = SPEED_Y * 1000;
-        updateReadouts(speedMmS);
+        ultimaVelocidadeMmS = speedMmS;
+      }
+
+      function desenhar(now) {
+        updateReadouts(ultimaVelocidadeMmS);
 
         if (laserOn) {
           var pulse = 0.8 + Math.sin(now * 0.006) * 0.2;
@@ -1693,7 +1729,26 @@
         }
 
         renderer.render(scene, camera);
-        requestAnimationFrame(animate);
+        requestAnimationFrame(desenhar);
+      }
+
+      // Liga a fisica ao relogio do nucleo. Sem o nucleo carregado (ex.: uma
+      // pagina que so inclua sala-exame.js), cai para o comportamento antigo
+      // de passo variavel preso ao rAF, para nao quebrar.
+      var Core = window.SimTCCore;
+      if (Core && Core.relogio) {
+        Core.relogio.aoPasso(passoFisica);
+        Core.relogio.iniciar();
+        SimTC.relogio = Core.relogio;
+      } else {
+        var ultimoMs = performance.now();
+        var passoAntigo = function (now) {
+          var dt = Math.min(0.05, (now - ultimoMs) / 1000);
+          ultimoMs = now;
+          passoFisica(dt);
+          requestAnimationFrame(passoAntigo);
+        };
+        requestAnimationFrame(passoAntigo);
       }
 
       updateReadouts(0);
@@ -1705,7 +1760,7 @@
       requestAnimationFrame(function () {
         if (loadingOverlay) loadingOverlay.setAttribute("data-hidden", "true");
       });
-      requestAnimationFrame(animate);
+      requestAnimationFrame(desenhar);
 
       SimTC.showMessage(
         "Simulador carregado (largura da janela: " + window.innerWidth + "px). Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.",

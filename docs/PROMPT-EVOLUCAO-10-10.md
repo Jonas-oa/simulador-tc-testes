@@ -83,6 +83,14 @@ não gaste sessão redescobrindo.
 | B-15 | Campos de protocolo são texto livre sem tipagem nem validação. | `dose: "≈55 mGy (ref.)"` é lido por regex |
 | B-16 | `.gitignore` exclui `package.json` e `package-lock.json`. | Configuração do electron-builder fora do versionamento |
 | B-17 | Mapeamento de região só cobre Crânio e Tórax. | Abdome, Pelve, Coluna e Membros exibem um **crânio** |
+| B-18 | **A anatomia de interesse nunca entra no gantry.** O corpo é modelado com a cabeça em z local +0,76 (lado oposto ao gantry). Com 2,0 m de curso, a cabeça alcançava no máximo z = −0,34, parando **26 cm antes** do isocentro (z = −0,6). O que passava pelo plano de corte num "exame de crânio" era o tórax superior. | Cabeça em z = +1,66 com a mesa recuada; `alcança isocentro = false` |
+| B-19 | **Cabeça primeiro / pés primeiro invertidos.** "Entrada" designa a extremidade que entra PRIMEIRO no gantry; o `yaw` estava mapeado ao contrário. | Com "DORSAL / CABEÇA" a cabeça apontava para +Z, afastando-se do gantry |
+| B-20 | **Não existe lista de exames realizados.** Terminado o exame, não há como revê-lo nem editá-lo — e o `Stop` ainda apagava o paciente. Falta o repositório de estudos e a tela que o mostra. | Nenhuma persistência de `Study`; só um exame por vez, sem histórico |
+
+> B-18, B-19 e B-20 vieram do **operador** (revisão de 30/08/2026), não da auditoria
+> automatizada — são exatamente o tipo de erro que só aparece para quem conhece o
+> fluxo real da sala. B-18 e B-19 têm a mesma raiz e foram corrigidos juntos na
+> Fase 1. B-20 é entregável da Fase 1.
 
 ## A.4 Estilo de trabalho
 
@@ -194,6 +202,15 @@ core/
 
 5. Adicionar ao paciente `pesoKg` e `alturaCm` (necessários para dose na Fase 6).
 
+6. Corrigir B-19 e B-18 (mesma raiz): a "entrada" passa a designar a extremidade
+   que entra PRIMEIRO no gantry, e a anatomia de interesse precisa **alcançar o
+   isocentro** dentro do curso da mesa. Compensar o espelhamento lateral que o
+   giro de 180° introduz — decúbito é propriedade do paciente, não da entrada.
+
+7. Corrigir B-20: repositório de estudos (`core/model/exam.js` já define `Study`
+   e `Series`) persistido em IndexedDB, mais a tela **Exames realizados**, com
+   reabrir e editar. Encerrar um exame passa a arquivá-lo, não descartá-lo.
+
 **Critério de aceite**
 
 - Teste headless em Node: importar `core/` e rodar um exame completo (paciente →
@@ -202,6 +219,10 @@ core/
 - Teste do relógio: com `requestAnimationFrame` inibido, um scan de 10 s de simulação
   completa em 10 s ± 5%.
 - Cadastrar dois pacientes não altera o exame em curso.
+- Com "cabeça primeiro", a cabeça alcança o isocentro dentro do curso da mesa; com
+  "pés primeiro", os pés. Em ambos, o decúbito lateral direito mantém o paciente
+  sobre o lado direito.
+- Encerrar um exame o mantém recuperável na lista de exames realizados.
 
 ---
 
