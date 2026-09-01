@@ -19,7 +19,11 @@ importScripts(
   "../core/model/exam.js",
   "../core/state.js",
   "../core/phantom/volume.js",
-  "../core/phantom/acervo.js"
+  "../core/phantom/acervo.js",
+  "../core/acquisition/fisica.js",
+  "../core/acquisition/noise.js",
+  "../core/acquisition/projector.js",
+  "../core/acquisition/scan.js"
 );
 
 var C = self.SimTCCore;
@@ -478,6 +482,133 @@ teste("acervo: regiao sem volume e reportada, nao substituida por outra", functi
   igual(C.Acervo.volumeDaRegiao("Coluna"), "tronco");
   igual(C.Acervo.volumeDaRegiao("Membros"), null, "sem volume deve devolver null");
   igual(C.Acervo.volumeDaRegiao("Pescoço"), null);
+});
+
+
+// =====================================================================
+// 8. MOTOR DE AQUISICAO — FISICA  (Fase 4)
+// =====================================================================
+// Fantoma de afericao: cilindro de agua (0 HU) em ar, com inserto denso.
+function fantomaAgua(n, nz, esp) {
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2, R = n * 0.40, Rb = n * 0.08;
+  for (var z = 0; z < nz; z++) for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+    var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+    var hu = -1000;
+    if (r < R) hu = 0;
+    if (Math.sqrt((x - c - n * 0.20) * (x - c - n * 0.20) + (y - c) * (y - c)) < Rb) hu = 1000;
+    d[z * n * n + y * n + x] = hu;
+  }
+  return new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [esp, esp, esp] });
+}
+var VOL_AFER = fantomaAgua(64, 6, 1.5);
+function reconstruir(op, semente) {
+  var base = {
+    volume: VOL_AFER, centroMm: 4.5, espessuraMm: 5, fovMm: 96, matriz: 64,
+    kv: 120, mas: 200, pitch: 1.0, modo: "helicoidal", kernel: "padrao",
+    vistas: 120, semente: semente || 1
+  };
+  for (var k in op) base[k] = op[k];
+  return C.scan.reconstruirCorte(base);
+}
+// Ruido ALEATORIO isolado do artefato fixo: std(a-b)/sqrt(2) sobre duas
+// realizacoes. E a tecnica usada em QA de TC; sem ela, as estrias de vistas
+// limitadas entram na conta e mascaram a lei de Poisson.
+function ruidoAleatorio(op) {
+  var a = reconstruir(op, 101), b = reconstruir(op, 202);
+  var n = a.n, s = 0, s2 = 0, cont = 0;
+  for (var y = 38; y <= 46; y++) for (var x = 28; x <= 36; x++) {
+    var d = a.hu[y * n + x] - b.hu[y * n + x];
+    s += d; s2 += d * d; cont++;
+  }
+  var m = s / cont;
+  return Math.sqrt(Math.max(0, s2 / cont - m * m)) / Math.SQRT2;
+}
+
+teste("FBP: agua reconstroi em ~0 HU, ar em ~-1000, denso em ~1000", function () {
+  var c = reconstruir({ semRuido: true });
+  var agua = C.scan.desvioEmROI(c.hu, c.n, 32, 42, 7);
+  var ar = C.scan.desvioEmROI(c.hu, c.n, 32, 3, 3);
+  perto(agua.media, 0, 15, "agua");
+  perto(ar.media, -1000, 40, "ar");
+});
+
+teste("dobrar o mAs reduz o ruido em raiz de 2 (+/-10%)", function () {
+  var r200 = ruidoAleatorio({ mas: 200 });
+  var r400 = ruidoAleatorio({ mas: 400 });
+  var razao = r200 / r400;
+  ok(Math.abs(razao - Math.SQRT2) / Math.SQRT2 <= 0.10,
+     "razao " + razao.toFixed(3) + ", esperado 1,414 +/-10%");
+});
+
+teste("reduzir o pitch de 1,0 para 0,5 equivale a dobrar o mAs", function () {
+  var p05 = ruidoAleatorio({ mas: 200, pitch: 0.5 });
+  var m400 = ruidoAleatorio({ mas: 400, pitch: 1.0 });
+  ok(Math.abs(p05 - m400) / m400 <= 0.10,
+     "pitch 0,5 deu " + p05.toFixed(2) + " e mAs 400 deu " + m400.toFixed(2));
+});
+
+teste("ruido cai com a raiz da espessura", function () {
+  var e5 = ruidoAleatorio({ espessuraMm: 5 });
+  var e125 = ruidoAleatorio({ espessuraMm: 1.25 });
+  var razao = e125 / e5;
+  ok(Math.abs(razao - 2) / 2 <= 0.15, "razao " + razao.toFixed(3) + ", esperado 2,0");
+});
+
+teste("kV menor a mAs constante: MAIS ruido e MAIS contraste", function () {
+  var r120 = ruidoAleatorio({ kv: 120 });
+  var r80 = ruidoAleatorio({ kv: 80 });
+  ok(r80 > r120 * 1.1, "80 kV deveria ser mais ruidoso (" + r80.toFixed(2) + " vs " + r120.toFixed(2) + ")");
+
+  function contrasteEm(kv) {
+    var c = reconstruir({ kv: kv, semRuido: true });
+    var denso = C.scan.desvioEmROI(c.hu, c.n, 45, 32, 2);
+    var agua = C.scan.desvioEmROI(c.hu, c.n, 32, 42, 6);
+    return denso.media - agua.media;
+  }
+  var c80 = contrasteEm(80), c120 = contrasteEm(120), c140 = contrasteEm(140);
+  ok(c80 > c120 && c120 > c140,
+     "contraste deveria subir ao baixar o kV: 140=" + c140.toFixed(0) +
+     " 120=" + c120.toFixed(0) + " 80=" + c80.toFixed(0));
+});
+
+teste("mAs e kV alteram a imagem — nao sao rotulo (B-02)", function () {
+  var a = reconstruir({ mas: 300, kv: 120 }, 7);
+  var b = reconstruir({ mas: 30, kv: 80 }, 7);
+  var difs = 0;
+  for (var i = 0; i < a.hu.length; i++) if (a.hu[i] !== b.hu[i]) difs++;
+  ok(difs > a.hu.length * 0.5,
+     "as imagens deveriam diferir na maioria dos pixels (diferiram em " + difs + " de " + a.hu.length + ")");
+});
+
+teste("numero de cortes vem da faixa e do incremento (B-03)", function () {
+  var p120 = M.criarPlano({ inicioMm: 0, fimMm: 120 });
+  var p177 = M.criarPlano({ inicioMm: 0, fimMm: 177 });
+  igual(M.contarCortes(p120, 5), 24);
+  igual(M.contarCortes(p177, 5), 35);
+  igual(M.contarCortes(p120, 1.25), 96);
+  var pos = C.scan.posicoesDosCortes(0, 120, 5);
+  igual(pos.length, 24);
+  perto(pos[0], 2.5, 1e-6, "primeiro corte a meio incremento da borda");
+  perto(pos[23], 117.5, 1e-6, "ultimo corte a meio incremento da borda");
+});
+
+teste("fisica: mAs efetivo e velocidade da mesa seguem a definicao", function () {
+  var F = C.fisica;
+  perto(F.masEfetivo(300, 1.5, "helicoidal"), 200, 1e-9, "mAs/pitch");
+  perto(F.masEfetivo(300, null, "sequencial"), 300, 1e-9, "sequencial nao divide");
+  perto(F.velocidadeMesaMmS(1.0, 38.4, 0.5), 76.8, 1e-6, "pitch x colimacao / rotacao");
+  ok(F.muDeHU(0, 120) > 0, "agua tem mu positivo");
+  perto(F.muDeHU(0, 120), F.muAgua(120), 1e-9, "0 HU = mu da agua, por definicao");
+  perto(F.muDeHU(-1000, 120), 0, 1e-9, "-1000 HU = ar, mu ~ 0");
+});
+
+teste("Poisson: media e variancia batem com lambda", function () {
+  var rnd = new C.ruido.Aleatorio(4242);
+  var n = 4000, soma = 0, soma2 = 0, lambda = 50;
+  for (var i = 0; i < n; i++) { var v = rnd.poisson(lambda); soma += v; soma2 += v * v; }
+  var media = soma / n, varia = soma2 / n - media * media;
+  perto(media, lambda, lambda * 0.06, "media");
+  perto(varia, lambda, lambda * 0.25, "variancia = media, na Poisson");
 });
 
 // =====================================================================
