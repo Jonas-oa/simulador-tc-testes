@@ -17,7 +17,9 @@ importScripts(
   "../core/model/patient.js",
   "../core/model/protocol.js",
   "../core/model/exam.js",
-  "../core/state.js"
+  "../core/state.js",
+  "../core/phantom/volume.js",
+  "../core/phantom/acervo.js"
 );
 
 var C = self.SimTCCore;
@@ -360,6 +362,122 @@ teste("sessão: exame completo de ponta a ponta, sem navegador", function () {
   s.encerrarExame();
   igual(s.worklist.quantidade(), 1);
   igual(s.worklist.selecionado(), null);
+});
+
+
+// =====================================================================
+// 7. FANTOMA VOLUMETRICO EM HU  (Fase 3)
+// =====================================================================
+function volumeDeTeste(nx, ny, nz, sx, sy, sz) {
+  var d = new Int16Array(nx * ny * nz);
+  for (var z = 0; z < nz; z++) {
+    for (var y = 0; y < ny; y++) {
+      for (var x = 0; x < nx; x++) {
+        // ar fora, agua no meio, osso num nucleo pequeno que anda em z
+        var cx = nx / 2, cy = ny / 2;
+        var r = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        var hu = -1000;
+        if (r < nx * 0.35) hu = 0;
+        if (r < nx * 0.12 && z > nz * 0.3 && z < nz * 0.7) hu = 1200;
+        d[z * nx * ny + y * nx + x] = hu;
+      }
+    }
+  }
+  return new C.Volume({ dados: d, dims: [nx, ny, nz], spacingMm: [sx, sy, sz] });
+}
+
+teste("volume: extensao fisica = dims x espacamento", function () {
+  var v = volumeDeTeste(64, 64, 32, 2, 2, 5);
+  var e = v.extentMm();
+  igual(e[0], 128); igual(e[1], 128); igual(e[2], 160);
+});
+
+teste("volume: huAt fora dos limites devolve ar", function () {
+  var v = volumeDeTeste(16, 16, 8, 1, 1, 1);
+  igual(v.huAt(-1, 0, 0), -1000);
+  igual(v.huAt(0, 0, 99), -1000);
+});
+
+teste("volume: sampleMm interpola entre voxels", function () {
+  var d = new Int16Array(8);
+  d[0] = 0; d[1] = 1000;            // dois voxels vizinhos em x
+  var v = new C.Volume({ dados: d, dims: [2, 2, 2], spacingMm: [1, 1, 1] });
+  var meio = v.sampleMm(1.0, 0.5, 0.5);   // exatamente entre os centros
+  perto(meio, 500, 1, "interpolacao linear no meio do caminho");
+});
+
+teste("volume: subamostrar CORRIGE o espacamento (trava do B-04)", function () {
+  var v = volumeDeTeste(64, 64, 8, 1, 1, 2);
+  var extAntes = v.extentMm();
+  var v2 = v.subamostrar(2);
+  igual(v2.dims[0], 32, "matriz cai pela metade");
+  igual(v2.spacingMm[0], 2, "espacamento DOBRA");
+  var extDepois = v2.extentMm();
+  perto(extDepois[0], extAntes[0], 1e-6, "extensao fisica em x e invariante");
+  perto(extDepois[1], extAntes[1], 1e-6, "extensao fisica em y e invariante");
+});
+
+teste("volume: verificarEscala rejeita a regressao do B-04", function () {
+  // Reproduz o defeito: matriz 256 com o espacamento do original 512.
+  var d = new Int16Array(8 * 8 * 2);
+  var errado = new C.Volume({ dados: d, dims: [8, 8, 2], spacingMm: [0.43, 0.43, 1] });
+  var lancou = false;
+  try { errado.verificarEscala([16 * 0.43, 16 * 0.43, 2]); } catch (e) { lancou = true; }
+  ok(lancou, "extensao pela metade deveria ser recusada");
+});
+
+teste("volume: fatiaAxial janela em 0..255", function () {
+  var v = volumeDeTeste(32, 32, 8, 1, 1, 1);
+  var f = v.fatiaAxial(4, { wl: 40, ww: 400 });
+  igual(f.w, 32); igual(f.h, 32);
+  igual(f.cinza.length, 32 * 32);
+  var mn = 255, mx = 0;
+  for (var i = 0; i < f.cinza.length; i++) { if (f.cinza[i] < mn) mn = f.cinza[i]; if (f.cinza[i] > mx) mx = f.cinza[i]; }
+  igual(mn, 0, "ar deve saturar em preto na janela de partes moles");
+  igual(mx, 255, "osso deve saturar em branco");
+});
+
+teste("volume: janela de pulmao e de osso produzem imagens DIFERENTES", function () {
+  // Era impossivel com PNG ja janelado (B-06): a faixa nao sustentava as duas.
+  var v = volumeDeTeste(32, 32, 8, 1, 1, 1);
+  var pulmao = v.fatiaAxial(4, { wl: -600, ww: 1500 });
+  var osso = v.fatiaAxial(4, { wl: 400, ww: 1800 });
+  var difs = 0;
+  for (var i = 0; i < pulmao.cinza.length; i++) if (pulmao.cinza[i] !== osso.cinza[i]) difs++;
+  ok(difs > pulmao.cinza.length * 0.5, "as duas janelas deveriam diferir na maioria dos pixels");
+});
+
+teste("scout: projecao lateral tem o eixo cranio-caudal na horizontal", function () {
+  var v = volumeDeTeste(48, 40, 30, 1, 1, 2);
+  var s = v.scout("lateral");
+  igual(s.w, 30, "largura = numero de cortes (eixo z)");
+  igual(s.h, 40, "altura = eixo y no scout lateral");
+  perto(s.mmPorPixel[0], 2, 1e-9, "mm por pixel no eixo z");
+});
+
+teste("scout: projecao frontal usa o outro eixo", function () {
+  var v = volumeDeTeste(48, 40, 30, 1, 1, 2);
+  var s = v.scout("frontal");
+  igual(s.w, 30);
+  igual(s.h, 48, "altura = eixo x no scout frontal");
+});
+
+teste("scout: estrutura densa aparece mais clara que o ar", function () {
+  var v = volumeDeTeste(48, 40, 30, 1, 1, 2);
+  var s = v.scout("lateral");
+  // centro da imagem (atravessa o objeto) vs canto (so ar)
+  var centro = s.cinza[Math.floor(s.h / 2) * s.w + Math.floor(s.w / 2)];
+  var canto = s.cinza[0];
+  ok(centro > canto + 40, "corpo deveria atenuar mais que o ar (centro " + centro + " vs canto " + canto + ")");
+});
+
+teste("acervo: regiao sem volume e reportada, nao substituida por outra", function () {
+  // B-17: antes, Abdome/Pelve/Coluna/Membros exibiam um cranio em silencio.
+  igual(C.Acervo.volumeDaRegiao("Tórax"), "torax");
+  igual(C.Acervo.volumeDaRegiao("Abdome"), "tronco");
+  igual(C.Acervo.volumeDaRegiao("Coluna"), "tronco");
+  igual(C.Acervo.volumeDaRegiao("Membros"), null, "sem volume deve devolver null");
+  igual(C.Acervo.volumeDaRegiao("Pescoço"), null);
 });
 
 // =====================================================================

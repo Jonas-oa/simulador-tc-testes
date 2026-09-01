@@ -58,18 +58,27 @@
     // scout(kind). Hoje: fantoma procedural (js/phantoms.js). A região sai do
     // protocolo selecionado (Tórax → tórax; demais → crânio, por ora).
     var volSource = { kind: "files", region: null };
-    function phantomRegionFor(prot) {
-      if (!prot) return "cranio";
-      var reg = prot.regiao || "";
-      if (reg === "Tórax") return "torax";
-      return "cranio"; // crânio e demais regiões usam o fantoma de crânio (placeholder)
-    }
-    function resolveSource() {
+    function regiaoDoProtocolo() {
       var prot = SimTC.examProtocol && SimTC.examProtocol.data;
-      var region = phantomRegionFor(prot);
-      if (window.CTPhantom && window.CTPhantom.has(region)) return { kind: "phantom", region: region };
+      return (prot && prot.regiao) || "";
+    }
+    // Ordem de preferencia da origem das imagens:
+    //   1) volume de TC REAL do acervo (HU verdadeiros)  -> Fase 2/3
+    //   2) fantoma procedural, so como reserva offline
+    // Antes, qualquer regiao diferente de Torax caia num cranio em silencio
+    // (B-17). Agora, regiao sem volume e dita explicitamente.
+    function resolveSource() {
+      var regiao = regiaoDoProtocolo();
+      if (SimTC.FonteVolume && SimTC.FonteVolume.has(regiao)) {
+        return { kind: "volume", region: regiao };
+      }
+      var legado = (regiao === "Tórax") ? "torax" : "cranio";
+      if (window.CTPhantom && window.CTPhantom.has(legado)) {
+        return { kind: "phantom", region: legado };
+      }
       return { kind: "files", region: null };
     }
+    var janelaAtual = null;   // {wl, ww} — null usa a janela padrao do volume
     var loaded = false;
     // idle → topoAcq (varredura) → plan (linhas) → volAcq (mesa+cortes) → review
     var phase = "idle";
@@ -78,7 +87,10 @@
     var TOPO_MS = 4000;    // fallback (sem cena 3D): duração da varredura
     var VOL_MS = 6500;     // fallback (sem cena 3D): duração do volume
     // Física didática da aquisição (mesa REAL comanda a imagem):
-    var TOPO_LEN_MM = 300;   // comprimento coberto pelo topograma inteiro
+    // Comprimento REAL coberto pelo topograma. Era 300 mm fixo, o que tornava
+    // a "faixa planejada" uma fracao de uma imagem, nao uma grandeza. Agora vem
+    // da extensao cranio-caudal do volume carregado.
+    var TOPO_LEN_MM = 300;
     var TOPO_SPEED_MMS = 100;// velocidade da mesa no scout (tubo estacionário)
     var ROT_S = 1.0;         // tempo de rotação do gantry (s/volta) no helicoidal
 
@@ -219,6 +231,7 @@
     // com cache-buster). Orientação frontal/AP vs lateral conforme o protocolo.
     function scoutSrc(m) {
       var frontal = protocolParams().scout === "frontal";
+      if (volSource.kind === "volume") return SimTC.FonteVolume.scout(volSource.region, frontal ? "frontal" : "lateral");
       if (volSource.kind === "phantom") return window.CTPhantom.scout(volSource.region, frontal ? "frontal" : "lateral");
       if (!m) return bust("topograma.png");
       if (frontal) return bust(m.topograma_ap || m.topograma_frontal || m.topograma_h || m.topograma || "topograma.png");
@@ -296,6 +309,7 @@
 
     function pad3(n) { n = String(n); while (n.length < 3) n = "0" + n; return n; }
     function srcFor(i) {
+      if (volSource.kind === "volume") return SimTC.FonteVolume.axial(volSource.region, i, janelaAtual);
       if (volSource.kind === "phantom") return window.CTPhantom.axial(volSource.region, i);
       return bust("axial_" + pad3(i) + ".png");
     }
@@ -1177,6 +1191,44 @@
         return;
       }
       // Resolve a origem das imagens para ESTE exame (região do protocolo).
+      // ---- origem das imagens: volume de TC real do acervo ----------------
+      var regiaoAlvo = regiaoDoProtocolo();
+      if (SimTC.FonteVolume && SimTC.FonteVolume.cobre(regiaoAlvo)) {
+        startBtn.disabled = true;
+        startBtn.textContent = "Carregando volume…";
+        SimTC.FonteVolume.preparar(regiaoAlvo).then(function () {
+          volSource = resolveSource();
+          manifest = SimTC.FonteVolume.manifest(regiaoAlvo);
+          // A faixa planejada passa a ser uma GRANDEZA: o topograma cobre a
+          // extensao cranio-caudal real do volume, nao 300 mm arbitrarios.
+          TOPO_LEN_MM = SimTC.FonteVolume.comprimentoCCmm(regiaoAlvo) || 300;
+          slider.min = 0; slider.max = manifest.cortes - 1;
+          if (caption) {
+            caption.textContent = "TC real anonimizada — " + manifest.nome + " · " +
+              manifest.fonte.nome + " · " + manifest.fonte.licenca +
+              " Volume de " + Math.round(TOPO_LEN_MM) + " mm em HU reais (" +
+              manifest.hu_min + " a " + manifest.hu_max + " HU). " +
+              "Uso exclusivamente educacional — sem interpretação diagnóstica.";
+          }
+          startBtn.disabled = false; startBtn.textContent = "Iniciar";
+          topoImg.src = scoutSrc(manifest);
+          toTopoAcq();
+        }).catch(function (err) {
+          startBtn.disabled = false; startBtn.textContent = "Iniciar";
+          SimTC.showMessage("Falha ao carregar o volume de " + regiaoAlvo + ": " + err.message, "error");
+        });
+        return;
+      }
+
+      // Regiao sem volume no acervo: dizer isso, em vez de exibir um cranio
+      // no lugar (B-17).
+      if (SimTC.FonteVolume && regiaoAlvo && !SimTC.FonteVolume.cobre(regiaoAlvo)) {
+        SimTC.showMessage("Ainda não há volume de TC para a região \"" + regiaoAlvo +
+          "\". Disponíveis: " + SimTC.FonteVolume.regioesCobertas().join(", ") +
+          ". Escolha um protocolo de uma dessas regiões.", "warning");
+        return;
+      }
+
       volSource = resolveSource();
       if (volSource.kind === "phantom") {
         manifest = window.CTPhantom.manifest(volSource.region);
@@ -1258,7 +1310,7 @@
 
     // Passos do fluxo atual e a fase em que cada um fica ativo.
     var STEPS = [
-      { name: "Topograma", sub: "scout lateral", active: ["topoAcq"] },
+      { name: "Topograma", sub: "scout", active: ["topoAcq"] },
       { name: "Planejamento da faixa", sub: "linhas FOV / CC", active: ["plan", "moving"] },
       { name: "Volume — aquisição", sub: "helicoidal", active: ["volAcq"] },
       { name: "Revisão / Relatório", sub: "cortes + dose", active: ["review"] }
@@ -1276,6 +1328,10 @@
     // Subtítulo do passo de volume reflete o modo do protocolo em exame
     // (axial sequencial × helicoidal), em vez de um rótulo fixo.
     function stepSub(s) {
+      if (s.name === "Topograma") {
+        var pt = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
+        return "scout " + ((pt && pt.scout === "frontal") ? "frontal/AP" : "lateral");
+      }
       if (s.name.indexOf("Volume") === 0) {
         var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
         return (p && p.modo === "sequencial") ? "axial sequencial" : "helicoidal";

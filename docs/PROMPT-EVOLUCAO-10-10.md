@@ -72,7 +72,7 @@ não gaste sessão redescobrindo.
 | B-04 | Pixel spacing errado por fator 2. Volume subamostrado 512→256 sem corrigir o espaçamento. | Crânio exportado com **110 mm** de largura em vez de 220 mm |
 | B-05 | HU falsos declarados verdadeiros. Payload envia `unidadeHU: true`. | Faixa exportada **−160 a +223 HU** (TC real: −1024 a +3071) |
 | B-06 | Presets de janela sem dado que os suporte. | Pulmão (C−600/L1500): brilho médio 211,8 (estourado). Osso (C400/L1800): média 57 (esmagado) |
-| B-07 | MPR sem anatomia no eixo Z: o fantoma é pilha de cortes quase idênticos. | Coronal/sagital saem como borrão esticado |
+| B-07 | ~~MPR sem anatomia no eixo Z: o fantoma é pilha de cortes quase idênticos.~~ **CORRIGIDO NA REDAÇÃO (01/09/2026):** a medição desmente o enunciado. A correlação entre os cortes a 25% e a 75% do fantoma procedural é **0,577** — ele *varia* em Z, só que de forma geométrica em vez de anatômica (o volume real dá 0,489). O borrão observado no coronal vinha do **erro de escala 2:1 do B-04**, não de ausência de variação. O achado válido é: variação geométrica, não anatômica. | Correlação 25%×75%: fantoma 0,577 · TC real 0,489 |
 | B-08 | Movimento não comandado da mesa: comando manual segurado durante a aquisição fica *latched* e retoma sozinho ao fim do scan. | Mesa arrancou **360 mm em 0,7 s** sem ação do operador |
 | B-09 | Corrida no handshake `postMessage` com o iframe do leitor: a mensagem `ready` se perde na primeira carga. | Status fica em "Aguardando o leitor…" até recarregar o iframe |
 | B-10 | Sem seleção de paciente: o último cadastrado vira o do exame, silenciosamente. `Stop` **apaga** o registro. | Cadastrar 2º paciente sequestra o exame sem aviso |
