@@ -9,6 +9,7 @@
 import { Volume } from './volume.js';
 
 const TIPO_ENTRADA = 'ct-simulator:volume';
+const TIPO_SAUDACAO = 'ct-simulator:hello';
 const MAX_VOXELS = 64 * 1024 * 1024;
 
 function triplaInteira(valor, nome) {
@@ -94,9 +95,30 @@ export function instalarPonteSimulador(aplicar, depois = () => {}) {
 
   const responder = (mensagem) => window.parent.postMessage(mensagem, location.origin);
 
+  // Handshake idempotente: o "pronto" emitido uma única vez se perdia quando
+  // o pai ainda não tinha instalado o listener (postMessage não tem buffer).
+  // Agora anunciamos repetidamente até o pai dar sinal de vida, e também
+  // respondemos ao "hello" dele — qualquer um dos dois lados destrava.
+  let anunciado = false;
+  let tentativas = 0;
+  let timer = null;
+  const pararAnuncio = () => { if (timer) { clearInterval(timer); timer = null; } };
+  const anunciar = () => {
+    responder({ type: 'ct-dicom-viewer:ready' });
+    if (timer || anunciado) return;
+    timer = setInterval(() => {
+      if (anunciado || tentativas >= 20) { pararAnuncio(); return; }
+      tentativas++;
+      responder({ type: 'ct-dicom-viewer:ready' });
+    }, 250);
+  };
+
   window.addEventListener('message', (event) => {
     if (event.origin !== location.origin || event.source !== window.parent) return;
-    if (!event.data || event.data.type !== TIPO_ENTRADA) return;
+    if (!event.data) return;
+    if (event.data.type === TIPO_SAUDACAO) { anunciado = true; pararAnuncio(); responder({ type: 'ct-dicom-viewer:ready' }); return; }
+    if (event.data.type !== TIPO_ENTRADA) return;
+    anunciado = true; pararAnuncio();
     try {
       const payload = event.data.payload;
       const volume = montarVolumeSimulado(payload);
@@ -113,5 +135,5 @@ export function instalarPonteSimulador(aplicar, depois = () => {}) {
     }
   });
 
-  responder({ type: 'ct-dicom-viewer:ready' });
+  anunciar();
 }
