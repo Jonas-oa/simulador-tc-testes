@@ -3,3 +3,8 @@ dist/
 
 # Backups e utilitários locais
 *.bak
+
+# DICOM bruto baixado do TCIA — fica só na máquina local.
+# O que vai para o repositório é o volume convertido em assets/volumes/,
+# muito menor. O bruto pode somar dezenas de GB.
+ARQUIVOS DICON/
