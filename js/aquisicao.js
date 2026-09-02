@@ -458,27 +458,67 @@
       updateTopoOrient();
     }
     function inZone(v, z) { return v >= z[0] && v <= z[1]; }
+
+    /**
+     * Validação da faixa planejada (corrige B-21).
+     *
+     * As zonas-alvo eram CONSTANTES calibradas para o crânio: num exame de
+     * tórax o sistema recusava faixas perfeitamente válidas dizendo "leve o
+     * limite inferior até a base do crânio". Agora os limites vêm do próprio
+     * volume — onde o paciente de fato está —, então valem para qualquer
+     * região do acervo.
+     *
+     * As regras são físicas, não anatômicas:
+     *   • faixa invertida ou estreita demais não é varredura;
+     *   • faixa fora do paciente irradia ar;
+     *   • FOV que não cobre o paciente trunca a imagem.
+     */
     function problems() {
-      var p = [], T = preset().target;
-      if (isFrontal()) {
-        // FAIXA (crânio-caudal) = eixo vertical (sup/inf)
-        if (boxState.bottom - boxState.top < MIN_GAP) p.push("A faixa está invertida ou muito estreita (cabeça em cima, base embaixo).");
-        else if (!inZone(boxState.top, T.top)) p.push("Leve o limite superior até o vértice do crânio.");
-        else if (!inZone(boxState.bottom, T.bottom)) p.push("Leve o limite inferior até a base do crânio.");
-        // FOV (direita-esquerda) = eixo horizontal (esq/dir)
-        if (boxState.right - boxState.left < MIN_GAP) p.push("O FOV está invertido ou muito estreito.");
-        else if (!inZone(boxState.left, T.left) || !inZone(boxState.right, T.right)) p.push("Ajuste o FOV para cobrir o crânio (direita/esquerda).");
-      } else {
-        // FAIXA (crânio-caudal) = eixo horizontal (esq/dir)
-        if (boxState.right - boxState.left < MIN_GAP) p.push("A faixa está invertida ou muito estreita (vértice à esquerda, base à direita).");
-        else if (!inZone(boxState.left, T.left)) p.push("Leve o limite esquerdo até o vértice.");
-        else if (!inZone(boxState.right, T.right)) p.push("Leve o limite direito até a base do crânio.");
-        // FOV (ântero-posterior) = eixo vertical (sup/inf)
-        if (boxState.bottom - boxState.top < MIN_GAP) p.push("O FOV está invertido ou muito estreito.");
-        else if (!inZone(boxState.top, T.top) || !inZone(boxState.bottom, T.bottom)) p.push("Ajuste o FOV para cobrir o crânio (anterior/posterior).");
+      var p = [];
+      var fr = isFrontal();
+      // Eixo crânio-caudal e eixo perpendicular, conforme a orientação.
+      var ccA = fr ? boxState.top : boxState.left;
+      var ccB = fr ? boxState.bottom : boxState.right;
+      var pA = fr ? boxState.left : boxState.top;
+      var pB = fr ? boxState.right : boxState.bottom;
+      var faixa = Math.abs(ccB - ccA);
+      var fov = Math.abs(pB - pA);
+
+      if (ccB - ccA < MIN_GAP) {
+        p.push("A faixa de varredura está invertida ou curta demais — arraste as linhas para cobrir a região de interesse.");
+        return p;
+      }
+      if (pB - pA < MIN_GAP) {
+        p.push("O FOV está invertido ou estreito demais.");
+        return p;
+      }
+
+      var lim = (SimTC.FonteVolume && SimTC.FonteVolume.limitesAnatomicos(
+        regiaoDoProtocolo(), fr ? "frontal" : "lateral"));
+      if (!lim) return p;   // sem volume não há como validar; não inventa regra
+
+      var ccMin = lim.cc[0] * 100, ccMax = lim.cc[1] * 100;
+      var pMin = lim.perp[0] * 100, pMax = lim.perp[1] * 100;
+
+      // Sobreposição da faixa com a anatomia disponível.
+      var sobrepoe = Math.max(0, Math.min(ccB, ccMax) - Math.max(ccA, ccMin));
+      if (sobrepoe <= 0) {
+        p.push("A faixa está fora do paciente — não há anatomia nesse trecho do topograma.");
+        return p;
+      }
+      var forcaAr = 1 - sobrepoe / faixa;
+      if (forcaAr > 0.25) {
+        p.push("Cerca de " + Math.round(forcaAr * 100) +
+          "% da faixa está fora do paciente: seria irradiação sem imagem útil. Aproxime as linhas da anatomia.");
+      }
+
+      // O FOV precisa conter o paciente, senão a borda trunca.
+      if (pA > pMin + 2 || pB < pMax - 2) {
+        p.push("O FOV não cobre toda a largura do paciente — a borda seria truncada. Afaste as linhas do FOV.");
       }
       return p;
     }
+
     function renderReadout() {
       var probs = problems();
       var ok = probs.length === 0;
@@ -674,8 +714,25 @@
       if (topoBox) topoBox.hidden = false;
       if (readout) readout.hidden = false;
       if (!keepBox) {
-        var d = preset().def;
-        boxState = { top: d.top, bottom: d.bottom, left: d.left, right: d.right };
+        // Caixa inicial derivada da ANATOMIA do volume, não de constantes
+        // calibradas para crânio (B-21). A faixa começa cobrindo o paciente
+        // com uma folga, e o FOV o envolve com margem.
+        var fr0 = isFrontal();
+        var lm = (SimTC.FonteVolume && SimTC.FonteVolume.limitesAnatomicos(
+          regiaoDoProtocolo(), fr0 ? "frontal" : "lateral"));
+        if (lm) {
+          var ccA = lm.cc[0] * 100, ccB = lm.cc[1] * 100;
+          var folga = (ccB - ccA) * 0.08;          // recua 8% em cada ponta
+          var c0 = Math.max(0, ccA + folga), c1 = Math.min(100, ccB - folga);
+          var pA = Math.max(0, lm.perp[0] * 100 - 4);   // margem de 4% no FOV
+          var pB = Math.min(100, lm.perp[1] * 100 + 4);
+          boxState = fr0
+            ? { top: c0, bottom: c1, left: pA, right: pB }
+            : { top: pA, bottom: pB, left: c0, right: c1 };
+        } else {
+          var d = preset().def;
+          boxState = { top: d.top, bottom: d.bottom, left: d.left, right: d.right };
+        }
       }
       startBtn.disabled = false; startBtn.textContent = "Iniciar";
       atStart = false; isMoving = false;

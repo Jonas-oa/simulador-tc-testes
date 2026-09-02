@@ -28,6 +28,7 @@ importScripts(
   _i("../core/acquisition/scan.js"),
   _i("../core/dose/ctdi.js"),
   _i("../core/dose/aec.js"),
+  _i("../core/protocol/validacao.js"),
   _i("../core/recon/serie.js")
 );
 
@@ -852,6 +853,129 @@ teste("AEC: realimenta a IMAGEM, nao so o relatorio", function () {
   var n0IniCom = comAEC.linhas[0].n0, n0FimCom = comAEC.linhas[comAEC.linhas.length - 1].n0;
   perto(n0IniSem, n0FimSem, n0IniSem * 1e-6, "sem AEC o N0 e constante");
   ok(n0FimCom > n0IniCom * 1.2, "com AEC o N0 sobe onde o paciente engrossa");
+});
+
+
+// =====================================================================
+// 11. MOTOR DE VALIDACAO DE PROTOCOLOS  (Fase 9)
+// =====================================================================
+function protoValido(extra) {
+  var base = {
+    nome: "Teste", regiao: "Tórax", kv: 120, mas: 200, pitch: 1.0,
+    rotacao: 0.5, colimacao: "64 × 0,6 mm", modo: "helicoidal",
+    reconstrucoes: [{ nome: "A", espessuraMm: 5, incrementoMm: 5, kernel: "liso", fovMm: 400, matriz: 512 }]
+  };
+  for (var k in (extra || {})) base[k] = extra[k];
+  return M.normalizarProtocolo(base);
+}
+
+teste("validacao: protocolo coerente nao gera erro", function () {
+  var r = C.validacao.validar(protoValido());
+  igual(r.erros.length, 0, "erros: " + JSON.stringify(r.erros.map(function(e){return e.codigo;})));
+  ok(r.podeExecutar);
+});
+
+teste("validacao: pitch em modo sequencial e ERRO", function () {
+  // normalizarProtocolo ja zera o pitch no sequencial; forcamos o estado ruim
+  var p = protoValido({ modo: "sequencial" });
+  p.aquisicao.pitch = 0.8;
+  var r = C.validacao.validar(p);
+  ok(r.erros.some(function (e) { return e.codigo === "PITCH_EM_SEQUENCIAL"; }));
+  ok(!r.podeExecutar);
+});
+
+teste("validacao: helicoidal sem pitch e ERRO", function () {
+  var p = protoValido();
+  p.aquisicao.pitch = null;
+  var r = C.validacao.validar(p);
+  ok(r.erros.some(function (e) { return e.codigo === "PITCH_AUSENTE"; }));
+});
+
+teste("validacao: kV ou mAs ausentes sao ERRO", function () {
+  var p = protoValido();
+  p.aquisicao.kv = null; p.aquisicao.mas = null;
+  var r = C.validacao.validar(p);
+  ok(r.erros.some(function (e) { return e.codigo === "KV_AUSENTE"; }));
+  ok(r.erros.some(function (e) { return e.codigo === "MAS_AUSENTE"; }));
+});
+
+teste("validacao: aquisicao sem reconstrucao e ERRO", function () {
+  var p = protoValido();
+  p.reconstrucoes = [];
+  var r = C.validacao.validar(p);
+  ok(r.erros.some(function (e) { return e.codigo === "SEM_RECONSTRUCAO"; }));
+});
+
+teste("validacao: FOV menor que o paciente e ERRO", function () {
+  var p = protoValido({ reconstrucoes: [{ nome: "A", espessuraMm: 5, incrementoMm: 5, kernel: "liso", fovMm: 200, matriz: 512 }] });
+  var r = C.validacao.validar(p, { larguraPacienteMm: 380 });
+  ok(r.erros.some(function (e) { return e.codigo === "FOV_MENOR_QUE_PACIENTE"; }));
+});
+
+teste("validacao: faixa alem do topograma e ERRO", function () {
+  var r = C.validacao.validar(protoValido(), { comprimentoFaixaMm: 500, extensaoVolumeMm: 326 });
+  ok(r.erros.some(function (e) { return e.codigo === "FAIXA_FORA_DO_TOPOGRAMA"; }));
+});
+
+teste("validacao: contraste sem fase e ERRO", function () {
+  var p = protoValido();
+  p.contraste = { tipo: "iodado", volumeMl: 80 };
+  var r = C.validacao.validar(p);
+  ok(r.erros.some(function (e) { return e.codigo === "CONTRASTE_SEM_FASE"; }));
+});
+
+teste("validacao: incremento maior que espessura e AVISO, nao erro", function () {
+  var p = protoValido({ reconstrucoes: [{ nome: "A", espessuraMm: 2, incrementoMm: 5, kernel: "liso", fovMm: 400, matriz: 512 }] });
+  var r = C.validacao.validar(p);
+  ok(r.avisos.some(function (a) { return a.codigo === "LACUNA_ENTRE_CORTES"; }));
+  ok(r.podeExecutar, "aviso NAO pode bloquear a execucao");
+});
+
+teste("validacao: pitch alto em cranio e AVISO", function () {
+  var p = protoValido({ regiao: "Crânio", pitch: 1.5 });
+  var r = C.validacao.validar(p);
+  ok(r.avisos.some(function (a) { return a.codigo === "PITCH_ALTO_EM_CRANIO"; }));
+  ok(r.podeExecutar);
+});
+
+teste("validacao: kV baixo sem contraste e AVISO", function () {
+  var r = C.validacao.validar(protoValido({ kv: 80 }));
+  ok(r.avisos.some(function (a) { return a.codigo === "KV_BAIXO_SEM_CONTRASTE"; }));
+});
+
+teste("validacao: DLP acima do DRL e AVISO", function () {
+  var r = C.validacao.validar(protoValido(), { dlpEstimado: 900 });
+  ok(r.avisos.some(function (a) { return a.codigo === "ACIMA_DO_DRL"; }));
+});
+
+teste("validacao: todo achado explica a CONSEQUENCIA", function () {
+  var p = protoValido({ modo: "sequencial" });
+  p.aquisicao.pitch = 0.8;
+  var r = C.validacao.validar(p, { dlpEstimado: 900, larguraPacienteMm: 500 });
+  var semConsequencia = r.todos.filter(function (a) {
+    return a.nivel !== "info" && !a.consequencia;
+  });
+  igual(semConsequencia.length, 0,
+    "erros e avisos precisam dizer a consequencia: " +
+    JSON.stringify(semConsequencia.map(function (a) { return a.codigo; })));
+});
+
+teste("limites anatomicos saem do volume, nao de constante de cranio (B-21)", function () {
+  // objeto ocupando so o terco central do volume em z
+  var n = 32, nz = 30;
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2;
+  // Int16Array nasce com ZEROS, e zero HU e AGUA: sem preencher com ar
+  // primeiro, o volume inteiro pareceria paciente.
+  d.fill(-1000);
+  for (var z = 10; z < 20; z++) for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+    var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+    if (r < n * 0.3) d[z * n * n + y * n + x] = 0;
+  }
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [1, 1, 1] });
+  var lim = v.limitesAnatomicos("lateral");
+  perto(lim.cc[0], 10 / 30, 0.05, "inicio da anatomia em z");
+  perto(lim.cc[1], 20 / 30, 0.05, "fim da anatomia em z");
+  ok(lim.perp[0] > 0.1 && lim.perp[1] < 0.9, "extensao perpendicular limitada ao objeto");
 });
 
 // =====================================================================

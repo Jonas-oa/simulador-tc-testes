@@ -203,6 +203,52 @@
   };
 
   /**
+   * LIMITES ANATÔMICOS no scout, em fração da imagem (0..1).
+   *
+   * Corrige B-21: as zonas que validavam a faixa planejada eram constantes
+   * calibradas para o crânio ("leve o limite inferior até a base do crânio").
+   * Num exame de tórax o sistema recusava faixas perfeitamente válidas com
+   * essa mensagem. Aqui os limites saem do PRÓPRIO volume — onde o paciente
+   * de fato está —, então valem para qualquer região do acervo.
+   *
+   * @param {string} orientacao "lateral" | "frontal"
+   * @param {number} [limiarHU=-500]
+   * @returns {{cc:[number,number], perp:[number,number]}} frações da imagem
+   */
+  Volume.prototype.limitesAnatomicos = function (orientacao, limiarHU) {
+    var lim = limiarHU == null ? -500 : limiarHU;
+    var nx = this.dims[0], ny = this.dims[1], nz = this.dims[2];
+    var lateral = orientacao !== "frontal";
+
+    // Extensão ocupada no eixo crânio-caudal (z).
+    var zMin = nz, zMax = -1;
+    // e no eixo perpendicular visível no scout (y no lateral, x no frontal).
+    var pMin = lateral ? ny : nx, pMax = -1;
+
+    for (var z = 0; z < nz; z++) {
+      var base = z * this._nxy;
+      var achouZ = false;
+      for (var y = 0; y < ny; y++) {
+        for (var x = 0; x < nx; x++) {
+          if (this.dados[base + y * nx + x] <= lim) continue;
+          achouZ = true;
+          var p = lateral ? y : x;
+          if (p < pMin) pMin = p;
+          if (p > pMax) pMax = p;
+        }
+      }
+      if (achouZ) { if (z < zMin) zMin = z; if (z > zMax) zMax = z; }
+    }
+
+    if (zMax < 0) return { cc: [0, 1], perp: [0, 1] };
+    var perpN = lateral ? ny : nx;
+    return {
+      cc: [zMin / nz, (zMax + 1) / nz],
+      perp: [pMin / perpN, (pMax + 1) / perpN]
+    };
+  };
+
+  /**
    * Confere que dimensões e espaçamento continuam descrevendo a MESMA
    * extensão física. É a trava contra a regressão do B-04, em que o volume
    * era subamostrado 512→256 e o espaçamento permanecia 0,43 mm, entregando

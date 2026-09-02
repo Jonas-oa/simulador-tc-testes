@@ -30,6 +30,7 @@
 
   var cacheAxial = Object.create(null);   // "id:i:wl:ww" -> dataURL
   var cacheScout = Object.create(null);   // "id:orient"  -> dataURL
+  var cacheLimites = Object.create(null); // "id:orient"  -> limites anatômicos
   var carregados = Object.create(null);   // id -> Volume
 
   function pintar(w, h, cinza) {
@@ -165,6 +166,18 @@
       return url;
     },
 
+    /**
+     * Limites anatômicos no scout, em fração da imagem. Cacheado: varrer o
+     * volume inteiro custa caro e o resultado não muda.
+     */
+    limitesAnatomicos: function (regiao, orientacao) {
+      var v = Fonte.volume(regiao);
+      if (!v) return null;
+      var chave = v.id + ":" + (orientacao === "frontal" ? "frontal" : "lateral");
+      if (!cacheLimites[chave]) cacheLimites[chave] = v.limitesAnatomicos(orientacao);
+      return cacheLimites[chave];
+    },
+
     /** Comprimento real do volume no eixo crânio-caudal, em mm. */
     comprimentoCCmm: function (regiao) {
       var v = Fonte.volume(regiao);
@@ -174,6 +187,7 @@
     limparCache: function () {
       cacheAxial = Object.create(null);
       cacheScout = Object.create(null);
+      cacheLimites = Object.create(null);
     }
   };
 
