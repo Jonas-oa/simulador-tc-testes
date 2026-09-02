@@ -25,6 +25,8 @@
     series: [],        // séries reconstruídas do último exame
     atual: 0,          // índice da série exibida
     bruto: null,       // resumo do dado bruto
+    dose: null,        // relatorio de dose CALCULADO
+    aec: null,         // o que a modulacao fez
     janela: { wl: 40, ww: 400 }
   };
 
@@ -70,7 +72,9 @@
       if (emCurso) return Promise.reject(new Error("Já existe uma reconstrução em curso."));
       return new Promise(function (resolve, reject) {
         try {
-          worker = new Worker("js/worker-aquisicao.js");
+          // Versao na URL: sem ela o navegador serve o Worker do cache e
+          // uma alteracao no motor simplesmente nao aparece.
+          worker = new Worker("js/worker-aquisicao.js?v=" + (window.__SIMTC_REV__ || "1"));
         } catch (e) {
           reject(new Error("Não foi possível iniciar o processador de imagens: " + e.message));
           return;
@@ -96,6 +100,8 @@
             });
             estado.atual = 0;
             estado.bruto = m.bruto;
+            estado.dose = m.dose || null;
+            estado.aec = m.aec || null;
             cache = Object.create(null);
             finalizar();
             resolve(estado);
@@ -112,6 +118,8 @@
           plano: o.plano,
           aquisicao: o.aquisicao,
           reconstrucoes: o.reconstrucoes,
+          regiao: o.regiao,
+          aec: o.aec || null,
           qualidade: o.qualidade,
           semente: o.semente || Math.floor(Math.random() * 100000) + 1
         });
@@ -131,6 +139,8 @@
     serieAtual: function () { return estado.series[estado.atual] || null; },
     indiceAtual: function () { return estado.atual; },
     bruto: function () { return estado.bruto; },
+    dose: function () { return estado.dose; },
+    aec: function () { return estado.aec; },
 
     selecionarSerie: function (i) {
       if (i < 0 || i >= estado.series.length) return false;
@@ -174,6 +184,7 @@
 
     limpar: function () {
       estado.series = []; estado.atual = 0; estado.bruto = null;
+      estado.dose = null; estado.aec = null;
       cache = Object.create(null);
     }
   };

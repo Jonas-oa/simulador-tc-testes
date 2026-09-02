@@ -75,7 +75,10 @@
   }
 
   try {
-    var w = new Worker("core.worker.js");
+    // Cache-buster: sem isto o navegador serve a versao antiga do Worker
+    // (e dos core/*.js que ele importa), e a suite roda codigo velho
+    // sem dar nenhum sinal disso.
+    var w = new Worker("core.worker.js?v=" + Date.now());
     w.onmessage = function (ev) { render(ev.data); w.terminate(); };
     w.onerror = function (ev) {
       placar.innerHTML = '<span class="vermelho">O núcleo não carregou no Worker</span>';

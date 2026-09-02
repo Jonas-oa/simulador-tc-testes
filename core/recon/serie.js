@@ -55,10 +55,22 @@
     // Fótons por raio de UMA linha de detector. Note que aqui a espessura é a
     // da LINHA (colimação), não a do corte reconstruído — é a distinção que a
     // Fase 4 não fazia.
-    var n0 = F.fotonsPorRaio({
-      mas: o.aquisicao.mas, pitch: o.aquisicao.pitch, modo: o.aquisicao.modo,
-      kv: o.aquisicao.kv, espessuraMm: linhaMm
-    });
+    //
+    // Com AEC, o mAs varia ao longo do eixo Z: cada linha recebe a corrente
+    // que a atenuação daquele nível pediu. É isto que faz a modulação
+    // REALIMENTAR a imagem, em vez de ser só um número no relatório.
+    function n0Da(centroMm) {
+      var mas = o.aquisicao.mas;
+      if (o.modulacaoAEC) {
+        var m = Core.aec.masEm(o.modulacaoAEC, centroMm);
+        if (m > 0) mas = m;
+      }
+      return F.fotonsPorRaio({
+        mas: mas, pitch: o.aquisicao.pitch, modo: o.aquisicao.modo,
+        kv: o.aquisicao.kv, espessuraMm: linhaMm
+      });
+    }
+    var n0 = n0Da((ini + fim) / 2);   // referência para o relatório
 
     var detectores = o.detectores || vol.dims[0];
     var vistas = o.vistas || 180;
@@ -76,16 +88,17 @@
         vistas: vistas, detectores: detectores
       });
 
-      if (!o.semRuido && n0 > 0) {
+      var n0Linha = n0Da(centro);
+      if (!o.semRuido && n0Linha > 0) {
         sino = {
-          dados: Core.ruido.aplicarRuido(sino.dados, n0, {
+          dados: Core.ruido.aplicarRuido(sino.dados, n0Linha, {
             semente: (o.semente || 1) + i * 7919,
             ruidoEletronicoDP: o.ruidoEletronicoDP
           }),
           vistas: sino.vistas, detectores: sino.detectores, passoMm: sino.passoMm
         };
       }
-      linhas.push({ sino: sino, centroMm: centro });
+      linhas.push({ sino: sino, centroMm: centro, n0: n0Linha });
       if (o.aoProgresso) o.aoProgresso(i + 1, nLinhas);
     }
 
@@ -100,6 +113,7 @@
       detectores: detectores,
       passoMm: vol.spacingMm[0],
       aquisicao: o.aquisicao,
+      modulacaoAEC: o.modulacaoAEC || null,
       volumeId: vol.id,
       extensaoVolumeMm: vol.extentMm()
     };

@@ -27,6 +27,8 @@ importScripts(
   "../core/acquisition/noise.js",
   "../core/acquisition/projector.js",
   "../core/acquisition/scan.js",
+  "../core/dose/ctdi.js",
+  "../core/dose/aec.js",
   "../core/recon/serie.js"
 );
 
@@ -51,9 +53,23 @@ self.onmessage = function (ev) {
   C.Acervo.carregar(m.regiaoId).then(function (vol) {
     var q = m.qualidade || {};
 
+    // ---- AEC ----
+    // A modulacao sai da atenuacao medida no proprio volume, como o
+    // equipamento real faz a partir do topograma.
+    var modulacao = null;
+    if (m.aec && m.aec.ativo && m.aquisicao.mas > 0) {
+      var perfil = C.aec.perfilAtenuacao(vol, m.plano.inicioMm, m.plano.fimMm,
+                                         (q.linhaMm || vol.spacingMm[2]), m.aquisicao.kv);
+      modulacao = C.aec.modularLongitudinal(perfil, {
+        masReferencia: m.aquisicao.mas,
+        alfa: m.aec.alfa == null ? 0.6 : m.aec.alfa
+      });
+    }
+
     // ---- IRRADIAÇÃO (uma vez) ----
     responder({ tipo: "etapa", etapa: "irradiando", feito: 0, total: 1 });
     var bruto = C.recon.adquirirBruto({
+      modulacaoAEC: modulacao,
       volume: vol,
       plano: m.plano,
       aquisicao: m.aquisicao,
@@ -98,7 +114,23 @@ self.onmessage = function (ev) {
         linhas: bruto.linhas.length, linhaMm: bruto.linhaMm,
         comprimentoMm: bruto.comprimentoMm, n0PorLinha: bruto.n0PorLinha,
         vistas: bruto.vistas, detectores: bruto.detectores
-      }
+      },
+      // Dose CALCULADA — nao digitada. O diametro efetivo sai do proprio
+      // volume, no meio da faixa varrida.
+      dose: C.dose.relatorio({
+        kv: m.aquisicao.kv,
+        mas: modulacao ? modulacao.masMedio : m.aquisicao.mas,
+        pitch: m.aquisicao.pitch, modo: m.aquisicao.modo,
+        regiao: m.regiao,
+        comprimentoMm: bruto.comprimentoMm,
+        diametroEfetivoMm: C.dose.diametroEfetivoMm(vol, (m.plano.inicioMm + m.plano.fimMm) / 2)
+      }),
+      aec: modulacao ? {
+        masMedio: modulacao.masMedio, razaoDose: modulacao.razaoDose,
+        masMin: Math.min.apply(null, modulacao.mas),
+        masMax: Math.max.apply(null, modulacao.mas),
+        alfa: modulacao.alfa, explicacao: C.aec.explicar(modulacao)
+      } : null
     }, series.map(function (s) { return s.dados.buffer; }));
 
   }).catch(function (e) {

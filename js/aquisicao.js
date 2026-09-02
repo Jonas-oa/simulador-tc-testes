@@ -723,24 +723,41 @@
         rows.push("<strong>Mesa:</strong> " + Math.round(speed) + " mm/s (pitch " + pp.pitch + " × colimação " + pp.colim.toFixed(1) + " mm ÷ rotação " + pp.rotacaoS.toFixed(1) + " s)");
       }
       rows.push("<strong>Posicionamento no isocentro:</strong> " + isoTxt);
-      if (!isNaN(dlp)) {
-        // CTDIvol de crânio é referido ao fantoma de CABEÇA (PMMA 16 cm),
-        // distinto do fantoma de corpo (32 cm). Dose efetiva didática:
-        // E ≈ DLP × k, com k de cabeça do adulto ≈ 0,0021 mSv/(mGy·cm)
-        // (fatores de ICRP/EUR — apenas para ordem de grandeza).
-        var K_HEAD = 0.0021;
-        var eff = dlp * K_HEAD; // mSv
-        rows.push("<strong>Dose (didática):</strong> CTDIvol " + dose +
-          " mGy <small>(fantoma de cabeça 16 cm)</small> × " + (scanLen / 10).toFixed(1) +
-          " cm → DLP ≈ <strong>" + dlp.toFixed(0) + " mGy·cm</strong>");
-        rows.push("<strong>Dose efetiva (estimada):</strong> E ≈ DLP × k(cabeça " +
-          K_HEAD.toFixed(4) + ") ≈ <strong>" + eff.toFixed(2) + " mSv</strong>");
-        // DRL didático de referência para crânio adulto (~1000 mGy·cm).
-        var DRL_HEAD = 1000;
-        if (dlp > DRL_HEAD * 1.2) {
-          rows.push('<span class="is-bad">DLP acima do nível de referência didático de crânio (~' + DRL_HEAD + ' mGy·cm) — revise mAs/faixa.</span>');
+      // ---- DOSE CALCULADA (Fase 6) ------------------------------------
+      // Antes, o CTDIvol vinha de um TEXTO digitado no protocolo e lido por
+      // expressao regular: mudar kV ou mAs nao mudava a dose, e um paciente
+      // de 45 kg recebia o mesmo numero de um de 120 kg. Agora e calculado,
+      // e o SSDE corrige pelo diametro efetivo medido no proprio volume.
+      var dz = SimTC.MotorImagem && SimTC.MotorImagem.dose();
+      if (dz && dz.ctdivol != null) {
+        rows.push("<strong>CTDIvol:</strong> " + dz.ctdivol.toFixed(1) +
+          " mGy <small>(fantoma de " + dz.fantomaCm + " cm · CTDIw ÷ pitch)</small>");
+        rows.push("<strong>DLP:</strong> " + Math.round(dz.dlp) +
+          " mGy·cm <small>(CTDIvol × " + (dz.comprimentoMm / 10).toFixed(1) + " cm)</small>");
+        if (dz.ssdeMGy != null) {
+          rows.push("<strong>SSDE:</strong> " + dz.ssdeMGy.toFixed(1) +
+            " mGy <small>(diâmetro efetivo " + dz.diametroEfetivoCm.toFixed(1) +
+            " cm · fator " + dz.fatorSSDE.toFixed(2) + " · AAPM 204)</small>");
+          if (dz.ssdeMGy > dz.ctdivol * 1.1) {
+            rows.push('<span class="is-bad">Paciente menor que o fantoma: a dose real é MAIOR que o CTDIvol indica.</span>');
+          } else if (dz.ssdeMGy < dz.ctdivol * 0.9) {
+            rows.push('<span class="is-good">Paciente maior que o fantoma: a dose real é menor que o CTDIvol indica.</span>');
+          }
         }
+        if (dz.doseEfetivaMSv != null) {
+          rows.push("<strong>Dose efetiva (estimada):</strong> " + dz.doseEfetivaMSv.toFixed(2) +
+            " mSv <small>(DLP × k = " + dz.kEfetiva + ", fator de conversão regional)</small>");
+        }
+        if (dz.drlDLP) {
+          rows.push(dz.acimaDoDRL
+            ? '<span class="is-bad">DLP acima do nível de referência didático da região (~' + dz.drlDLP + ' mGy·cm) — revise mAs, pitch ou faixa.</span>'
+            : '<span class="is-good">DLP dentro do nível de referência didático (~' + dz.drlDLP + ' mGy·cm).</span>');
+        }
+      } else {
+        rows.push("<strong>Dose:</strong> não calculada — informe kV e mAs no protocolo.");
       }
+      var ae = SimTC.MotorImagem && SimTC.MotorImagem.aec();
+      if (ae) rows.push("<strong>AEC:</strong> " + esc(ae.explicacao));
       // Alerta de pitch: no crânio helicoidal usa-se pitch < 1 para conter
       // ruído/dose; pitch > 1 é atípico. No sequencial o pitch não se aplica.
       if (pp.modo !== "sequencial" && pp.pitch > 1.0) {
@@ -848,6 +865,9 @@
             modo: pr.protocolo.aquisicao.modo
           },
           reconstrucoes: pr.reconstrucoes,
+          regiao: regiaoDoProtocolo(),
+          aec: pr.protocolo.dose && pr.protocolo.dose.aec && pr.protocolo.dose.aec.ativo
+            ? { ativo: true, alfa: 0.6 } : null,
           // Amostragem bruta limitada. Projetar e caro: cada linha de
           // detector custa ~120 vistas x 160 canais x ~360 amostras. Sem
           // teto, uma faixa de 156 mm com linhas de 1,25 mm daria 125

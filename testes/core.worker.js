@@ -11,20 +11,24 @@
 /* eslint-env worker */
 "use strict";
 
+var __V__ = (function(){ try { return "?" + (self.location.search || "").slice(1); } catch(e){ return ""; } })();
+function _i(p){ return p + __V__; }
 importScripts(
-  "../core/bus.js",
-  "../core/clock.js",
-  "../core/model/patient.js",
-  "../core/model/protocol.js",
-  "../core/model/exam.js",
-  "../core/state.js",
-  "../core/phantom/volume.js",
-  "../core/phantom/acervo.js",
-  "../core/acquisition/fisica.js",
-  "../core/acquisition/noise.js",
-  "../core/acquisition/projector.js",
-  "../core/acquisition/scan.js",
-  "../core/recon/serie.js"
+  _i("../core/bus.js"),
+  _i("../core/clock.js"),
+  _i("../core/model/patient.js"),
+  _i("../core/model/protocol.js"),
+  _i("../core/model/exam.js"),
+  _i("../core/state.js"),
+  _i("../core/phantom/volume.js"),
+  _i("../core/phantom/acervo.js"),
+  _i("../core/acquisition/fisica.js"),
+  _i("../core/acquisition/noise.js"),
+  _i("../core/acquisition/projector.js"),
+  _i("../core/acquisition/scan.js"),
+  _i("../core/dose/ctdi.js"),
+  _i("../core/dose/aec.js"),
+  _i("../core/recon/serie.js")
 );
 
 var C = self.SimTCCore;
@@ -699,6 +703,155 @@ teste("reconstruirTodas devolve uma serie por entrada do protocolo", function ()
   igual(todas[0].nome, "A"); igual(todas[1].nome, "B");
   igual(todas[0].cortes.length, 4);
   igual(todas[1].cortes.length, 8);
+});
+
+
+// =====================================================================
+// 10. DOSE  (Fase 6)
+// =====================================================================
+teste("dose: CTDIvol e proporcional ao mAs", function () {
+  var D = C.dose;
+  var a = D.ctdivol({ kv: 120, mas: 100, pitch: 1, fantoma: "corpo" });
+  var b = D.ctdivol({ kv: 120, mas: 200, pitch: 1, fantoma: "corpo" });
+  perto(b / a, 2, 1e-9, "dobrar o mAs dobra o CTDIvol");
+});
+
+teste("dose: dobrar o pitch reduz o CTDIvol pela metade", function () {
+  var D = C.dose;
+  var p1 = D.ctdivol({ kv: 120, mas: 200, pitch: 1.0, fantoma: "corpo" });
+  var p2 = D.ctdivol({ kv: 120, mas: 200, pitch: 2.0, fantoma: "corpo" });
+  perto(p1 / p2, 2, 1e-9, "CTDIvol = CTDIw / pitch");
+});
+
+teste("dose: modo sequencial nao divide por pitch", function () {
+  var D = C.dose;
+  var seq = D.ctdivol({ kv: 120, mas: 200, pitch: 0.5, modo: "sequencial", fantoma: "corpo" });
+  var w = D.ctdiw({ kv: 120, mas: 200, fantoma: "corpo" });
+  perto(seq, w, 1e-9);
+});
+
+teste("dose: fantoma de cabeca da valor maior que o de corpo", function () {
+  var D = C.dose;
+  var cab = D.ctdivol({ kv: 120, mas: 200, pitch: 1, fantoma: "cabeca" });
+  var cor = D.ctdivol({ kv: 120, mas: 200, pitch: 1, fantoma: "corpo" });
+  ok(cab > cor * 2, "16 cm concentra mais dose que 32 cm");
+  igual(D.fantomaDaRegiao("Crânio"), "cabeca");
+  igual(D.fantomaDaRegiao("Abdome"), "corpo");
+});
+
+teste("dose: DLP = CTDIvol x comprimento em cm", function () {
+  var D = C.dose;
+  perto(D.dlp(10, 200), 200, 1e-9, "10 mGy x 20 cm");
+  igual(D.dlp(10, 0), null, "sem comprimento nao ha DLP");
+});
+
+teste("dose: dobrar o mAs dobra o DLP", function () {
+  var D = C.dose;
+  var r1 = D.relatorio({ kv: 120, mas: 100, pitch: 1, regiao: "Abdome", comprimentoMm: 300 });
+  var r2 = D.relatorio({ kv: 120, mas: 200, pitch: 1, regiao: "Abdome", comprimentoMm: 300 });
+  perto(r2.dlp / r1.dlp, 2, 1e-9);
+});
+
+teste("dose: SSDE corrige o CTDIvol pelo tamanho do paciente", function () {
+  var D = C.dose;
+  var ctdi = 10;
+  var magro = D.ssde(ctdi, 22, "corpo");   // 22 cm de diametro efetivo
+  var obeso = D.ssde(ctdi, 40, "corpo");   // 40 cm
+  ok(magro.mGy > ctdi, "paciente magro recebe MAIS que o CTDIvol do fantoma");
+  ok(obeso.mGy < ctdi, "paciente grande recebe MENOS");
+  ok(magro.mGy > obeso.mGy * 1.5, "a diferenca precisa ser substancial");
+});
+
+teste("dose: diametro efetivo e medido no volume, nao estimado", function () {
+  // cilindro de agua de raio conhecido: Deff = 2R
+  var n = 64, nz = 4, esp = 2.0, R = n * 0.3;
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2;
+  for (var z = 0; z < nz; z++) for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+    var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+    d[z * n * n + y * n + x] = r < R ? 0 : -1000;
+  }
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [esp, esp, esp] });
+  var deff = C.dose.diametroEfetivoMm(v, esp * 2);
+  perto(deff, 2 * R * esp, 2 * R * esp * 0.05, "Deff = 2R do cilindro");
+});
+
+teste("dose: DRL sinaliza ultrapassagem sem reprovar", function () {
+  var D = C.dose;
+  var alto = D.relatorio({ kv: 140, mas: 600, pitch: 0.5, regiao: "Tórax", comprimentoMm: 400 });
+  ok(alto.drlDLP > 0, "regiao deve ter DRL de referencia");
+  ok(alto.acimaDoDRL === true, "protocolo pesado deveria sinalizar");
+  var normal = D.relatorio({ kv: 120, mas: 80, pitch: 1.2, regiao: "Tórax", comprimentoMm: 300 });
+  ok(normal.acimaDoDRL === false);
+});
+
+teste("dose: campo nao calculavel devolve null, nao numero inventado", function () {
+  var r = C.dose.relatorio({ kv: 120, mas: null, pitch: 1, regiao: "Tórax", comprimentoMm: 300 });
+  igual(r.ctdivol, null, "sem mAs nao ha CTDIvol");
+  igual(r.dlp, null);
+  igual(r.doseEfetivaMSv, null);
+});
+
+teste("AEC: modula a corrente ao longo do eixo Z", function () {
+  // fantoma que ENGROSSA ao longo de z: a AEC deve elevar o mAs ali
+  var n = 48, nz = 20, esp = 3.0;
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2;
+  for (var z = 0; z < nz; z++) {
+    var R = n * (0.15 + 0.22 * z / nz);
+    for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+      var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+      d[z * n * n + y * n + x] = r < R ? 0 : -1000;
+    }
+  }
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [esp, esp, esp] });
+  var perfil = C.aec.perfilAtenuacao(v, 0, (nz - 1) * esp, esp, 120);
+  ok(perfil.integral[perfil.integral.length - 1] > perfil.integral[0] * 1.5,
+     "a atenuacao deve crescer com a espessura do fantoma");
+  var mod = C.aec.modularLongitudinal(perfil, { masReferencia: 200, alfa: 0.6 });
+  ok(mod.mas[mod.mas.length - 1] > mod.mas[0],
+     "mAs deve subir onde o paciente e mais espesso (" +
+     Math.round(mod.mas[0]) + " -> " + Math.round(mod.mas[mod.mas.length - 1]) + ")");
+  ok(mod.masMedio > 0 && mod.razaoDose > 0);
+});
+
+teste("AEC: limites do tubo sao respeitados", function () {
+  var perfil = { z: [0, 10, 20], integral: [0, 50, -50], mediana: 0 };
+  var mod = C.aec.modularLongitudinal(perfil, { masReferencia: 100, alfa: 1, masMin: 50, masMax: 300 });
+  for (var i = 0; i < mod.mas.length; i++) {
+    ok(mod.mas[i] >= 50 && mod.mas[i] <= 300, "mAs fora dos limites: " + mod.mas[i]);
+  }
+});
+
+teste("AEC: alfa = 0 desliga a modulacao", function () {
+  var perfil = { z: [0, 10, 20], integral: [1, 3, 5], mediana: 3 };
+  var mod = C.aec.modularLongitudinal(perfil, { masReferencia: 150, alfa: 0 });
+  for (var i = 0; i < mod.mas.length; i++) perto(mod.mas[i], 150, 1e-9);
+});
+
+teste("AEC: realimenta a IMAGEM, nao so o relatorio", function () {
+  // Mesmo fantoma, mesma faixa: com e sem AEC os dados brutos diferem.
+  var n = 48, nz = 16, esp = 3.0;
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2;
+  for (var z = 0; z < nz; z++) {
+    var R = n * (0.15 + 0.22 * z / nz);
+    for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+      var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+      d[z * n * n + y * n + x] = r < R ? 0 : -1000;
+    }
+  }
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [esp, esp, esp] });
+  var plano = { inicioMm: 3, fimMm: 42 };
+  var perfil = C.aec.perfilAtenuacao(v, plano.inicioMm, plano.fimMm, esp, 120);
+  var mod = C.aec.modularLongitudinal(perfil, { masReferencia: 200, alfa: 0.6 });
+
+  var comum = { volume: v, plano: plano, aquisicao: { kv: 120, mas: 200, pitch: 1, modo: "helicoidal" },
+                linhaMm: esp, vistas: 60, detectores: 48, semente: 7 };
+  var semAEC = C.recon.adquirirBruto(comum);
+  var comAEC = C.recon.adquirirBruto(Object.assign({}, comum, { modulacaoAEC: mod }));
+
+  var n0IniSem = semAEC.linhas[0].n0, n0FimSem = semAEC.linhas[semAEC.linhas.length - 1].n0;
+  var n0IniCom = comAEC.linhas[0].n0, n0FimCom = comAEC.linhas[comAEC.linhas.length - 1].n0;
+  perto(n0IniSem, n0FimSem, n0IniSem * 1e-6, "sem AEC o N0 e constante");
+  ok(n0FimCom > n0IniCom * 1.2, "com AEC o N0 sobe onde o paciente engrossa");
 });
 
 // =====================================================================
