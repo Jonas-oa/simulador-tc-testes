@@ -23,7 +23,8 @@ importScripts(
   "../core/acquisition/fisica.js",
   "../core/acquisition/noise.js",
   "../core/acquisition/projector.js",
-  "../core/acquisition/scan.js"
+  "../core/acquisition/scan.js",
+  "../core/recon/serie.js"
 );
 
 var C = self.SimTCCore;
@@ -609,6 +610,95 @@ teste("Poisson: media e variancia batem com lambda", function () {
   var media = soma / n, varia = soma2 / n - media * media;
   perto(media, lambda, lambda * 0.06, "media");
   perto(varia, lambda, lambda * 0.25, "variancia = media, na Poisson");
+});
+
+
+// =====================================================================
+// 9. RECONSTRUCAO: SERIES DO MESMO DADO BRUTO  (Fase 5)
+// =====================================================================
+function fantomaBorda(n, nz, esp) {
+  var d = new Int16Array(n * n * nz), c = (n - 1) / 2, R = n * 0.40;
+  for (var z = 0; z < nz; z++) for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+    var r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+    var hu = -1000;
+    if (r < R) hu = 0;
+    if (r < R && x > c + 4 && x < c + 14) hu = 1000;   // degrau para medir borda
+    d[z * n * n + y * n + x] = hu;
+  }
+  return new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [esp, esp, esp] });
+}
+var VOL_BORDA = fantomaBorda(64, 24, 1.5);
+var BRUTO = C.recon.adquirirBruto({
+  volume: VOL_BORDA, plano: { inicioMm: 6, fimMm: 30 },
+  aquisicao: { kv: 120, mas: 200, pitch: 1.0, modo: "helicoidal" },
+  vistas: 120, detectores: 64, semente: 99
+});
+function serie(rec) { return C.recon.reconstruirSerie(BRUTO, rec); }
+function ruidoDe(s, idx) { return C.scan.desvioEmROI(s.cortes[idx].hu, s.cortes[idx].n, 20, 32, 7).dp; }
+
+teste("bruto: uma irradiacao produz linhas de detector com ruido proprio", function () {
+  igual(BRUTO.linhas.length, 16, "24 mm / 1,5 mm por linha");
+  perto(BRUTO.linhaMm, 1.5, 1e-9);
+  ok(BRUTO.n0PorLinha > 0, "N0 por linha deve estar definido");
+});
+
+teste("duas series COEXISTEM a partir do mesmo bruto", function () {
+  var mole = serie({ nome: "Partes moles", espessuraMm: 6, incrementoMm: 6, kernel: "liso", fovMm: 96, matriz: 64 });
+  var osso = serie({ nome: "Osso", espessuraMm: 1.5, incrementoMm: 1.5, kernel: "nitido", fovMm: 96, matriz: 64 });
+  igual(mole.cortes.length, 4, "24 mm / 6 mm");
+  igual(osso.cortes.length, 16, "24 mm / 1,5 mm");
+  igual(mole.cortes[1].linhasCombinadas, 4, "6 mm combina 4 linhas de 1,5 mm");
+  igual(osso.cortes[8].linhasCombinadas, 1, "1,5 mm usa uma linha");
+  ok(mole.nome !== osso.nome && mole.kernel !== osso.kernel);
+});
+
+teste("kernel nitido: mais ruido que o liso, no MESMO bruto e espessura", function () {
+  var liso = serie({ espessuraMm: 3, incrementoMm: 3, kernel: "liso", fovMm: 96, matriz: 64 });
+  var nitido = serie({ espessuraMm: 3, incrementoMm: 3, kernel: "nitido", fovMm: 96, matriz: 64 });
+  var rl = ruidoDe(liso, 3), rn = ruidoDe(nitido, 3);
+  ok(rn > rl * 1.3, "nitido " + rn.toFixed(2) + " deveria superar liso " + rl.toFixed(2));
+});
+
+teste("kernel nitido: transicao de borda mais curta que a do liso", function () {
+  var liso = serie({ espessuraMm: 6, incrementoMm: 6, kernel: "liso", fovMm: 96, matriz: 64 });
+  var nitido = serie({ espessuraMm: 6, incrementoMm: 6, kernel: "nitido", fovMm: 96, matriz: 64 });
+  var bl = C.recon.larguraDeBorda(liso.cortes[1].hu, 64, 32, 28, 46);
+  var bn = C.recon.larguraDeBorda(nitido.cortes[1].hu, 64, 32, 28, 46);
+  ok(bn <= bl, "borda nitida (" + bn + " px) nao pode ser mais larga que a lisa (" + bl + " px)");
+});
+
+teste("espessura maior reduz o ruido, combinando linhas do mesmo bruto", function () {
+  var fino = serie({ espessuraMm: 1.5, incrementoMm: 1.5, kernel: "padrao", fovMm: 96, matriz: 64 });
+  var grosso = serie({ espessuraMm: 6, incrementoMm: 6, kernel: "padrao", fovMm: 96, matriz: 64 });
+  var rf = ruidoDe(fino, 8), rg = ruidoDe(grosso, 1);
+  ok(rg < rf, "6 mm (" + rg.toFixed(2) + ") deve ser menos ruidoso que 1,5 mm (" + rf.toFixed(2) + ")");
+});
+
+teste("pixel = FOV / matriz, exato", function () {
+  var s = serie({ espessuraMm: 6, incrementoMm: 6, kernel: "padrao", fovMm: 250, matriz: 512 });
+  perto(s.pixelMm, 250 / 512, 1e-9, "FOV 250 / matriz 512");
+  perto(s.pixelMm, 0.48828125, 1e-8);
+  var s2 = serie({ espessuraMm: 6, incrementoMm: 6, kernel: "padrao", fovMm: 350, matriz: 512 });
+  perto(s2.pixelMm, 350 / 512, 1e-9, "FOV maior, pixel maior");
+});
+
+teste("a serie carrega o rastro do que a gerou", function () {
+  var s = serie({ nome: "Rastro", espessuraMm: 3, incrementoMm: 3, kernel: "padrao", fovMm: 96, matriz: 64 });
+  igual(s.origem.kv, 120);
+  igual(s.origem.mas, 200);
+  perto(s.origem.linhaMm, 1.5, 1e-9);
+  ok(s.origem.n0PorLinha > 0, "N0 registrado para rastreabilidade ate o DICOM");
+});
+
+teste("reconstruirTodas devolve uma serie por entrada do protocolo", function () {
+  var todas = C.recon.reconstruirTodas(BRUTO, [
+    { nome: "A", espessuraMm: 6, incrementoMm: 6, kernel: "liso", fovMm: 96, matriz: 64 },
+    { nome: "B", espessuraMm: 3, incrementoMm: 3, kernel: "nitido", fovMm: 96, matriz: 64 }
+  ]);
+  igual(todas.length, 2);
+  igual(todas[0].nome, "A"); igual(todas[1].nome, "B");
+  igual(todas[0].cortes.length, 4);
+  igual(todas[1].cortes.length, 8);
 });
 
 // =====================================================================
