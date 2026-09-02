@@ -51,6 +51,21 @@
    * (mm por pixel difere entre os eixos). Reescala para pixels quadrados,
    * senão o topograma aparece esticado e o planejamento da faixa erra.
    */
+  /**
+   * Volume.scout() devolve sempre o eixo crânio-caudal na HORIZONTAL. A tela,
+   * porém, trata o scout frontal com o eixo CC na VERTICAL (cabeça em cima),
+   * que é como se vê um topograma AP. Sem transpor, o planejamento da faixa
+   * mediria o eixo errado.
+   */
+  function transpor(proj) {
+    var w = proj.w, h = proj.h;
+    var out = new Uint8ClampedArray(w * h);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) out[x * h + (h - 1 - y)] = proj.cinza[y * w + x];
+    }
+    return { w: h, h: w, cinza: out, mmPorPixel: [proj.mmPorPixel[1], proj.mmPorPixel[0]] };
+  }
+
   function pintarProporcional(proj) {
     var base = pintar(proj.w, proj.h, proj.cinza);
     var mmX = proj.mmPorPixel[0], mmY = proj.mmPorPixel[1];
@@ -142,7 +157,10 @@
       var orient = orientacao === "frontal" ? "frontal" : "lateral";
       var chave = v.id + ":" + orient;
       if (cacheScout[chave]) return cacheScout[chave];
-      var url = pintarProporcional(v.scout(orient));
+      var proj = v.scout(orient);
+      // No frontal, cabeça em cima: o eixo CC vai para a vertical.
+      if (orient === "frontal") proj = transpor(proj);
+      var url = pintarProporcional(proj);
       cacheScout[chave] = url;
       return url;
     },

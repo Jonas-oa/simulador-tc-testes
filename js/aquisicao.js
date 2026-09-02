@@ -136,6 +136,74 @@
       }
     }
 
+    // Parametros de reconstrucao vindos do protocolo. Campos em branco
+    // recebem um padrao explicito — nunca um valor clinico inventado; o
+    // padrao aqui e de ENGENHARIA (o que o motor precisa para rodar).
+    function paramsReconstrucao() {
+      var Core = window.SimTCCore;
+      var cru = (SimTC.examProtocol && SimTC.examProtocol.data) || {};
+      var pr = Core.model.normalizarProtocolo(cru);
+      var extensao = (SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo()));
+      var fovPadrao = extensao ? Math.round(extensao.extentMm()[0]) : 350;
+      var recs = pr.reconstrucoes.map(function (r) {
+        return {
+          nome: r.nome || "Série",
+          espessuraMm: r.espessuraMm || 5,
+          incrementoMm: r.incrementoMm || r.espessuraMm || 5,
+          kernel: r.kernel || "padrao",
+          fovMm: r.fovMm || fovPadrao,
+          // Matriz limitada a 256 nesta versao: 512 quadruplica o custo da
+          // retroprojecao e o exame passaria de um minuto no navegador.
+          matriz: Math.min(256, r.matriz || 256)
+        };
+      });
+      return { protocolo: pr, reconstrucoes: recs };
+    }
+
+    // ---- ponte com o motor de aquisicao/reconstrucao ----------------
+    var motorPromessa = null;   // reconstrucao em curso
+    var motorErro = null;
+
+    // A faixa desenhada no topograma, convertida para MILIMETROS no eixo
+    // cranio-caudal do volume. E o que o motor consome: sem isto a faixa
+    // continuaria sendo "% da imagem", que nao e grandeza.
+    function faixaEmMm() {
+      var fr = isFrontal();
+      var a = fr ? boxState.top : boxState.left;
+      var b = fr ? boxState.bottom : boxState.right;
+      var ini = Math.min(a, b) / 100 * TOPO_LEN_MM;
+      var fim = Math.max(a, b) / 100 * TOPO_LEN_MM;
+      return { inicioMm: ini, fimMm: fim };
+    }
+
+    // Total de cortes exibiveis: da serie reconstruida quando ela existe,
+    // senao do volume (comportamento anterior).
+    // Seletor de SERIES. Um exame produz N series do mesmo dado bruto
+    // (encefalo 5 mm liso, osso 1,25 mm nitido...). Trocar de serie e um ato
+    // do operador, e precisa aparecer.
+    function renderSeletorSeries() {
+      var el = document.getElementById("ws-series");
+      if (!el) return;
+      var M = SimTC.MotorImagem;
+      if (!M || !M.temSeries()) { el.hidden = true; el.innerHTML = ""; return; }
+      var lista = M.series();
+      var html = '<span class="ws-series__rot">Séries</span>';
+      for (var i = 0; i < lista.length; i++) {
+        var s = lista[i];
+        html += '<button type="button" class="ws-series__btn' +
+          (i === M.indiceAtual() ? " is-active" : "") + '" data-serie="' + i + '">' +
+          esc(s.nome) + ' <small>' + s.espessuraMm + " mm · " + esc(s.kernel) +
+          " · " + s.cortes + " cortes</small></button>";
+      }
+      el.innerHTML = html;
+      el.hidden = false;
+    }
+
+    function totalCortes() {
+      if (SimTC.MotorImagem && SimTC.MotorImagem.temSeries()) return SimTC.MotorImagem.cortes();
+      return manifest ? manifest.cortes : 0;
+    }
+
     // Anuncia a fase do exame (idle/topoAcq/plan/moving/volAcq/review)
     // para módulos desacoplados — ex.: o PiP da sala 3D no modo console.
     function announcePhase(p) {
@@ -309,18 +377,25 @@
 
     function pad3(n) { n = String(n); while (n.length < 3) n = "0" + n; return n; }
     function srcFor(i) {
+      // Serie RECONSTRUIDA tem precedencia: e o produto do motor, com o
+      // ruido e a nitidez que os parametros do protocolo produziram.
+      if (SimTC.MotorImagem && SimTC.MotorImagem.temSeries()) {
+        var u = SimTC.MotorImagem.axial(i);
+        if (u) return u;
+      }
       if (volSource.kind === "volume") return SimTC.FonteVolume.axial(volSource.region, i, janelaAtual);
       if (volSource.kind === "phantom") return window.CTPhantom.axial(volSource.region, i);
       return bust("axial_" + pad3(i) + ".png");
     }
     function show(i) {
-      if (!manifest) return;
+      var total = totalCortes();
+      if (!total) return;
       i = i | 0;
       if (i < 0) i = 0;
-      if (i > manifest.cortes - 1) i = manifest.cortes - 1;
+      if (i > total - 1) i = total - 1;
       img.src = srcFor(i);
       slider.value = i;
-      counter.textContent = "Corte " + (i + 1) + " / " + manifest.cortes;
+      counter.textContent = "Corte " + (i + 1) + " / " + total;
     }
 
     // ---- rótulos de orientação anatômica nas margens (modo anatômico) ----
@@ -505,6 +580,9 @@
       topoImg.style.clipPath = "";
       // Descarta o volume/reformatações e volta o viewer ao plano axial.
       plane = "axial"; vol = null; mprCache = {};
+      if (SimTC.MotorImagem) { SimTC.MotorImagem.abortar(); SimTC.MotorImagem.limpar(); }
+      motorPromessa = null; motorErro = null;
+      renderSeletorSeries();
       if (planeEl) planeEl.hidden = true;
     }
 
@@ -750,6 +828,53 @@
       var scanLen = Math.max(20, (rangeSpan() / 100) * TOPO_LEN_MM);
       var speed = Math.max(10, Math.min(120, (pp.pitch * pp.colim) / pp.rotacaoS)); // mm/s
       lastAcq = { scanLen: scanLen, speed: speed, pp: pp };
+
+      // ---- DISPARA O MOTOR -------------------------------------------
+      // A mesa 3D anda enquanto o Worker projeta e reconstroi: o aluno ve o
+      // equipamento trabalhando e o calculo nao trava a interface.
+      motorPromessa = null; motorErro = null;
+      if (SimTC.MotorImagem && SimTC.MotorImagem.disponivel() &&
+          volSource.kind === "volume" && SimTC.FonteVolume) {
+        var pr = paramsReconstrucao();
+        var faixa = faixaEmMm();
+        var idVol = window.SimTCCore.Acervo.volumeDaRegiao(regiaoDoProtocolo());
+        motorPromessa = SimTC.MotorImagem.executar({
+          regiaoId: idVol,
+          plano: faixa,
+          aquisicao: {
+            kv: pr.protocolo.aquisicao.kv || 120,
+            mas: pr.protocolo.aquisicao.mas || 200,
+            pitch: pr.protocolo.aquisicao.pitch,
+            modo: pr.protocolo.aquisicao.modo
+          },
+          reconstrucoes: pr.reconstrucoes,
+          // Amostragem bruta limitada. Projetar e caro: cada linha de
+          // detector custa ~120 vistas x 160 canais x ~360 amostras. Sem
+          // teto, uma faixa de 156 mm com linhas de 1,25 mm daria 125
+          // projecoes e o exame levaria minutos no navegador.
+          //
+          // O preco e honesto e precisa ser dito ao operador: a espessura
+          // minima reconstruivel fica limitada pela linha efetiva.
+          qualidade: {
+            vistas: 120,
+            detectores: 160,
+            linhaMm: Math.max(
+              (SimTC.FonteVolume.volume(regiaoDoProtocolo()) || {spacingMm:[1,1,1]}).spacingMm[2],
+              Math.abs(faixa.fimMm - faixa.inicioMm) / 48
+            )
+          },
+          aoProgresso: function (m) {
+            if (phase !== "volAcq" && phase !== "recon") return;
+            if (m.etapa === "irradiando") {
+              counter.textContent = "IRRADIANDO — linha " + m.feito + " / " + m.total;
+            } else {
+              counter.textContent = "RECONSTRUINDO “" + m.serie + "” — corte " +
+                m.feito + " / " + m.total;
+            }
+          }
+        }).catch(function (e) { motorErro = e; });
+      }
+
       function paintProg(k) {
         var idx = Math.round(k * (total - 1));
         var n = (pp.direcao === "craniocaudal") ? (total - 1 - idx) : idx;
@@ -1012,8 +1137,39 @@
       slider.disabled = true;
       startBtn.disabled = true; startBtn.textContent = "Reconstruindo…";
       counter.textContent = "Reconstruindo volume…";
-      SimTC.showMessage("Reconstruindo o volume (axial + reformatações coronal/sagital)…", "info");
-      buildVolume(function () { if (phase === "recon") toReview(); });
+      SimTC.showMessage("Reconstruindo o volume…", "info");
+
+      // Espera o motor terminar antes de revisar. Sem isto a revisao abriria
+      // com os cortes do volume direto e o exame pareceria nao ter reagido
+      // aos parametros — que era exatamente o defeito B-02.
+      var espera = motorPromessa || Promise.resolve(null);
+      espera.then(function () {
+        // A espessura entregue pode ser MAIOR que a pedida: a amostragem
+        // bruta tem teto (custo de projecao), e nenhuma serie pode ser mais
+        // fina que a linha de detector efetiva. Dizer isso, em vez de
+        // exibir 2,5 mm no protocolo e 4,35 mm na serie sem explicacao.
+        if (!motorErro && SimTC.MotorImagem && SimTC.MotorImagem.temSeries()) {
+          var pedidas = paramsReconstrucao().reconstrucoes;
+          var obtidas = SimTC.MotorImagem.series();
+          var limitadas = [];
+          for (var q = 0; q < obtidas.length; q++) {
+            var ped = pedidas[q] && pedidas[q].espessuraMm;
+            if (ped && obtidas[q].espessuraMm > ped * 1.05) {
+              limitadas.push(obtidas[q].nome + " (" + ped + " → " +
+                obtidas[q].espessuraMm.toFixed(2) + " mm)");
+            }
+          }
+          if (limitadas.length) {
+            SimTC.showMessage("Espessura limitada pela amostragem desta versão: " +
+              limitadas.join(", ") + ". Reduza a faixa planejada para obter cortes mais finos.", "warning");
+          }
+        }
+        if (motorErro) {
+          SimTC.showMessage("Reconstrucao indisponivel (" + motorErro.message +
+            "); exibindo os cortes do volume.", "warning");
+        }
+        buildVolume(function () { if (phase === "recon") toReview(); });
+      });
     }
 
     function toReview() {
@@ -1036,7 +1192,10 @@
           b.classList.toggle("is-active", b.getAttribute("data-plane") === "axial");
         });
       }
-      slider.min = 0; slider.max = manifest.cortes - 1;
+      var totalRev = totalCortes();
+      slider.min = 0; slider.max = Math.max(0, totalRev - 1);
+      if (lastSlice > totalRev - 1) lastSlice = Math.floor(totalRev / 2);
+      renderSeletorSeries();
       show(lastSlice);
       showVolOrient(true);
       // Arquiva o exame realizado (B-20): o estudo passa a existir depois
@@ -1061,7 +1220,7 @@
         });
       }
 
-      SimTC.showMessage("Aquisição concluída (" + manifest.cortes + " cortes)" +
+      SimTC.showMessage("Aquisição concluída (" + totalCortes() + " cortes)" +
         (vol ? " — reformatações coronal/sagital disponíveis." : ".") + " Navegue e finalize com Stop.", "success");
     }
 
@@ -1300,6 +1459,23 @@
       if (reportEl.hidden) buildReport();
       reportEl.hidden = !reportEl.hidden;
     });
+    var seriesEl = document.getElementById("ws-series");
+    if (seriesEl) seriesEl.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest(".ws-series__btn") : null;
+      if (!b || !SimTC.MotorImagem) return;
+      var i = parseInt(b.getAttribute("data-serie"), 10);
+      if (!SimTC.MotorImagem.selecionarSerie(i)) return;
+      var t = totalCortes();
+      slider.min = 0; slider.max = Math.max(0, t - 1);
+      if (lastSlice > t - 1) lastSlice = Math.floor(t / 2);
+      plane = "axial"; vol = null; mprCache = {};
+      renderSeletorSeries();
+      show(lastSlice);
+      var s = SimTC.MotorImagem.serieAtual();
+      SimTC.showMessage("Série “" + s.nome + "” — " + s.espessuraMm +
+        " mm, kernel " + s.kernel + ", " + s.cortes + " cortes.", "info");
+    });
+
     topoImg.addEventListener("load", fitTopo);
     window.addEventListener("resize", fitTopo);
   }

@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260804mpr" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260804mpr" />
+  <link rel="stylesheet" href="css/style.css?v=20260901dpr" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260901dpr" />
 </head>
 <body data-theme="dark">
 
@@ -243,6 +243,7 @@
               </div>
 
               <div class="ws-overlay ws-overlay--bottom">
+                <div class="ws-series" id="ws-series" hidden aria-label="Séries reconstruídas"></div>
                 <div class="ws-plane" id="ws-plane" hidden role="group" aria-label="Plano de reformatação">
                   <button type="button" class="ws-plane__btn is-active" data-plane="axial">Axial</button>
                   <button type="button" class="ws-plane__btn" data-plane="coronal">Coronal</button>
@@ -392,42 +393,43 @@
 
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260820a"></script>
+  <script src="js/phantoms.js?v=20260901d"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260830a"></script>
-  <script src="core/clock.js?v=20260830a"></script>
-  <script src="core/model/patient.js?v=20260830a"></script>
-  <script src="core/model/protocol.js?v=20260830a"></script>
-  <script src="core/model/exam.js?v=20260830a"></script>
-  <script src="core/state.js?v=20260830a"></script>
-  <script src="core/phantom/volume.js?v=20260901a"></script>
-  <script src="core/phantom/acervo.js?v=20260901a"></script>
-  <script src="core/acquisition/fisica.js?v=20260901a"></script>
-  <script src="core/acquisition/noise.js?v=20260901a"></script>
-  <script src="core/acquisition/projector.js?v=20260901a"></script>
-  <script src="core/acquisition/scan.js?v=20260901a"></script>
-  <script src="core/recon/serie.js?v=20260901a"></script>
+  <script src="core/bus.js?v=20260901d"></script>
+  <script src="core/clock.js?v=20260901d"></script>
+  <script src="core/model/patient.js?v=20260901d"></script>
+  <script src="core/model/protocol.js?v=20260901d"></script>
+  <script src="core/model/exam.js?v=20260901d"></script>
+  <script src="core/state.js?v=20260901d"></script>
+  <script src="core/phantom/volume.js?v=20260901d"></script>
+  <script src="core/phantom/acervo.js?v=20260901d"></script>
+  <script src="core/acquisition/fisica.js?v=20260901d"></script>
+  <script src="core/acquisition/noise.js?v=20260901d"></script>
+  <script src="core/acquisition/projector.js?v=20260901d"></script>
+  <script src="core/acquisition/scan.js?v=20260901d"></script>
+  <script src="core/recon/serie.js?v=20260901d"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260820a"></script>
+  <script src="js/shared.js?v=20260901d"></script>
 
   <!-- Módulos de telas -->
-  <script src="js/sala-exame.js?v=20260820a"></script>
-  <script src="js/cadastro-pacientes.js?v=20260820a"></script>
-  <script src="js/protocolos.js?v=20260820a"></script>
+  <script src="js/sala-exame.js?v=20260901d"></script>
+  <script src="js/cadastro-pacientes.js?v=20260901d"></script>
+  <script src="js/protocolos.js?v=20260901d"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260901a"></script>
-  <script src="js/aquisicao.js?v=20260820a"></script>
-  <script src="js/mpr.js?v=20260820a"></script>
-  <script src="js/ui-layout.js?v=20260820a"></script>
+  <script src="js/fonte-volume.js?v=20260901d"></script>
+  <script src="js/motor-imagem.js?v=20260901d"></script>
+  <script src="js/aquisicao.js?v=20260901d"></script>
+  <script src="js/mpr.js?v=20260901d"></script>
+  <script src="js/ui-layout.js?v=20260901d"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260820a"></script>
+  <script src="script.js?v=20260901d"></script>
 
   <!-- Controlador de abas mobile (independente) -->
-  <script src="js/mobile-tabs.js?v=20260804mpr"></script>
+  <script src="js/mobile-tabs.js?v=20260901dpr"></script>
 </body>
 </html>

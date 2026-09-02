@@ -1533,3 +1533,31 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   body.is-mobile.mob-aq .acq4 .acq-adj { grid-template-columns: 1fr 1fr; }
   body.is-mobile.mob-aq .acq4 .acq-seq { overflow-y: auto; }
 }
+
+/* Seletor de séries reconstruídas.
+   Um exame produz N séries do MESMO dado bruto (encéfalo 5 mm liso, osso
+   1,25 mm nítido...). Trocar entre elas é ato do operador e precisa estar
+   visível — antes não havia séries, havia uma pilha só. */
+.ws-series {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 8px; border-top: 1px solid var(--border-subtle);
+}
+.ws-series__rot {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--text-muted); margin-right: 2px;
+}
+.ws-series__btn {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 4px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--text-secondary); font-size: 0.72rem; line-height: 1.25;
+  text-align: left;
+}
+.ws-series__btn small { font-size: 0.6rem; color: var(--text-muted); }
+.ws-series__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.ws-series__btn.is-active {
+  border-color: var(--accent-cyan); color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
+}
+.ws-series__btn.is-active small { color: var(--accent-cyan); }
