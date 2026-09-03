@@ -37,19 +37,35 @@
     var meia = Math.max(sz, espessuraMm) / 2;
     var z0 = (centroMm - meia) / sz;
     var z1 = (centroMm + meia) / sz;
-    var iz0 = Math.max(0, Math.floor(z0));
-    var iz1 = Math.min(volume.dims[2] - 1, Math.ceil(z1) - 1);
-    if (iz1 < iz0) iz1 = iz0;
+    var iz0 = Math.floor(z0);
+    var iz1 = Math.ceil(z1) - 1;
 
     var n = nx * ny;
     var slab = new Float32Array(n);
+
+    // Pedido inteiramente FORA do volume. Sem esta guarda, iz0 ficava alem do
+    // ultimo corte, a leitura em Int16Array fora dos limites devolvia
+    // undefined, e a soma virava NaN — um corte inteiro de NaN que atravessava
+    // projecao e retroprojecao sem nenhum sinal de erro. Fora do volume nao ha
+    // paciente: ha AR, e e isso que o detector mediria.
+    var nz = volume.dims[2];
+    if (iz1 < 0 || iz0 > nz - 1) {
+      for (var j = 0; j < n; j++) slab[j] = Core.HU.AR;
+      return { hu: slab, nx: nx, ny: ny, cortesIntegrados: 0, foraDoVolume: true };
+    }
+    // Pedido que so encosta na borda: usa a parte que existe.
+    if (iz0 < 0) iz0 = 0;
+    if (iz1 > nz - 1) iz1 = nz - 1;
+    if (iz1 < iz0) iz1 = iz0;
+
     var contagem = iz1 - iz0 + 1;
     for (var z = iz0; z <= iz1; z++) {
       var base = z * n;
       for (var i = 0; i < n; i++) slab[i] += volume.dados[base + i];
     }
     for (i = 0; i < n; i++) slab[i] /= contagem;
-    return { hu: slab, nx: nx, ny: ny, cortesIntegrados: contagem };
+    return { hu: slab, nx: nx, ny: ny, cortesIntegrados: contagem,
+             foraDoVolume: false };
   }
 
   /**

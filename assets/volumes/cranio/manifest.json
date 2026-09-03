@@ -1,49 +1,50 @@
 {
-  "id": "cranio",
+  "id": "cranio_ts",
   "modalidade": "CT",
   "formato": "int16-hu-raw-gz",
   "ordem": "z,y,x",
   "dims": [
-    256,
-    256,
-    34
+    170,
+    173,
+    125
   ],
   "espacamento_mm": {
-    "x": 0.976562,
-    "y": 0.976562,
-    "z": 5.0
+    "x": 1.5,
+    "y": 1.5,
+    "z": 1.5
   },
   "origem_mm": [
-    -124.7559,
-    -367.7559,
-    -201.0
-  ],
-  "orientacao": [
-    1.0,
     0.0,
     0.0,
-    0.0,
-    1.0,
     0.0
   ],
+  "orientacao": [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0
+  ],
   "hu_min": -1024,
-  "hu_max": 1843,
+  "hu_max": 3071,
   "janela_exibicao": {
     "wl": 40,
-    "ww": 400
+    "ww": 80
   },
+  "largura_maxima_mm": 225.0,
   "extensao_mm": {
-    "x": 250.0,
-    "y": 250.0,
-    "z": 170.0
+    "x": 255.0,
+    "y": 259.5,
+    "z": 187.5
   },
   "aquisicao_original": {
-    "kvp": 120.0,
-    "espessura_mm": 5.0,
-    "kernel": "['J30s', '2']",
-    "fabricante": "SIEMENS",
-    "modelo": "SOMATOM Definition Flash"
+    "fonte": "TotalSegmentator",
+    "sujeito": "s0187",
+    "arquivo": "ct.nii.gz",
+    "orientacao_origem": "RAS (NIfTI) -> LPS",
+    "mesa_removida": true
   },
-  "convertido_em": "2026-09-01T19:57:29.826647+00:00",
+  "convertido_em": "2026-09-03T19:54:06.302837+00:00",
   "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
 }

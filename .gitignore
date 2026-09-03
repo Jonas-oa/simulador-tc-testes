@@ -8,3 +8,12 @@ dist/
 # O que vai para o repositório é o volume convertido em assets/volumes/,
 # muito menor. O bruto pode somar dezenas de GB.
 ARQUIVOS DICON/
+
+# Cache de bytecode do Python
+__pycache__/
+*.pyc
+
+# Indice do ZIP remoto do TotalSegmentator: e um cache regeneravel de ~40 MB
+# (144 mil membros). Recria com:
+#   python ferramentas/zip_remoto.py indice <url> --saida indice_ts.json
+indice_ts.json

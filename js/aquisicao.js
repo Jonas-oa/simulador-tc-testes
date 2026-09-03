@@ -87,10 +87,26 @@
     var TOPO_MS = 4000;    // fallback (sem cena 3D): duração da varredura
     var VOL_MS = 6500;     // fallback (sem cena 3D): duração do volume
     // Física didática da aquisição (mesa REAL comanda a imagem):
-    // Comprimento REAL coberto pelo topograma. Era 300 mm fixo, o que tornava
-    // a "faixa planejada" uma fracao de uma imagem, nao uma grandeza. Agora vem
-    // da extensao cranio-caudal do volume carregado.
-    var TOPO_LEN_MM = 300;
+    // Comprimento REAL coberto pelo topograma: o scout E a projecao do volume,
+    // entao a escala dele e a extensao cranio-caudal do volume carregado.
+    //
+    // Antes isso vivia numa variavel de modulo reatribuida no inicio do exame.
+    // Funcionava no fluxo normal, mas obrigava todo consumidor a confiar que a
+    // atribuicao ja tinha acontecido; qualquer caminho que lesse a faixa em mm
+    // antes disso usaria 300 mm — errado por +76% no cranio (170 mm) e -57% no
+    // tronco (694 mm). Lendo do volume a cada uso, nao ha ordem a respeitar.
+    // Os 300 mm ficam so como reserva para o fantoma procedural, que nao tem
+    // volume carregado.
+    var TOPO_LEN_PADRAO_MM = 300;
+
+    function topoLenMm() {
+      var v = SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo());
+      if (v && v.dims && v.spacingMm) {
+        var z = v.dims[2] * v.spacingMm[2];
+        if (isFinite(z) && z > 0) return z;
+      }
+      return TOPO_LEN_PADRAO_MM;
+    }
     var TOPO_SPEED_MMS = 100;// velocidade da mesa no scout (tubo estacionário)
     var ROT_S = 1.0;         // tempo de rotação do gantry (s/volta) no helicoidal
 
@@ -189,8 +205,9 @@
       var fr = isFrontal();
       var a = fr ? boxState.top : boxState.left;
       var b = fr ? boxState.bottom : boxState.right;
-      var ini = Math.min(a, b) / 100 * TOPO_LEN_MM;
-      var fim = Math.max(a, b) / 100 * TOPO_LEN_MM;
+      var Ltopo = topoLenMm();
+      var ini = Math.min(a, b) / 100 * Ltopo;
+      var fim = Math.max(a, b) / 100 * Ltopo;
       return { inicioMm: ini, fimMm: fim };
     }
 
@@ -242,7 +259,7 @@
     // é a extremidade correspondente à direção.
     function volumeStartZ() {
       if (!topoRef) return null;
-      var L = TOPO_LEN_MM / 1000;
+      var L = topoLenMm() / 1000;
       var frontal = topoRef.scout === "frontal";
       // borda "vértice" (fração 0) e borda "base" (fração 1) da faixa
       var vertexEdge = frontal ? boxState.top : boxState.left;
@@ -699,7 +716,7 @@
       if (SimTC.tableDriveApi) {
         var pp = protocolParams();
         var res = SimTC.tableDriveApi.start({
-          distanceMm: TOPO_LEN_MM,
+          distanceMm: topoLenMm(),
           direction: pp.direcao === "craniocaudal" ? "in" : "out",
           speedMmS: TOPO_SPEED_MMS,
           rotTimeS: 0, // scout: tubo estacionário, gantry não gira
@@ -932,7 +949,7 @@
       var total = manifest.cortes;
       var pp = protocolParams();
       // Comprimento da varredura = faixa CC planejada no topograma (mm)
-      var scanLen = Math.max(20, (rangeSpan() / 100) * TOPO_LEN_MM);
+      var scanLen = Math.max(20, (rangeSpan() / 100) * topoLenMm());
       var speed = Math.max(10, Math.min(120, (pp.pitch * pp.colim) / pp.rotacaoS)); // mm/s
       lastAcq = { scanLen: scanLen, speed: speed, pp: pp };
 
@@ -1479,7 +1496,7 @@
       var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get) ? SimTC.examSessionApi.get() : null;
       var prot = protocoloVigente();
       var pp = protocolParams();
-      var scanLen = Math.max(20, (rangeSpan() / 100) * TOPO_LEN_MM);
+      var scanLen = Math.max(20, (rangeSpan() / 100) * topoLenMm());
       var dose = NaN;
       if (prot && prot.dose) { var m = String(prot.dose).replace(/,/g, ".").match(/\d+(\.\d+)?/); if (m) dose = parseFloat(m[0]); }
       var dlp = (dose > 0) ? dose * (scanLen / 10) : NaN;
@@ -1555,7 +1572,7 @@
       return Core.validacao.validar(pr, {
         larguraPacienteMm: larguraPac,
         comprimentoFaixaMm: comprimento,
-        extensaoVolumeMm: TOPO_LEN_MM,
+        extensaoVolumeMm: topoLenMm(),
         dlpEstimado: dlpPrev
       });
     }
@@ -1610,14 +1627,11 @@
         SimTC.FonteVolume.preparar(regiaoAlvo).then(function () {
           volSource = resolveSource();
           manifest = SimTC.FonteVolume.manifest(regiaoAlvo);
-          // A faixa planejada passa a ser uma GRANDEZA: o topograma cobre a
-          // extensao cranio-caudal real do volume, nao 300 mm arbitrarios.
-          TOPO_LEN_MM = SimTC.FonteVolume.comprimentoCCmm(regiaoAlvo) || 300;
           slider.min = 0; slider.max = manifest.cortes - 1;
           if (caption) {
             caption.textContent = "TC real anonimizada — " + manifest.nome + " · " +
               manifest.fonte.nome + " · " + manifest.fonte.licenca +
-              " Volume de " + Math.round(TOPO_LEN_MM) + " mm em HU reais (" +
+              " Volume de " + Math.round(topoLenMm()) + " mm em HU reais (" +
               manifest.hu_min + " a " + manifest.hu_max + " HU). " +
               "Uso exclusivamente educacional — sem interpretação diagnóstica.";
           }

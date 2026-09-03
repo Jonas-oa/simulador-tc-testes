@@ -961,6 +961,52 @@ teste("validacao: todo achado explica a CONSEQUENCIA", function () {
     JSON.stringify(semConsequencia.map(function (a) { return a.codigo; })));
 });
 
+teste("slab pedido FORA do volume devolve ar, nao NaN", function () {
+  // Um pedido alem do ultimo corte fazia iz0 passar do fim do Int16Array. A
+  // leitura fora dos limites devolve undefined, a soma virava NaN, e o corte
+  // inteiro de NaN atravessava projecao e retroprojecao sem sinal nenhum de
+  // erro. Fora do volume nao ha paciente: ha ar.
+  var n = 16, nz = 20, sz = 5;                 // volume de 100 mm
+  var d = new Int16Array(n * n * nz); d.fill(-1000);
+  for (var z = 0; z < nz; z++) for (var i = 0; i < n * n; i++) d[z * n * n + i] = 0;
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [1, 1, sz] });
+
+  var dentro = C.scan.extrairSlab(v, 50, 5);
+  ok(dentro.cortesIntegrados > 0, "corte no meio do volume integra dados");
+  ok(!dentro.foraDoVolume, "corte no meio nao e marcado como fora");
+  for (var k = 0; k < dentro.hu.length; k++) {
+    ok(isFinite(dentro.hu[k]), "slab interno todo finito");
+    break;
+  }
+
+  [ -40, 150, 400 ].forEach(function (centro) {
+    var s = C.scan.extrairSlab(v, centro, 5);
+    ok(s.foraDoVolume, "centro " + centro + " mm e reportado como fora do volume");
+    var naoFinitos = 0, naoAr = 0;
+    for (var i = 0; i < s.hu.length; i++) {
+      if (!isFinite(s.hu[i])) naoFinitos++;
+      if (s.hu[i] !== C.HU.AR) naoAr++;
+    }
+    igual(naoFinitos, 0, "nenhum NaN no slab fora do volume (centro " + centro + ")");
+    igual(naoAr, 0, "slab fora do volume e todo ar (centro " + centro + ")");
+  });
+});
+
+teste("slab que so encosta na borda usa a parte que existe", function () {
+  var n = 16, nz = 20, sz = 5;                 // 100 mm
+  var d = new Int16Array(n * n * nz); d.fill(-1000);
+  for (var z = 0; z < nz; z++) for (var i = 0; i < n * n; i++) d[z * n * n + i] = 0;
+  var v = new C.Volume({ dados: d, dims: [n, n, nz], spacingMm: [1, 1, sz] });
+  // centro em 2 mm com 20 mm de espessura: metade do slab cai antes do inicio
+  var s = C.scan.extrairSlab(v, 2, 20);
+  ok(!s.foraDoVolume, "slab parcial nao e descartado como fora");
+  ok(s.cortesIntegrados > 0 && s.cortesIntegrados <= nz, "integra so os cortes que existem");
+  for (var i = 0; i < s.hu.length; i++) {
+    ok(isFinite(s.hu[i]), "slab parcial todo finito");
+    break;
+  }
+});
+
 teste("limites anatomicos saem do volume, nao de constante de cranio (B-21)", function () {
   // objeto ocupando so o terco central do volume em z
   var n = 32, nz = 30;

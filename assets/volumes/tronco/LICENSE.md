@@ -1,74 +1,100 @@
-# Tronco (tórax · abdome · pelve · coluna lombar) — procedência e licença
+# Tronco (tórax · abdome · pelve · coluna) — procedência e licença
 
 ## Origem
 
-- **Coleção:** CPTAC-CCRCC — *Clinical Proteomic Tumor Analysis Consortium,
-  Clear Cell Renal Cell Carcinoma*
-- **Arquivo:** The Cancer Imaging Archive (TCIA), National Cancer Institute
-- **Página:** https://www.cancerimagingarchive.net/collection/cptac-ccrcc/
-- **Série usada:** `1.3.6.1.4.1.14519.5.2.1.6450.3304.166159322911379491499619152148`
-  (descrição original `CHEST ABDOMEN PELVIS`)
-- **Baixado em:** 2026-09-01, via API REST pública do TCIA (`getImage`, v1)
+- **Coleção:** TotalSegmentator — *A dataset for anatomical structure
+  segmentation in CT images*
+- **Arquivo:** Zenodo · DOI [10.5281/zenodo.10047292](https://doi.org/10.5281/zenodo.10047292)
+- **Versão:** `Totalsegmentator_dataset_v201`
+- **Sujeito:** `s0476`
+- **Baixado em:** 2026-09-03, por requisições HTTP Range sobre o ZIP público
+  (`ferramentas/zip_remoto.py`)
 
 ## Licença
 
 **Creative Commons Attribution 4.0 International (CC BY 4.0)**
 https://creativecommons.org/licenses/by/4.0/
 
-Permite uso, redistribuição e **uso comercial**, com atribuição. Sem cláusula
-NonCommercial e sem ShareAlike — compatível com o objetivo comercial da
-plataforma.
-
-Sujeito também à *TCIA Data Usage Policy*:
-https://www.cancerimagingarchive.net/data-usage-policies-and-restrictions/
+Uso comercial permitido, com atribuição. Sem NonCommercial, sem ShareAlike.
 
 ## Atribuição exigida
 
-> National Cancer Institute Clinical Proteomic Tumor Analysis Consortium (CPTAC).
-> (2018). **The Clinical Proteomic Tumor Analysis Consortium Clear Cell Renal Cell
-> Carcinoma Collection (CPTAC-CCRCC)** (Version 14) [Data set]. The Cancer Imaging
-> Archive. https://doi.org/10.7937/k9/tcia.2018.oblamn27
+> Wasserthal, J., Breit, H.-C., Meyer, M. T., et al. *TotalSegmentator: Robust
+> Segmentation of 104 Anatomic Structures in CT Images.* Radiology: Artificial
+> Intelligence, 2023. Dataset em Zenodo, DOI 10.5281/zenodo.10047292.
+> Licenciado sob CC BY 4.0.
 
-Agradecimento solicitado pela coleção:
+## Anonimização
 
-> Os dados usados nesta publicação foram gerados pelo National Cancer Institute
-> Clinical Proteomic Tumor Analysis Consortium (CPTAC).
+Volume já desidentificado pelos autores; o formato NIfTI não carrega os campos
+de identificação do DICOM. Sendo tronco, não há face a considerar.
 
-Citação do arquivo:
+## Dado original
 
-> Clark, K., Vendt, B., Smith, K., Freymann, J., Kirby, J., Koppel, P., Moore, S.,
-> Phillips, S., Maffitt, D., Pringle, M., Tarbox, L., & Prior, F. (2013). The Cancer
-> Imaging Archive (TCIA): Maintaining and Operating a Public Information Repository.
-> *Journal of Digital Imaging*, 26(6), 1045–1057.
+| campo | valor |
+|---|---|
+| tipo de estudo | `ct neck-thorax-abdomen-pelvis` |
+| achado | `no_pathology` |
+| idade / sexo | 61 anos · masculino |
+| equipamento | Siemens SOMATOM Definition Edge |
+| tensão | 120 kVp |
 
-## Processamento aplicado
+O exame é **com contraste** (aorta e rins realçados), o que serve ao ensino das
+fases contrastadas que o simulador modela.
 
-1. **Separação de reconstruções.** A série traz duas reconstruções entrelaçadas
-   sob o mesmo `SeriesInstanceUID`: 178 cortes de 5,0 mm e 144 de 2,5 mm.
-   Misturadas, produzem espaçamento irregular. Foi usada a de **2,5 mm**.
-2. Cortes ordenados por `ImagePositionPatient` projetada na normal do plano.
-3. Verificação de aquisição não oblíqua e espaçamento regular (2,5 mm constante).
-4. Conversão para HU com `RescaleSlope` / `RescaleIntercept`.
-5. Subamostragem 2× no plano **com o espaçamento corrigido na mesma proporção**
-   (0,7852 → 1,5703 mm), preservando a extensão física de 402 mm.
-6. Gravação como Int16 bruto comprimido + `manifest.json`.
+## Por que este sujeito
 
-Ferramenta: `ferramentas/dicom_para_volume.py`.
+Foram triados nove candidatos do dataset. Os critérios e o que reprovou cada um:
 
-## Cobertura anatômica
+| sujeito | extensão | metal | pulmão | veredito |
+|---|---|---|---|---|
+| s1371 | 788 mm | **0,027%** | 178 mm | prótese total de quadril, com estriamento |
+| s0913 | 698 mm | **0,059%** | 215 mm | metal |
+| **s0476** | **694 mm** | **0,000%** | **232 mm** | **escolhido** |
+| s0546 | 687 mm | 0,001% | 231 mm | aprovado; reserva |
+| s1012 | 680 mm | 0,001% | 198 mm | pulmão curto |
+| s1228 | 603 mm | 0,005% | — | largura de 482 mm |
+| s0250 | 452 mm | 0,000% | 32 mm | tórax quase ausente |
+| s0227 / s0174 / s0190 | 356–380 mm | 0,000% | — | curtos demais |
 
-Volume único de 360 mm no eixo crânio-caudal cobrindo **tórax inferior, abdome,
-pelve e coluna lombar**. As regiões do simulador são obtidas por recorte deste
-mesmo volume, evitando quatro downloads separados.
+O metal foi medido como fração de voxels acima de 2500 HU: osso cortical chega a
+cerca de 1800 HU, então o que passa disso é implante ou contraste concentrado.
+Rejeitar implantes importa porque a pelve é região de ensino central, e o
+artefato de estriamento dominaria toda imagem reconstruída ali.
 
-## Verificação de anonimização
+## Como foi convertido
 
-Nenhum identificador de paciente, instituição ou médico encontrado nos metadados.
-A coleção é distribuída já desidentificada pelo TCIA.
+`ferramentas/nifti_para_volume.py` — mesma cadeia descrita em
+`assets/volumes/cranio/LICENSE.md`: NIfTI → orientação RAS→LPS pela matriz afim
+→ remoção da mesa → recorte ao corpo com 20 mm de margem → verificação de escala.
 
-## Aviso
+Resultado: **1,5 mm isotrópico**, 424 × 404 × 694 mm, HU de −1024 a 3071.
 
-Volume de tomografia computadorizada **real**, de paciente anonimizado, usado
-exclusivamente para **treinamento de operação de equipamento e posicionamento**.
-A coleção é de pacientes oncológicos e o volume pode conter achados; a plataforma
-**não** interpreta exames nem oferece qualquer orientação clínica ou diagnóstica.
+## Limitação conhecida
+
+Em 198 dos 463 cortes (43%) o paciente **encosta na borda lateral** do campo
+reconstruído do exame original: o FOV da fonte era de 424 mm e o paciente é mais
+largo nos quadris. O tecido cortado chega a 41 pixels de altura numa coluna, num
+corte de 269 — visível como uma aresta reta no flanco, nos cortes mais baixos.
+Não há como recuperar o que a fonte não reconstruiu, e preencher seria inventar
+anatomia. Está declarado aqui e no manifesto (`largura_maxima_mm`).
+
+## Marcos anatômicos medidos
+
+Distâncias a partir da extremidade **inferior** do volume (fêmures proximais):
+
+| marco | posição |
+|---|---|
+| pico ósseo da bacia (acetábulos) | 75 mm |
+| crista ilíaca | 225 mm |
+| base pulmonar | 399 mm |
+| ápice pulmonar | 652 mm |
+| topo do volume (base do pescoço) | 694 mm |
+
+São esses números que alimentam as faixas padrão por região em
+`core/phantom/acervo.js`.
+
+## Uso
+
+Exclusivamente educacional, para treinar **operação** de tomógrafo. A plataforma
+não interpreta exames nem oferece orientação clínica.
