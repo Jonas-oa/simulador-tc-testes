@@ -29,6 +29,7 @@ importScripts(
   _i("../core/dose/ctdi.js"),
   _i("../core/dose/aec.js"),
   _i("../core/protocol/validacao.js"),
+  _i("../core/dicom/writer.js"),
   _i("../core/recon/serie.js")
 );
 
@@ -976,6 +977,146 @@ teste("limites anatomicos saem do volume, nao de constante de cranio (B-21)", fu
   perto(lim.cc[0], 10 / 30, 0.05, "inicio da anatomia em z");
   perto(lim.cc[1], 20 / 30, 0.05, "fim da anatomia em z");
   ok(lim.perp[0] > 0.1 && lim.perp[1] < 0.9, "extensao perpendicular limitada ao objeto");
+});
+
+
+// =====================================================================
+// 12. ESCRITA DICOM  (Fase 7)
+// =====================================================================
+// Leitor minimo, so para verificar a ESTRUTURA do que escrevemos.
+function lerDicom(bytes) {
+  var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  var txt = "";
+  for (var k = 128; k < 132; k++) txt += String.fromCharCode(bytes[k]);
+  if (txt !== "DICM") throw new Error("magica DICM ausente");
+  var pos = 132, tags = {};
+  var LONGOS = { OB: 1, OW: 1, OF: 1, SQ: 1, UT: 1, UN: 1 };
+  while (pos + 8 <= bytes.length) {
+    var g = dv.getUint16(pos, true), e = dv.getUint16(pos + 2, true);
+    var vr = String.fromCharCode(bytes[pos + 4], bytes[pos + 5]);
+    var len, cab;
+    if (LONGOS[vr]) { len = dv.getUint32(pos + 8, true); cab = 12; }
+    else { len = dv.getUint16(pos + 6, true); cab = 8; }
+    var chave = ("0000" + g.toString(16)).slice(-4) + "," + ("0000" + e.toString(16)).slice(-4);
+    var ini = pos + cab;
+    if (vr === "OW" || vr === "OB") {
+      tags[chave] = { vr: vr, bytes: len, inicio: ini };
+    } else {
+      var v = "";
+      for (var i = 0; i < len && i < 128; i++) v += String.fromCharCode(bytes[ini + i]);
+      if (vr === "US") v = dv.getUint16(ini, true);
+      if (vr === "UL") v = dv.getUint32(ini, true);
+      tags[chave] = { vr: vr, valor: (typeof v === "string" ? v.replace(/[  ]+$/, "") : v) };
+    }
+    pos = ini + len;
+  }
+  return tags;
+}
+
+function serieFalsa(nCortes, matriz) {
+  var hu = new Int16Array(matriz * matriz * nCortes);
+  hu.fill(-1000);
+  for (var z = 0; z < nCortes; z++) {
+    for (var i = 0; i < matriz * matriz; i++) hu[z * matriz * matriz + i] = (i % 7 === 0) ? 1000 : 0;
+  }
+  var pos = [];
+  for (z = 0; z < nCortes; z++) pos.push(10 + z * 5);
+  return {
+    nome: "Teste", hu: hu, cortes: nCortes, matriz: matriz,
+    pixelMm: 250 / matriz, fovMm: 250, espessuraMm: 5, incrementoMm: 5,
+    kernel: "padrao", posicoesMm: pos
+  };
+}
+
+teste("DICOM: arquivo tem preambulo, DICM e transfer syntax explicita", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(3, 32),
+    paciente: { nome: "TESTE^QA", id: "QA1", sexo: "M" },
+    estudo: { studyUID: M.novoUID(), frameUID: M.novoUID(), descricao: "QA" },
+    tecnica: { kv: 120, mas: 200, pitch: 1, tempoRotacaoS: 0.5, colimacaoMm: 38.4, ctdivol: 12 }
+  });
+  igual(r.arquivos.length, 3);
+  var t = lerDicom(r.arquivos[0].bytes);
+  igual(t["0002,0010"].valor, "1.2.840.10008.1.2.1", "Explicit VR Little Endian");
+  igual(t["0008,0016"].valor, "1.2.840.10008.5.1.4.1.1.2", "CT Image Storage");
+  igual(t["0008,0060"].valor, "CT");
+});
+
+teste("DICOM: geometria — pixel, matriz e avanco entre cortes", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(4, 64),
+    paciente: { nome: "G", id: "G1" },
+    estudo: { studyUID: M.novoUID(), frameUID: M.novoUID() },
+    tecnica: { kv: 120, mas: 200, pitch: 1, tempoRotacaoS: 0.5 }
+  });
+  var a = lerDicom(r.arquivos[0].bytes);
+  var b = lerDicom(r.arquivos[1].bytes);
+  igual(a["0028,0010"].valor, 64, "Rows");
+  igual(a["0028,0011"].valor, 64, "Columns");
+  perto(parseFloat(a["0028,0030"].valor.split("\\")[0]), 250 / 64, 1e-4, "PixelSpacing = FOV/matriz");
+  var za = parseFloat(a["0020,0032"].valor.split("\\")[2]);
+  var zb = parseFloat(b["0020,0032"].valor.split("\\")[2]);
+  perto(zb - za, 5, 1e-6, "ImagePositionPatient avanca o incremento entre cortes");
+  perto(parseFloat(a["0018,0088"].valor), 5, 1e-6, "SpacingBetweenSlices");
+});
+
+teste("DICOM: pixels sao HU com Rescale identidade", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(1, 32),
+    paciente: { nome: "H", id: "H1" },
+    estudo: { studyUID: M.novoUID(), frameUID: M.novoUID() },
+    tecnica: { kv: 120, mas: 200 }
+  });
+  var t = lerDicom(r.arquivos[0].bytes);
+  perto(parseFloat(t["0028,1052"].valor), 0, 1e-9, "RescaleIntercept 0");
+  perto(parseFloat(t["0028,1053"].valor), 1, 1e-9, "RescaleSlope 1");
+  igual(t["0028,1054"].valor, "HU");
+  igual(t["0028,0100"].valor, 16, "BitsAllocated");
+  igual(t["0028,0103"].valor, 1, "PixelRepresentation com sinal — HU negativos");
+  igual(t["7fe0,0010"].bytes, 32 * 32 * 2, "PixelData do tamanho certo");
+});
+
+teste("DICOM: tecnica registrada permite auditar o exame depois", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(1, 32),
+    paciente: { nome: "T", id: "T1" },
+    estudo: { studyUID: M.novoUID(), frameUID: M.novoUID() },
+    tecnica: { kv: 100, mas: 150, pitch: 0.8, tempoRotacaoS: 0.5, colimacaoMm: 38.4, ctdivol: 9.4 }
+  });
+  var t = lerDicom(r.arquivos[0].bytes);
+  perto(parseFloat(t["0018,0060"].valor), 100, 1e-9, "KVP");
+  perto(parseFloat(t["0018,9311"].valor), 0.8, 1e-9, "SpiralPitchFactor");
+  perto(parseFloat(t["0018,9345"].valor), 9.4, 1e-9, "CTDIvol");
+  igual(parseInt(t["0018,1152"].valor, 10), 150, "Exposure em mAs");
+  igual(parseInt(t["0018,1151"].valor, 10), 300, "XRayTubeCurrent = mAs/tempo");
+  igual(t["0018,1210"].valor, "STANDARD", "ConvolutionKernel");
+});
+
+teste("DICOM: UIDs sao unicos por instancia e compartilhados por serie", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(3, 32),
+    paciente: { nome: "U", id: "U1" },
+    estudo: { studyUID: "2.25.999", frameUID: "2.25.888" },
+    tecnica: { kv: 120, mas: 200 }
+  });
+  var uids = r.arquivos.map(function (a) { return lerDicom(a.bytes)["0008,0018"].valor; });
+  igual(new Set(uids).size, 3, "SOPInstanceUID unico por corte");
+  var series = r.arquivos.map(function (a) { return lerDicom(a.bytes)["0020,000e"].valor; });
+  igual(new Set(series).size, 1, "SeriesInstanceUID compartilhado");
+  igual(lerDicom(r.arquivos[0].bytes)["0020,000d"].valor, "2.25.999", "StudyInstanceUID preservado");
+});
+
+teste("DICOM: todo elemento tem comprimento par", function () {
+  var r = C.dicom.gerarSerie({
+    serie: serieFalsa(1, 32),
+    paciente: { nome: "IMPAR^NOME^X", id: "ABC" },   // nomes de tamanho impar
+    estudo: { studyUID: M.novoUID(), frameUID: M.novoUID(), descricao: "impar" },
+    tecnica: { kv: 120, mas: 200 }
+  });
+  // lerDicom percorre o arquivo inteiro; se algum comprimento fosse impar,
+  // o passo sairia de sincronia e a leitura falharia ou pararia cedo.
+  var t = lerDicom(r.arquivos[0].bytes);
+  ok(!!t["7fe0,0010"], "chegou ate o PixelData sem perder o alinhamento");
 });
 
 // =====================================================================

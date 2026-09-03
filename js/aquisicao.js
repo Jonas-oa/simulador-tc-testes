@@ -1258,6 +1258,8 @@
       // fica disponível no botão destacado.
       if (reportEl) reportEl.hidden = true;
       if (reportBtn) { reportBtn.hidden = false; reportBtn.classList.add("ws-btn--primary"); } loaded = true;
+      var btnDicom = document.getElementById("ws-exam-dicom");
+      if (btnDicom) btnDicom.hidden = !(SimTC.ExportarDicom && SimTC.ExportarDicom.disponivel());
       slider.disabled = false;
       startBtn.disabled = true; startBtn.textContent = "Exame adquirido";
       if (stopBtn) stopBtn.disabled = false;
@@ -1551,6 +1553,17 @@
       var s = SimTC.MotorImagem.serieAtual();
       SimTC.showMessage("Série “" + s.nome + "” — " + s.espessuraMm +
         " mm, kernel " + s.kernel + ", " + s.cortes + " cortes.", "info");
+    });
+
+    var btnDicomEl = document.getElementById("ws-exam-dicom");
+    if (btnDicomEl) btnDicomEl.addEventListener("click", function () {
+      try {
+        var r = SimTC.ExportarDicom.exportarSerieAtual();
+        SimTC.showMessage("Exportados " + r.arquivos + " arquivos DICOM em " + r.nome +
+          " — abra em qualquer visualizador DICOM.", "success");
+      } catch (e) {
+        SimTC.showMessage("Falha ao exportar DICOM: " + e.message, "error");
+      }
     });
 
     topoImg.addEventListener("load", fitTopo);
