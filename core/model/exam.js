@@ -55,6 +55,7 @@
     o = o || {};
     var ini = Number(o.inicioMm), fim = Number(o.fimMm);
     if (!isFinite(ini) || !isFinite(fim)) throw new Error("Faixa do plano precisa estar em mm.");
+    if (Math.abs(fim - ini) < 1e-6) throw new Error("Faixa do plano tem comprimento nulo.");
     if (fim < ini) { var t = ini; ini = fim; fim = t; }
     return {
       inicioMm: ini,

@@ -50,6 +50,9 @@
     var ini = Math.min(o.plano.inicioMm, o.plano.fimMm);
     var fim = Math.max(o.plano.inicioMm, o.plano.fimMm);
     var comprimento = fim - ini;
+    if (!isFinite(comprimento) || comprimento <= 0) {
+      throw new Error("Faixa de aquisicao invalida: comprimento " + comprimento + " mm.");
+    }
     var nLinhas = Math.max(1, Math.round(comprimento / linhaMm));
 
     // Fótons por raio de UMA linha de detector. Note que aqui a espessura é a
@@ -72,9 +75,52 @@
     }
     var n0 = n0Da((ini + fim) / 2);   // referência para o relatório
 
-    var detectores = o.detectores || vol.dims[0];
+    // RESOLUCAO DE PROJECAO x COBERTURA DO DETECTOR.
+    //
+    // Reduzir o numero de canais do detector para ganhar velocidade parece
+    // inofensivo e NAO E: se o detector cobre menos que o objeto, os raios que
+    // faltam produzem TRUNCAMENTO, e a imagem inteira sai com o nivel
+    // deslocado (o ar fora do paciente reconstruia em -609 HU em vez de
+    // -1000). O barato precisa vir de reduzir a RESOLUCAO mantendo o CAMPO,
+    // nao de recortar o campo.
+    //
+    // Logo: reamostra-se o slab para nProj pixels cobrindo a extensao TOTAL,
+    // e o detector recebe canais suficientes para conter a diagonal.
+    var nNativo = vol.dims[0];
+    var nProj = Math.max(32, Math.min(nNativo, o.resolucao || nNativo));
+    var escalaProj = nNativo / nProj;
+    var pixelProjMm = vol.spacingMm[0] * escalaProj;
+    // 1,45 ~ raiz(2) + folga: o objeto gira dentro do campo do detector.
+    var detectores = o.detectores || Math.ceil(nProj * 1.45);
+    if (detectores < Math.ceil(nProj * 1.42)) {
+      detectores = Math.ceil(nProj * 1.42);   // nunca truncar, mesmo se pedirem
+    }
     var vistas = o.vistas || 180;
     var linhas = [];
+
+    /** Reduz o slab para nProj preservando a EXTENSAO fisica. */
+    function reduzirSlab(slab) {
+      if (nProj === nNativo) return slab.hu;
+      var out = new Float32Array(nProj * nProj);
+      var f = escalaProj;
+      for (var y = 0; y < nProj; y++) {
+        var sy = Math.min(slab.ny - 1, Math.floor(y * f));
+        for (var x = 0; x < nProj; x++) {
+          var sx = Math.min(slab.nx - 1, Math.floor(x * f));
+          // media do bloco f x f, para nao perder sinal por subamostragem
+          var acc = 0, c = 0;
+          for (var dy = 0; dy < f; dy++) {
+            var yy = sy + dy; if (yy >= slab.ny) break;
+            for (var dx = 0; dx < f; dx++) {
+              var xx = sx + dx; if (xx >= slab.nx) break;
+              acc += slab.hu[yy * slab.nx + xx]; c++;
+            }
+          }
+          out[y * nProj + x] = c ? acc / c : -1000;
+        }
+      }
+      return out;
+    }
 
     for (var i = 0; i < nLinhas; i++) {
       var centro = ini + (i + 0.5) * linhaMm;
@@ -82,9 +128,9 @@
 
       // Projeta na resolução NATIVA do volume. FOV e matriz não entram aqui:
       // são parâmetros de reconstrução, e o dado bruto não os conhece.
-      var mu = P.huParaMu(slab.hu, o.aquisicao.kv);
+      var mu = P.huParaMu(reduzirSlab(slab), o.aquisicao.kv);
       var sino = P.projetar(mu, {
-        n: slab.nx, pixelMm: vol.spacingMm[0],
+        n: nProj, pixelMm: pixelProjMm,
         vistas: vistas, detectores: detectores
       });
 
@@ -111,7 +157,8 @@
       n0PorLinha: n0,
       vistas: vistas,
       detectores: detectores,
-      passoMm: vol.spacingMm[0],
+      passoMm: pixelProjMm,
+      resolucaoProj: nProj,
       aquisicao: o.aquisicao,
       modulacaoAEC: o.modulacaoAEC || null,
       volumeId: vol.id,

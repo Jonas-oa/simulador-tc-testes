@@ -396,6 +396,7 @@
       img.src = srcFor(i);
       slider.value = i;
       counter.textContent = "Corte " + (i + 1) + " / " + total;
+      if (SimTC.Medidas) SimTC.Medidas.sincronizar(i);
     }
 
     // ---- rótulos de orientação anatômica nas margens (modo anatômico) ----
@@ -484,6 +485,10 @@
       var faixa = Math.abs(ccB - ccA);
       var fov = Math.abs(pB - pA);
 
+      if (!isFinite(ccA) || !isFinite(ccB) || !isFinite(pA) || !isFinite(pB)) {
+        p.push("Planejamento inválido — refaça a faixa. (Um dos limites perdeu a referência de posição.)");
+        return p;
+      }
       if (ccB - ccA < MIN_GAP) {
         p.push("A faixa de varredura está invertida ou curta demais — arraste as linhas para cobrir a região de interesse.");
         return p;
@@ -556,8 +561,15 @@
     // ---- arraste das 4 linhas ----
     function pctFromEvent(e, axis) {
       var r = topoImg.getBoundingClientRect();
-      if (axis === "y") return ((e.clientY - r.top) / r.height) * 100;
-      return ((e.clientX - r.left) / r.width) * 100;
+      // Guarda contra elemento de dimensao ZERO (quadrante oculto, aba de
+      // celular fora de vista, layout ainda nao medido). Sem ela a divisao
+      // 0/0 devolve NaN, que contamina boxState e segue silenciosamente ate
+      // o fim: o exame "conclui" com 0 cortes e DLP nulo, sem erro nenhum.
+      var den = (axis === "y") ? r.height : r.width;
+      if (!(den > 0)) return null;
+      var v = (axis === "y") ? ((e.clientY - r.top) / den) * 100
+                             : ((e.clientX - r.left) / den) * 100;
+      return isFinite(v) ? v : null;
     }
     function clampPct(v) { return Math.min(100, Math.max(0, v)); }
     Array.prototype.forEach.call(lines, function (line) {
@@ -568,7 +580,9 @@
         e.preventDefault(); e.stopPropagation();
         try { line.setPointerCapture(e.pointerId); } catch (err) {}
         function move(ev) {
-          boxState[edge] = clampPct(pctFromEvent(ev, axis)); // não impede cruzamento — validação bloqueia
+          var pct = pctFromEvent(ev, axis);
+          if (pct == null) return;          // sem geometria valida, ignora o arrasto
+          boxState[edge] = clampPct(pct);   // nao impede cruzamento — a validacao bloqueia
           applyBox(); renderReadout();
         }
         function up() {
@@ -911,6 +925,12 @@
           volSource.kind === "volume" && SimTC.FonteVolume) {
         var pr = paramsReconstrucao();
         var faixa = faixaEmMm();
+        if (!isFinite(faixa.inicioMm) || !isFinite(faixa.fimMm) ||
+            !(Math.abs(faixa.fimMm - faixa.inicioMm) > 1)) {
+          SimTC.showMessage("Faixa de varredura inválida — refaça o planejamento antes de iniciar.", "error");
+          toPlan(true);
+          return;
+        }
         var idVol = window.SimTCCore.Acervo.volumeDaRegiao(regiaoDoProtocolo());
         motorPromessa = SimTC.MotorImagem.executar({
           regiaoId: idVol,
@@ -934,7 +954,7 @@
           // minima reconstruivel fica limitada pela linha efetiva.
           qualidade: {
             vistas: 120,
-            detectores: 160,
+            resolucao: 128,
             linhaMm: Math.max(
               (SimTC.FonteVolume.volume(regiaoDoProtocolo()) || {spacingMm:[1,1,1]}).spacingMm[2],
               Math.abs(faixa.fimMm - faixa.inicioMm) / 48
@@ -1538,6 +1558,8 @@
       if (reportEl.hidden) buildReport();
       reportEl.hidden = !reportEl.hidden;
     });
+    if (SimTC.MedidasInit) SimTC.MedidasInit.init();
+
     var seriesEl = document.getElementById("ws-series");
     if (seriesEl) seriesEl.addEventListener("click", function (e) {
       var b = e.target && e.target.closest ? e.target.closest(".ws-series__btn") : null;

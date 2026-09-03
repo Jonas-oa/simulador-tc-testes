@@ -75,7 +75,9 @@ self.onmessage = function (ev) {
       aquisicao: m.aquisicao,
       linhaMm: q.linhaMm,
       vistas: q.vistas || 120,
-      detectores: q.detectores || 160,
+      // resolucao (nao "detectores"): reduzir canais recortaria o campo e
+      // produziria truncamento.
+      resolucao: q.resolucao || 128,
       semente: m.semente || 1,
       aoProgresso: function (feito, total) {
         responder({ tipo: "etapa", etapa: "irradiando", feito: feito, total: total });
