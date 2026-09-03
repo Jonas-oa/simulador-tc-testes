@@ -1119,6 +1119,52 @@ teste("DICOM: todo elemento tem comprimento par", function () {
   ok(!!t["7fe0,0010"], "chegou ate o PixelData sem perder o alinhamento");
 });
 
+
+// =====================================================================
+// 13. VALOR FORA DA FAIXA — sem substituicao silenciosa
+// =====================================================================
+teste("valor fora da faixa vira ERRO, nao ajuste silencioso", function () {
+  var base = {
+    kv: 120, mas: 200, modo: "helicoidal", pitch: 1,
+    reconstrucoes: [{ nome: "x", espessuraMm: 5, incrementoMm: 5, kernel: "padrao", fovMm: 400, matriz: 512 }]
+  };
+  function comp(mod) {
+    var p = {}; for (var k in base) p[k] = base[k];
+    for (k in mod) p[k] = mod[k];
+    var pr = M.normalizarProtocolo(p);
+    return { pr: pr, v: C.validacao.validar(pr) };
+  }
+  [
+    ["pitch 999", { pitch: 999 }],
+    ["pitch 0", { pitch: 0 }],
+    ["kV 300", { kv: 300 }],
+    ["matriz 1", { reconstrucoes: [{ nome: "x", espessuraMm: 5, incrementoMm: 5, fovMm: 400, matriz: 1 }] }],
+    ["FOV 99999", { reconstrucoes: [{ nome: "x", espessuraMm: 5, incrementoMm: 5, fovMm: 99999, matriz: 512 }] }],
+    ["espessura -5", { reconstrucoes: [{ nome: "x", espessuraMm: -5, incrementoMm: 5, fovMm: 400, matriz: 512 }] }]
+  ].forEach(function (par) {
+    var r = comp(par[1]);
+    ok(r.pr.coercoes.length > 0, par[0] + ": a coercao deveria ser registrada");
+    ok(r.v.erros.some(function (e) { return e.codigo === "VALOR_FORA_DA_FAIXA"; }),
+       par[0] + ": deveria virar ERRO");
+    ok(!r.v.podeExecutar, par[0] + ": nao pode executar com parametro que o operador nao escolheu");
+  });
+  var bom = comp({});
+  igual(bom.pr.coercoes.length, 0, "protocolo valido nao gera coercao");
+  ok(bom.v.podeExecutar, "protocolo valido continua executavel");
+});
+
+teste("reconstrucao sem espessura, incremento ou FOV e ERRO", function () {
+  var p = M.normalizarProtocolo({
+    kv: 120, mas: 200, modo: "helicoidal", pitch: 1,
+    reconstrucoes: [{ nome: "incompleta", kernel: "padrao", matriz: 512 }]
+  });
+  var v = C.validacao.validar(p);
+  ok(v.erros.some(function (e) { return e.codigo === "ESPESSURA_AUSENTE"; }));
+  ok(v.erros.some(function (e) { return e.codigo === "INCREMENTO_AUSENTE"; }));
+  ok(v.erros.some(function (e) { return e.codigo === "FOV_AUSENTE"; }));
+  ok(!v.podeExecutar);
+});
+
 // =====================================================================
 postMessage({
   total: resultados.length,

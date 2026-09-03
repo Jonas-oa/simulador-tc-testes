@@ -39,9 +39,23 @@
     return m ? parseFloat(m[0]) : null;
   }
 
-  function naFaixa(n, min, max, padrao) {
+  /**
+   * Mantem n dentro da faixa aceita.
+   *
+   * REGISTRA a coercao quando o valor veio preenchido e estava fora: trocar
+   * em silencio um pitch 999 por 1,0 e pior do que recusar — o operador
+   * acredita ter configurado uma coisa e o exame roda com outra. Quem chama
+   * decide o que fazer com o registro; o motor de validacao transforma cada
+   * coercao em ERRO.
+   */
+  function naFaixa(n, min, max, padrao, campo, registro) {
     if (n == null) return padrao;
-    if (n < min || n > max) return padrao;
+    if (n < min || n > max) {
+      if (registro && campo) {
+        registro.push({ campo: campo, valor: n, min: min, max: max, usado: padrao });
+      }
+      return padrao;
+    }
     return n;
   }
 
@@ -88,6 +102,7 @@
    */
   function normalizarProtocolo(cru) {
     cru = cru || {};
+    var coercoes = [];   // valores fora de faixa que foram descartados
     var aq = cru.aquisicao || cru;
     var modo = umDe(aq.modo, MODOS, "helicoidal");
     var colim = normalizarColimacao(aq.colimacao);
@@ -124,15 +139,15 @@
 
       aquisicao: {
         modo: modo,
-        kv: naFaixa(num(aq.kv), 70, 150, null),
-        mas: naFaixa(num(aq.mas), 1, 2000, null),
-        tempoRotacaoS: naFaixa(num(aq.tempoRotacaoS != null ? aq.tempoRotacaoS : aq.rotacao), 0.2, 3, 1.0),
+        kv: naFaixa(num(aq.kv), 70, 150, null, "kV", coercoes),
+        mas: naFaixa(num(aq.mas), 1, 2000, null, "mAs", coercoes),
+        tempoRotacaoS: naFaixa(num(aq.tempoRotacaoS != null ? aq.tempoRotacaoS : aq.rotacao), 0.2, 3, 1.0, "tempo de rotação", coercoes),
         // Pitch não se aplica ao sequencial — manter null evita o erro
         // clássico de "pitch em step-and-shoot".
-        pitch: modo === "sequencial" ? null : naFaixa(num(aq.pitch), 0.1, 3, 1.0),
+        pitch: modo === "sequencial" ? null : naFaixa(num(aq.pitch), 0.1, 3, 1.0, "pitch", coercoes),
         colimacao: colim,
         direcao: umDe(aq.direcao, DIRECOES, "caudocranial"),
-        tiltGantryDeg: naFaixa(num(aq.tiltGantryDeg != null ? aq.tiltGantryDeg : aq.tilt), -30, 30, 0)
+        tiltGantryDeg: naFaixa(num(aq.tiltGantryDeg != null ? aq.tiltGantryDeg : aq.tilt), -30, 30, 0, "tilt do gantry", coercoes)
       },
 
       dose: {
@@ -147,17 +162,19 @@
       reconstrucoes: recons.map(function (r) {
         return {
           nome: r.nome || "Série",
-          espessuraMm: naFaixa(num(r.espessuraMm), 0.4, 20, null),
-          incrementoMm: naFaixa(num(r.incrementoMm), 0.1, 20, null),
+          espessuraMm: naFaixa(num(r.espessuraMm), 0.4, 20, null, "espessura", coercoes),
+          incrementoMm: naFaixa(num(r.incrementoMm), 0.1, 20, null, "incremento", coercoes),
           kernel: normalizarKernel(r.kernel),
-          fovMm: naFaixa(num(r.fovMm), 50, 700, null),
-          matriz: naFaixa(num(r.matriz), 128, 1024, 512),
+          fovMm: naFaixa(num(r.fovMm), 50, 700, null, "FOV", coercoes),
+          matriz: naFaixa(num(r.matriz), 128, 1024, 512, "matriz", coercoes),
           algoritmo: r.algoritmo || "FBP"
         };
       }),
 
       contraste: cru.contraste || null,
-      obs: cru.obs == null ? "" : String(cru.obs)
+      obs: cru.obs == null ? "" : String(cru.obs),
+      // Valores que o operador digitou fora da faixa e foram descartados.
+      coercoes: coercoes
     };
   }
 

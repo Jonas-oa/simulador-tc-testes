@@ -73,6 +73,16 @@
         "Sem mAs não há fluência de fótons: a imagem não tem ruído definido nem a dose valor."));
     }
 
+    // Valor digitado FORA DA FAIXA e erro, nao ajuste silencioso. Substituir
+    // um pitch 999 por 1,0 sem avisar faz o exame rodar com um parametro que
+    // o operador nao escolheu.
+    (p.coercoes || []).forEach(function (c) {
+      out.push(achado(ERRO, "VALOR_FORA_DA_FAIXA", c.campo,
+        c.campo + " = " + c.valor + " está fora da faixa aceita (" + c.min + " a " + c.max + ").",
+        "O valor foi descartado e o sistema usaria " + c.usado +
+        " — diferente do que você configurou. Corrija para que o exame rode com o parâmetro pretendido."));
+    });
+
     if (!recs.length) {
       out.push(achado(ERRO, "SEM_RECONSTRUCAO", "reconstrucoes",
         "Aquisição sem nenhuma reconstrução.",
@@ -81,6 +91,21 @@
 
     recs.forEach(function (r, i) {
       var campo = "reconstrucoes[" + i + "]";
+      if (r.espessuraMm == null) {
+        out.push(achado(ERRO, "ESPESSURA_AUSENTE", campo + ".espessuraMm",
+          "Série \"" + r.nome + "\" sem espessura de corte definida.",
+          "Sem espessura não há como combinar as linhas do detector: a série não pode ser reconstruída."));
+      }
+      if (r.incrementoMm == null) {
+        out.push(achado(ERRO, "INCREMENTO_AUSENTE", campo + ".incrementoMm",
+          "Série \"" + r.nome + "\" sem incremento definido.",
+          "Sem incremento não há como determinar quantos cortes a faixa produz."));
+      }
+      if (r.fovMm == null) {
+        out.push(achado(ERRO, "FOV_AUSENTE", campo + ".fovMm",
+          "Série \"" + r.nome + "\" sem FOV definido.",
+          "Sem FOV não há tamanho de pixel: pixel = FOV / matriz."));
+      }
       if (r.espessuraMm != null && !(r.espessuraMm > 0)) {
         out.push(achado(ERRO, "ESPESSURA_INVALIDA", campo + ".espessuraMm",
           "Espessura de corte não positiva na série \"" + r.nome + "\".", null));
