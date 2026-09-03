@@ -59,7 +59,7 @@
     // protocolo selecionado (Tórax → tórax; demais → crânio, por ora).
     var volSource = { kind: "files", region: null };
     function regiaoDoProtocolo() {
-      var prot = SimTC.examProtocol && SimTC.examProtocol.data;
+      var prot = protocoloVigente();
       return (prot && prot.regiao) || "";
     }
     // Ordem de preferencia da origem das imagens:
@@ -141,7 +141,7 @@
     // padrao aqui e de ENGENHARIA (o que o motor precisa para rodar).
     function paramsReconstrucao() {
       var Core = window.SimTCCore;
-      var cru = (SimTC.examProtocol && SimTC.examProtocol.data) || {};
+      var cru = protocoloVigente() || {};
       var pr = Core.model.normalizarProtocolo(cru);
       var extensao = (SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo()));
       var fovPadrao = extensao ? Math.round(extensao.extentMm()[0]) : 350;
@@ -158,6 +158,24 @@
         };
       });
       return { protocolo: pr, reconstrucoes: recs };
+    }
+
+    // PROTOCOLO CONGELADO PARA O EXAME.
+    //
+    // Trocar de protocolo durante a aquisicao fazia o exame terminar com as
+    // imagens de um protocolo e o ROTULO de outro: o relatorio atribuia o
+    // exame ao protocolo errado. Num console real o protocolo e travado
+    // quando a irradiacao comeca. Aqui tira-se uma copia no inicio e o exame
+    // inteiro passa a consultar essa copia.
+    var protoExame = null;
+    function protocoloVigente() {
+      if (protoExame) return protoExame;
+      return (SimTC.examProtocol && SimTC.examProtocol.data) || null;
+    }
+    function congelarProtocolo() {
+      var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
+      protoExame = p ? JSON.parse(JSON.stringify(p)) : null;
+      return protoExame;
     }
 
     // ---- ponte com o motor de aquisicao/reconstrucao ----------------
@@ -261,7 +279,7 @@
     // Parâmetros do protocolo selecionado (direção, pitch, colimação) com
     // interpretação tolerante ("1,2", "64 × 0,6 mm", "40 mm"...).
     function protocolParams() {
-      var p = (SimTC.examProtocol && SimTC.examProtocol.data) || {};
+      var p = protocoloVigente() || {};
       function num(s) {
         if (!s) return NaN;
         var m = String(s).replace(/,/g, ".").match(/\d+(\.\d+)?/);
@@ -616,6 +634,7 @@
       if (ctrl) ctrl.classList.remove("is-acquiring");
       announcePhase("idle");
       topoRef = null; atStart = false; isMoving = false;
+      protoExame = null;   // libera o protocolo ao encerrar
       if (SimTC.tableDriveApi && SimTC.tableDriveApi.setGantryTilt) SimTC.tableDriveApi.setGantryTilt(0);
       stopAnimations();
       img.hidden = true; ctrl.hidden = true;
@@ -764,7 +783,7 @@
       var bodyEl = document.getElementById("ws-report-body");
       if (!bodyEl) return;
       var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get) ? SimTC.examSessionApi.get() : null;
-      var prot = SimTC.examProtocol ? SimTC.examProtocol.data : null;
+      var prot = protocoloVigente();
       var pp = (lastAcq && lastAcq.pp) || protocolParams();
       var scanLen = lastAcq ? lastAcq.scanLen : 0;
       var speed = lastAcq ? lastAcq.speed : 0;
@@ -1261,9 +1280,10 @@
               limitadas.join(", ") + ". Reduza a faixa planejada para obter cortes mais finos.", "warning");
           }
         }
-        if (motorErro) {
-          SimTC.showMessage("Reconstrucao indisponivel (" + motorErro.message +
-            "); exibindo os cortes do volume.", "warning");
+        // Abortar pelo Stop nao e falha: nao apresentar como tal.
+        if (motorErro && !/abortad/i.test(motorErro.message)) {
+          SimTC.showMessage("Reconstrução indisponível (" + motorErro.message +
+            ") — exibindo os cortes do volume.", "warning");
         }
         buildVolume(function () { if (phase === "recon") toReview(); });
       });
@@ -1300,7 +1320,7 @@
       // Arquiva o exame realizado (B-20): o estudo passa a existir depois
       // que a aquisicao termina, e fica disponivel em "Exames realizados".
       if (SimTC.examSessionApi && SimTC.examSessionApi.arquivar) {
-        var protArq = SimTC.examProtocol ? SimTC.examProtocol.data : null;
+        var protArq = protocoloVigente();
         var ppArq = (lastAcq && lastAcq.pp) || protocolParams();
         var doseArq = NaN;
         if (protArq && protArq.dose) {
@@ -1400,7 +1420,7 @@
       var bodyEl = document.getElementById("ws-confirm-body");
       if (!bodyEl) return;
       var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get) ? SimTC.examSessionApi.get() : null;
-      var prot = SimTC.examProtocol ? SimTC.examProtocol.data : null;
+      var prot = protocoloVigente();
       var pp = protocolParams();
       var scanLen = Math.max(20, (rangeSpan() / 100) * TOPO_LEN_MM);
       var dose = NaN;
@@ -1459,7 +1479,7 @@
     function validarExameAtual() {
       var Core = window.SimTCCore;
       if (!Core || !Core.validacao) return null;
-      var cru = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
+      var cru = protocoloVigente();
       if (!cru) return null;
       var pr = Core.model.normalizarProtocolo(cru);
       var faixa = faixaEmMm();
@@ -1522,6 +1542,9 @@
         return;
       }
       // Resolve a origem das imagens para ESTE exame (região do protocolo).
+      // Congela o protocolo: daqui ate o Stop, o exame usa esta copia.
+      congelarProtocolo();
+
       // ---- origem das imagens: volume de TC real do acervo ----------------
       var regiaoAlvo = regiaoDoProtocolo();
       if (SimTC.FonteVolume && SimTC.FonteVolume.cobre(regiaoAlvo)) {
