@@ -67,6 +67,33 @@
     return { w: h, h: w, cinza: out, mmPorPixel: [proj.mmPorPixel[1], proj.mmPorPixel[0]] };
   }
 
+  /**
+   * Inverte o eixo crânio-caudal da projeção.
+   *
+   * Core.Volume.scout monta a imagem com a largura sendo o índice z do volume,
+   * e z cresce para SUPERIOR (convenção LPS). Sem inverter, o topograma sai com
+   * os pés primeiro: no lateral a base do crânio ficava à esquerda e o vértice
+   * à direita; no frontal, depois de transpor, a bacia ficava EM CIMA e os
+   * pulmões embaixo — o paciente de cabeça para baixo.
+   *
+   * O comentário das caixas de planejamento em js/aquisicao.js sempre descreveu
+   * a convenção certa ("vértice à esquerda", "crânio em cima"); era o desenho
+   * que discordava. Invertendo aqui, as zonas-alvo didáticas voltam a apontar
+   * para a anatomia que nomeiam.
+   *
+   * Quem lê fração do topograma tem de aplicar a MESMA inversão para chegar ao
+   * milímetro do volume — é o que fazem limitesAnatomicos e fracaoCCparaMm.
+   */
+  function inverterCC(proj) {
+    var w = proj.w, h = proj.h;
+    var out = new Uint8ClampedArray(w * h);
+    for (var y = 0; y < h; y++) {
+      var base = y * w;
+      for (var x = 0; x < w; x++) out[base + (w - 1 - x)] = proj.cinza[base + x];
+    }
+    return { w: w, h: h, cinza: out, mmPorPixel: proj.mmPorPixel };
+  }
+
   function pintarProporcional(proj) {
     var base = pintar(proj.w, proj.h, proj.cinza);
     var mmX = proj.mmPorPixel[0], mmY = proj.mmPorPixel[1];
@@ -158,8 +185,9 @@
       var orient = orientacao === "frontal" ? "frontal" : "lateral";
       var chave = v.id + ":" + orient;
       if (cacheScout[chave]) return cacheScout[chave];
-      var proj = v.scout(orient);
-      // No frontal, cabeça em cima: o eixo CC vai para a vertical.
+      // Superior primeiro: à esquerda no lateral, em cima no frontal.
+      var proj = inverterCC(v.scout(orient));
+      // No frontal, o eixo CC vai para a vertical.
       if (orient === "frontal") proj = transpor(proj);
       var url = pintarProporcional(proj);
       cacheScout[chave] = url;
@@ -174,7 +202,16 @@
       var v = Fonte.volume(regiao);
       if (!v) return null;
       var chave = v.id + ":" + (orientacao === "frontal" ? "frontal" : "lateral");
-      if (!cacheLimites[chave]) cacheLimites[chave] = v.limitesAnatomicos(orientacao);
+      if (!cacheLimites[chave]) {
+        var l = v.limitesAnatomicos(orientacao);
+        // O núcleo devolve frações do índice z (z cresce para superior); o
+        // topograma exibe superior primeiro. Sem esta inversão, a validação
+        // compararia a caixa desenhada com a anatomia do lado oposto.
+        cacheLimites[chave] = {
+          cc: [1 - l.cc[1], 1 - l.cc[0]],
+          perp: l.perp
+        };
+      }
       return cacheLimites[chave];
     },
 
@@ -182,6 +219,18 @@
     comprimentoCCmm: function (regiao) {
       var v = Fonte.volume(regiao);
       return v ? v.dims[2] * v.spacingMm[2] : null;
+    },
+
+    /**
+     * Converte fração do topograma no eixo crânio-caudal (0 = extremidade
+     * SUPERIOR exibida) para milímetro no volume (0 = primeiro corte, que é o
+     * INFERIOR). É a única conversão entre as duas convenções; quem precisar
+     * de milímetros a partir da caixa de planejamento passa por aqui.
+     */
+    fracaoCCparaMm: function (regiao, fracao) {
+      var L = Fonte.comprimentoCCmm(regiao);
+      if (L == null) return null;
+      return (1 - fracao) * L;
     },
 
     limparCache: function () {

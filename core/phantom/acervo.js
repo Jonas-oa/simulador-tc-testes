@@ -37,6 +37,40 @@
     "Membros": null
   };
 
+  /**
+   * Faixa de varredura PADRÃO por região, em milímetros medidos a partir da
+   * extremidade INFERIOR do volume (o corte de índice 0).
+   *
+   * Existe porque, sem ela, a caixa de planejamento começava sempre na mesma
+   * fração do topograma, qualquer que fosse a região. No volume de tronco isso
+   * fazia "Abdome" e "Coluna" produzirem exatamente o mesmo exame — o aluno
+   * escolhia protocolos diferentes e recebia as mesmas imagens.
+   *
+   * Os números vêm de marcos medidos em cada volume, não de estimativa. Para o
+   * tronco (694 mm, sujeito s0476):
+   *
+   *     pico ósseo da bacia   75 mm
+   *     crista ilíaca        225 mm
+   *     base pulmonar        399 mm
+   *     ápice pulmonar       652 mm
+   *
+   * Para o tórax da LIDC (326 mm): pulmão de 60 a 262 mm.
+   *
+   * É PADRÃO, não trava: o operador arrasta as linhas e muda o que quiser. O
+   * ponto é partir de um enquadramento que corresponde ao exame pedido.
+   */
+  var FAIXA_PADRAO = {
+    cranio: { "Crânio": [8, 182], "Cranio": [8, 182] },
+    torax:  { "Tórax": [45, 285], "Torax": [45, 285] },
+    tronco: {
+      "Tórax":  [380, 670],   // base do diafragma ao ápice pulmonar
+      "Torax":  [380, 670],
+      "Abdome": [230, 430],   // crista ilíaca à cúpula diafragmática
+      "Pelve":  [20, 250],    // abaixo dos fêmures proximais à crista ilíaca
+      "Coluna": [150, 440]    // sacro a T12
+    }
+  };
+
   var cache = Object.create(null);
   var emVoo = Object.create(null);
 
@@ -120,6 +154,20 @@
     return id === undefined ? null : id;
   }
 
+  /**
+   * Faixa padrão da região, em mm a partir do corte 0 (inferior) do volume que
+   * a cobre. Devolve null quando não há padrão declarado — nesse caso a
+   * interface mantém a caixa onde estava, em vez de inventar um enquadramento.
+   */
+  function faixaPadrao(regiao) {
+    var id = volumeDaRegiao(regiao);
+    if (!id) return null;
+    var porRegiao = FAIXA_PADRAO[id];
+    var f = porRegiao && porRegiao[regiao];
+    if (!f) return null;
+    return { inicioMm: f[0], fimMm: f[1] };
+  }
+
   function regioesCobertas() {
     var out = [];
     for (var r in MAPA_REGIAO) {
@@ -131,8 +179,10 @@
   Core.Acervo = {
     carregar: carregar,
     volumeDaRegiao: volumeDaRegiao,
+    faixaPadrao: faixaPadrao,
     regioesCobertas: regioesCobertas,
     MAPA_REGIAO: MAPA_REGIAO,
+    FAIXA_PADRAO: FAIXA_PADRAO,
     emCache: function (id) { return !!cache[id]; }
   };
 

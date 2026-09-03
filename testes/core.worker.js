@@ -961,6 +961,37 @@ teste("validacao: todo achado explica a CONSEQUENCIA", function () {
     JSON.stringify(semConsequencia.map(function (a) { return a.codigo; })));
 });
 
+teste("faixa padrao difere entre regioes que dividem o mesmo volume", function () {
+  // Abdome, Pelve e Coluna saem todas do volume de tronco. Sem faixa padrao
+  // propria, a caixa de planejamento cobria toda a anatomia do volume e as
+  // tres produziam EXATAMENTE o mesmo exame: o aluno escolhia protocolos
+  // diferentes e recebia as mesmas imagens.
+  var A = C.Acervo;
+  ok(A && typeof A.faixaPadrao === "function", "Acervo.faixaPadrao existe");
+
+  var mesmas = ["Abdome", "Pelve", "Coluna"];
+  var vistas = {};
+  mesmas.forEach(function (r) {
+    igual(A.volumeDaRegiao(r), "tronco", r + " sai do volume de tronco");
+    var f = A.faixaPadrao(r);
+    ok(f && f.fimMm > f.inicioMm, r + " tem faixa padrao com comprimento positivo");
+    var chave = f.inicioMm + ":" + f.fimMm;
+    ok(!vistas[chave], r + " nao repete a faixa de " + vistas[chave]);
+    vistas[chave] = r;
+  });
+
+  // e o comprimento tem de diferir tambem: faixas iguais em tamanho dariam o
+  // mesmo numero de cortes e o mesmo DLP, ainda que em alturas diferentes.
+  var comps = mesmas.map(function (r) {
+    var f = A.faixaPadrao(r); return f.fimMm - f.inicioMm;
+  });
+  ok(comps[0] !== comps[1] || comps[1] !== comps[2],
+     "comprimentos distintos entre regioes: " + comps.join(", "));
+
+  // regiao sem volume nao inventa faixa
+  igual(A.faixaPadrao("Membros"), null, "regiao sem volume devolve null");
+});
+
 teste("slab pedido FORA do volume devolve ar, nao NaN", function () {
   // Um pedido alem do ultimo corte fazia iz0 passar do fim do Int16Array. A
   // leitura fora dos limites devolve undefined, a soma virava NaN, e o corte

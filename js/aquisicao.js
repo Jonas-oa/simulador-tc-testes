@@ -205,10 +205,20 @@
       var fr = isFrontal();
       var a = fr ? boxState.top : boxState.left;
       var b = fr ? boxState.bottom : boxState.right;
-      var Ltopo = topoLenMm();
-      var ini = Math.min(a, b) / 100 * Ltopo;
-      var fim = Math.max(a, b) / 100 * Ltopo;
-      return { inicioMm: ini, fimMm: fim };
+      // A caixa e fracao do TOPOGRAMA, que exibe o superior primeiro (vertice
+      // a esquerda no lateral, cranio em cima no frontal). O volume indexa ao
+      // contrario: o corte 0 e o INFERIOR. Sem esta inversao a faixa desenhada
+      // sobre o torax adquiria a pelve.
+      var reg = regiaoDoProtocolo();
+      var conv = SimTC.FonteVolume && SimTC.FonteVolume.fracaoCCparaMm;
+      var L = topoLenMm();
+      function paraMm(pct) {
+        var f = pct / 100;
+        var mm = conv ? SimTC.FonteVolume.fracaoCCparaMm(reg, f) : null;
+        return mm == null ? (1 - f) * L : mm;   // fantoma procedural: mesma regra
+      }
+      var mmA = paraMm(a), mmB = paraMm(b);
+      return { inicioMm: Math.min(mmA, mmB), fimMm: Math.max(mmA, mmB) };
     }
 
     // Total de cortes exibiveis: da serie reconstruida quando ela existe,
@@ -774,6 +784,25 @@
           var ccA = lm.cc[0] * 100, ccB = lm.cc[1] * 100;
           var folga = (ccB - ccA) * 0.08;          // recua 8% em cada ponta
           var c0 = Math.max(0, ccA + folga), c1 = Math.min(100, ccB - folga);
+
+          // Faixa PADRAO da regiao, quando o acervo declara uma. Sem isso a
+          // caixa cobria toda a anatomia do volume, e como Abdome, Pelve e
+          // Coluna compartilham o volume de tronco, os tres protocolos
+          // produziam exatamente o mesmo exame: o aluno escolhia diferente e
+          // recebia igual. Os limites anatomicos continuam valendo como teto —
+          // a faixa padrao e recortada para dentro deles.
+          var Lv = topoLenMm();
+          var fp = window.SimTCCore && window.SimTCCore.Acervo &&
+                   window.SimTCCore.Acervo.faixaPadrao(regiaoDoProtocolo());
+          if (fp && Lv > 0) {
+            // mm no volume (0 = corte inferior) -> % do topograma (0 = superior)
+            var p0 = (1 - fp.fimMm / Lv) * 100;
+            var p1 = (1 - fp.inicioMm / Lv) * 100;
+            p0 = Math.max(c0, Math.min(100, p0));
+            p1 = Math.min(c1, Math.max(0, p1));
+            if (p1 - p0 >= MIN_GAP) { c0 = p0; c1 = p1; }
+          }
+
           var pA = Math.max(0, lm.perp[0] * 100 - 4);   // margem de 4% no FOV
           var pB = Math.min(100, lm.perp[1] * 100 + 4);
           boxState = fr0
