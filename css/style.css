@@ -1608,3 +1608,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   border: 0; background: transparent; color: var(--text-muted); padding: 0 4px;
 }
 .ws-med__x:hover { color: var(--accent-red); }
+
+/* Achados do motor de validação no diálogo de confirmação.
+   AVISO tem cor própria: não é erro (não bloqueia) nem informação neutra. */
+.is-warn { color: var(--accent-amber, #e0a04b); }

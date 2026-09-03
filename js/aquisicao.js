@@ -1421,10 +1421,83 @@
       rows.push(chk(!SimTC.tableDriveApi || SimTC.tableDriveApi.isPatientOnTable(), "Paciente posicionado na mesa"));
       rows.push(chk(problems().length === 0, "Faixa e FOV válidos"));
       if (iso != null) rows.push(chk(Math.abs(iso) <= 4, "Isocentro (" + iso.toFixed(1) + " cm do centro)"));
+      // ---- ACHADOS DO MOTOR DE VALIDACAO (Fase 10) ---------------------
+      // Confirmacao INFORMADA, nao bloqueio: o aluno ve a consequencia
+      // prevista e decide. So ERRO impede — e erro aqui significa
+      // incoerencia interna ou impossibilidade fisica, nao opiniao.
+      var vd = validarExameAtual();
+      if (vd) {
+        if (vd.erros.length) {
+          rows.push("<br><strong>Impedimentos</strong>");
+          vd.erros.forEach(function (a) {
+            rows.push('<span class="is-bad">⛔ ' + esc(a.texto) + '</span>' +
+              (a.consequencia ? '<br><small>' + esc(a.consequencia) + '</small>' : ""));
+          });
+        }
+        if (vd.avisos.length) {
+          rows.push("<br><strong>Consequências previstas</strong>");
+          vd.avisos.forEach(function (a) {
+            rows.push('<span class="is-warn">⚠ ' + esc(a.texto) + '</span>' +
+              (a.consequencia ? '<br><small>' + esc(a.consequencia) + '</small>' : ""));
+          });
+        }
+        if (vd.infos.length) {
+          vd.infos.forEach(function (a) {
+            rows.push('<small>ℹ ' + esc(a.texto) +
+              (a.consequencia ? " — " + esc(a.consequencia) : "") + '</small>');
+          });
+        }
+      }
       rows.push("<em>Confira antes de irradiar — treinamento de operação.</em>");
       bodyEl.innerHTML = rows.join("<br>");
     }
-    function showConfirm() { buildConfirm(); var el = document.getElementById("ws-confirm"); if (el) el.hidden = false; }
+    /**
+     * Roda o motor de validacao sobre o protocolo e o plano atuais.
+     * Devolve null quando o nucleo nao esta disponivel — a tela nunca inventa
+     * regra propria.
+     */
+    function validarExameAtual() {
+      var Core = window.SimTCCore;
+      if (!Core || !Core.validacao) return null;
+      var cru = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
+      if (!cru) return null;
+      var pr = Core.model.normalizarProtocolo(cru);
+      var faixa = faixaEmMm();
+      var vol = SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo());
+      var lim = vol && SimTC.FonteVolume.limitesAnatomicos(regiaoDoProtocolo(), isFrontal() ? "frontal" : "lateral");
+      var larguraPac = (vol && lim) ? (lim.perp[1] - lim.perp[0]) * vol.extentMm()[0] : null;
+      var comprimento = Math.abs(faixa.fimMm - faixa.inicioMm);
+      var dlpPrev = null;
+      if (Core.dose && pr.aquisicao.kv != null && pr.aquisicao.mas != null && comprimento > 0) {
+        var rel = Core.dose.relatorio({
+          kv: pr.aquisicao.kv, mas: pr.aquisicao.mas, pitch: pr.aquisicao.pitch,
+          modo: pr.aquisicao.modo, regiao: regiaoDoProtocolo(), comprimentoMm: comprimento
+        });
+        dlpPrev = rel.dlp;
+      }
+      return Core.validacao.validar(pr, {
+        larguraPacienteMm: larguraPac,
+        comprimentoFaixaMm: comprimento,
+        extensaoVolumeMm: TOPO_LEN_MM,
+        dlpEstimado: dlpPrev
+      });
+    }
+
+    function showConfirm() {
+      buildConfirm();
+      var el = document.getElementById("ws-confirm");
+      if (el) el.hidden = false;
+      // ERRO impede irradiar; AVISO nao. O botao muda de texto para deixar
+      // claro que o operador esta assumindo a consequencia.
+      var vd = validarExameAtual();
+      var ok = document.getElementById("ws-confirm-ok");
+      if (ok) {
+        var temErro = !!(vd && vd.erros.length);
+        ok.disabled = temErro;
+        ok.textContent = temErro ? "Corrija os impedimentos"
+          : (vd && vd.avisos.length ? "Executar mesmo assim" : "Confirmar e iniciar");
+      }
+    }
     function hideConfirm() { var el = document.getElementById("ws-confirm"); if (el) el.hidden = true; }
 
     function onStart() {
