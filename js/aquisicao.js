@@ -1360,15 +1360,72 @@
     // os assets do simulador são PNG já janelados, os HU enviados são uma
     // aproximação inversa da janela de exibição — adequada ao treinamento de
     // ferramentas, mas explicitamente sem valor diagnóstico/dosimétrico.
+    /**
+     * Monta o payload para o leitor DICOM a partir da SERIE RECONSTRUIDA.
+     *
+     * A ponte enviava o volume-fonte inteiro com HU derivados por aproximacao
+     * inversa da janela — a faixa chegava ao leitor como -160..+239 e ainda
+     * declarada `unidadeHU: true`. Era o B-05 sobrevivendo no unico lugar onde
+     * o aluno mede HU. Agora vai a serie que o motor produziu, com HU reais e
+     * a geometria que a reconstrucao definiu.
+     */
+    function payloadDaSerieReconstruida() {
+      var M = SimTC.MotorImagem;
+      if (!M || !M.temSeries()) return null;
+      var s = M.serieAtual();
+      var n = s.matriz, nz = s.cortes;
+      // Copia: o buffer e transferido ao Worker do leitor e nao pode ser o
+      // mesmo que a tela continua usando para desenhar.
+      var dados = new Int16Array(s.hu.length);
+      dados.set(s.hu);
+      var mn = 32767, mx = -32768;
+      for (var i = 0; i < dados.length; i++) { if (dados[i] < mn) mn = dados[i]; if (dados[i] > mx) mx = dados[i]; }
+      var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get()) || null;
+      var prot = protocoloVigente();
+      var dz = M.dose();
+      return {
+        buffer: dados.buffer,
+        dims: [n, n, nz],
+        espacamento: [s.pixelMm, s.pixelMm, s.incrementoMm],
+        origem: [0, 0, s.posicoesMm ? s.posicoesMm[0] : 0],
+        minimo: mn, maximo: mx,
+        janela: { centro: M.janela().wl, largura: M.janela().ww },
+        modalidade: "CT",
+        descricaoSerie: s.nome + " · " + s.espessuraMm + " mm · kernel " + s.kernel,
+        descricaoEstudo: prot && prot.nome ? prot.nome : "Simulação educacional de TC",
+        fabricante: "Simulador TC Educacional",
+        idPaciente: pac && pac.prontuario ? pac.prontuario : "SIMULADO",
+        sintaxe: "Volume reconstruído por retroprojeção filtrada",
+        numFatias: nz,
+        unidadeHU: true,   // agora é verdade: são HU reconstruídos
+        inverterMonocromatico: false,
+        label: pac && pac.nome ? pac.nome : "Exame simulado",
+        notes: "HU reconstruídos por FBP a partir de projeções com ruído de Poisson" +
+          (dz && dz.ctdivol != null ? " · CTDIvol " + dz.ctdivol.toFixed(1) + " mGy" : "") +
+          ". Uso educacional — sem valor diagnóstico.",
+        attribution: (manifest && manifest.fonte) ? manifest.fonte.nome : "Simulador TC Educacional"
+      };
+    }
+
     SimTC.mprApi = {
-      hasVolume: function () { return !!vol; },
+      hasVolume: function () {
+        return !!(SimTC.MotorImagem && SimTC.MotorImagem.temSeries()) || !!vol;
+      },
       count: function (pl) {
+        var M = SimTC.MotorImagem;
+        if (M && M.temSeries()) {
+          var s2 = M.serieAtual();
+          if (pl === "coronal" || pl === "sagital") return s2.matriz;
+          return s2.cortes;
+        }
         if (pl === "coronal") return vol ? vol.H : 0;
         if (pl === "sagital") return vol ? vol.W : 0;
         return manifest ? manifest.cortes : 0;
       },
       reformat: function (pl, idx) { return buildReformat(pl, idx); },
       exportVolume: function () {
+        var daSerie = payloadDaSerieReconstruida();
+        if (daSerie) return daSerie;
         if (!vol) return null;
         var janela = (manifest && manifest.janela_exibicao) || {};
         var wl = Number(janela.wl); if (!isFinite(wl)) wl = 40;
