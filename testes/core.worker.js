@@ -29,6 +29,7 @@ importScripts(
   _i("../core/dose/ctdi.js"),
   _i("../core/dose/aec.js"),
   _i("../core/protocol/validacao.js"),
+  _i("../core/protocol/gestor.js"),
   _i("../core/dicom/writer.js"),
   _i("../core/recon/serie.js")
 );
@@ -959,6 +960,147 @@ teste("validacao: todo achado explica a CONSEQUENCIA", function () {
   igual(semConsequencia.length, 0,
     "erros e avisos precisam dizer a consequencia: " +
     JSON.stringify(semConsequencia.map(function (a) { return a.codigo; })));
+});
+
+// ---------------------------------------------------------------- gestor
+function protoBase(extra) {
+  var base = {
+    id: "ref_torax", nome: "Torax padrao", regiao: "Torax", bloqueado: true,
+    aquisicao: { modo: "helicoidal", kv: 120, mas: 200, pitch: 1.0,
+                 tempoRotacaoS: 0.5, colimacao: "64x0,6", direcao: "caudocranial" },
+    reconstrucoes: [{ nome: "Mediastino", espessuraMm: 3, incrementoMm: 3,
+                      kernel: "padrao", fovMm: 350, matriz: 512 }]
+  };
+  if (extra) for (var k in extra) base[k] = extra[k];
+  return C.model.normalizarProtocolo(base);
+}
+
+teste("duplicar: a copia nasce DESTRAVADA e guarda de quem veio", function () {
+  // Sem copia explicita, a unica forma de experimentar e editar a referencia —
+  // e ai ela deixa de ser referencia.
+  var G = C.gestorProtocolos;
+  var ref = protoBase();
+  ok(ref.bloqueado, "a referencia esta travada");
+  var copia = G.duplicar(ref);
+  ok(!copia.bloqueado, "a copia esta destravada");
+  ok(copia.id !== ref.id, "a copia tem identidade propria");
+  igual(copia.derivadoDe.id, ref.id, "a copia registra a origem");
+  igual(copia.versao, 1, "a copia comeca na versao 1");
+  ok(/copia|cópia/.test(copia.nome), "o nome diz que e copia: " + copia.nome);
+  // e a referencia nao foi tocada
+  igual(ref.aquisicao.kv, 120, "a referencia continua intacta");
+  copia.aquisicao.kv = 100;
+  igual(ref.aquisicao.kv, 120, "editar a copia nao altera a referencia");
+});
+
+teste("comparar: lista o que mudou e so o que mudou", function () {
+  var G = C.gestorProtocolos;
+  var a = protoBase();
+  var b = G.duplicar(a, { nome: "Torax baixa dose" });
+  igual(G.comparar(a, b).filter(function (d) { return d.campo !== "nome"; }).length, 0,
+        "copia recem-feita nao difere em nada alem do nome");
+
+  b.aquisicao.kv = 100;
+  b.aquisicao.mas = 120;
+  b.reconstrucoes[0].espessuraMm = 1.5;
+  var difs = G.comparar(a, b);
+  var campos = difs.map(function (d) { return d.campo; });
+  ok(campos.indexOf("aquisicao.kv") >= 0, "detecta mudanca de kV");
+  ok(campos.indexOf("aquisicao.mas") >= 0, "detecta mudanca de mAs");
+  ok(campos.indexOf("reconstrucoes[0].espessuraMm") >= 0, "detecta mudanca na serie");
+  ok(campos.indexOf("aquisicao.pitch") < 0, "nao inventa diferenca onde nao houve");
+  var kv = difs.filter(function (d) { return d.campo === "aquisicao.kv"; })[0];
+  igual(kv.de, 120, "guarda o valor de origem");
+  igual(kv.para, 100, "guarda o valor de destino");
+  igual(kv.unidade, "kV", "a diferenca carrega a unidade");
+});
+
+teste("versionar: guarda o estado ANTERIOR e permite voltar", function () {
+  var G = C.gestorProtocolos;
+  var p = G.duplicar(protoBase());
+  igual(p.versao, 1, "comeca na versao 1");
+
+  G.registrarVersao(p, "baixando o kV");
+  p.aquisicao.kv = 80;
+  igual(p.versao, 2, "a versao avanca");
+  igual(p.historico.length, 1, "um estado guardado");
+  igual(p.historico[0].estado.aquisicao.kv, 120, "o historico guarda o valor ANTERIOR");
+
+  var r = G.reverter(p, 0);
+  ok(r, "reverter devolve o protocolo");
+  igual(p.aquisicao.kv, 120, "o kV voltou ao valor da versao 1");
+  ok(p.historico.length >= 2, "reverter tambem entrou no historico");
+  igual(p.id, r.id, "a identidade nao volta no tempo");
+
+  igual(G.reverter(p, 99), null, "indice inexistente devolve null, nao lixo");
+});
+
+teste("versionar: o historico tem teto", function () {
+  var G = C.gestorProtocolos;
+  var p = G.duplicar(protoBase());
+  for (var i = 0; i < G.MAX_HISTORICO + 10; i++) G.registrarVersao(p, "edicao " + i);
+  igual(p.historico.length, G.MAX_HISTORICO,
+        "historico limitado a " + G.MAX_HISTORICO + " estados");
+  ok(p.versao > G.MAX_HISTORICO, "a versao continua contando alem do teto");
+});
+
+teste("exportar/importar: ida e volta preserva os parametros", function () {
+  var G = C.gestorProtocolos;
+  var a = protoBase();
+  var texto = G.exportar([a]);
+  ok(texto.indexOf(G.ESQUEMA) > 0, "o arquivo declara o esquema");
+  var r = G.importar(texto);
+  igual(r.erro, null, "importou sem erro");
+  igual(r.aceitos.length, 1, "um protocolo aceito");
+  igual(r.recusados.length, 0, "nenhum recusado");
+  var b = r.aceitos[0];
+  igual(b.aquisicao.kv, a.aquisicao.kv, "kV preservado");
+  igual(b.aquisicao.mas, a.aquisicao.mas, "mAs preservado");
+  igual(b.reconstrucoes[0].espessuraMm, a.reconstrucoes[0].espessuraMm, "espessura preservada");
+  ok(b.id !== a.id, "importar nao sobrescreve: identidade nova");
+  ok(!b.bloqueado, "o importado chega destravado");
+});
+
+teste("importar: arquivo estranho e RECUSADO com motivo, nao aceito em silencio", function () {
+  var G = C.gestorProtocolos;
+  igual(G.importar("{isto nao e json").aceitos.length, 0, "JSON invalido nao entra");
+  ok(/JSON/.test(G.importar("{isto nao e json").erro), "o erro diz que o JSON e invalido");
+
+  var outroEsquema = JSON.stringify({ esquema: "outra.coisa/9", protocolos: [{ nome: "x" }] });
+  ok(/[Ee]squema/.test(G.importar(outroEsquema).erro), "esquema desconhecido e recusado");
+
+  var vazio = JSON.stringify({ esquema: G.ESQUEMA, protocolos: [] });
+  ok(G.importar(vazio).erro, "arquivo sem protocolos e recusado");
+});
+
+teste("importar: protocolo inexecutavel e recusado, e os bons passam", function () {
+  var G = C.gestorProtocolos;
+  var bom = protoBase();
+
+  // Campo AUSENTE nao serve para este teste: normalizarProtocolo preenche com
+  // o padrao, de proposito. O que precisa ser recusado e o valor FORA DA FAIXA
+  // — 999 kV nao existe em tomografo nenhum, e aceita-lo em silencio faria o
+  // exame rodar com 120 kV que o operador nao escolheu (regra do S-03).
+  var foraDeFaixa = JSON.parse(JSON.stringify(bom));
+  foraDeFaixa.nome = "Torax com 999 kV";
+  foraDeFaixa.aquisicao.kv = 999;
+
+  // E um protocolo que irradia sem produzir imagem nenhuma.
+  var semSerie = JSON.parse(JSON.stringify(bom));
+  semSerie.nome = "Torax sem reconstrucao";
+  semSerie.reconstrucoes = [];
+
+  var texto = JSON.stringify({ esquema: G.ESQUEMA,
+                               protocolos: [bom, foraDeFaixa, semSerie] });
+  var r = G.importar(texto);
+  igual(r.erro, null, "o arquivo em si e valido");
+  igual(r.aceitos.length, 1, "so o protocolo bom entra");
+  igual(r.recusados.length, 2, "os dois inexecutaveis ficam de fora");
+  r.recusados.forEach(function (x) {
+    ok(x.motivo && x.motivo.length > 0, "\"" + x.nome + "\" traz motivo: " + x.motivo);
+  });
+  ok(/999|faixa/.test(r.recusados[0].motivo),
+     "a recusa do 999 kV nomeia o valor ou a faixa");
 });
 
 teste("faixa padrao difere entre regioes que dividem o mesmo volume", function () {

@@ -1612,3 +1612,44 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
 /* Achados do motor de validação no diálogo de confirmação.
    AVISO tem cor própria: não é erro (não bloqueia) nem informação neutra. */
 .is-warn { color: var(--accent-amber, #e0a04b); }
+
+/* ---- Gestor de protocolos (Fase 9) ------------------------------------ */
+/* Favorito e trava aparecem na PROPRIA lista: o estado tem de ser legivel
+   sem abrir o protocolo, senao o usuario edita a referencia sem perceber. */
+.proto-list__item.is-favorito { border-color: var(--accent-amber); }
+.proto-list__item.is-travado { color: var(--text-secondary); }
+.proto-list__item.is-travado::after { content: ""; }
+
+.proto-gestor { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.proto-gestor .ws-btn { font-size: 0.68rem; padding: 4px 8px; }
+.proto-gestor .ws-btn[aria-pressed="true"] {
+  border-color: var(--accent-amber); color: var(--accent-amber);
+}
+
+.proto-cmp {
+  margin-top: 8px; padding: 8px; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); background: var(--bg-panel-raised);
+}
+.proto-cmp__head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.proto-cmp__rot { font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+.proto-cmp__sel {
+  flex: 1 1 auto; min-width: 0; font-size: 0.72rem; padding: 3px 6px;
+  background: var(--bg-panel); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+}
+/* A tabela pode ficar larga; rola dentro da propria caixa em vez de
+   empurrar o quadrante. */
+.proto-cmp__corpo { overflow-x: auto; }
+.proto-cmp__tab {
+  width: 100%; border-collapse: collapse; font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+.proto-cmp__tab th, .proto-cmp__tab td {
+  padding: 3px 6px; border-bottom: 1px solid var(--border-subtle); text-align: left;
+}
+.proto-cmp__tab thead th { color: var(--text-muted); font-weight: 600; }
+.proto-cmp__tab tbody th { color: var(--text-secondary); font-weight: 400; }
+.proto-cmp__tab td { color: var(--text-primary); }
+/* So a coluna do SEGUNDO protocolo e realcada: o olho procura o que mudou,
+   nao o que ficou igual. */
+.proto-cmp__tab td.is-dif { color: var(--accent-cyan); font-weight: 600; }

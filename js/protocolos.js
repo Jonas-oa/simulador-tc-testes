@@ -28,6 +28,20 @@
     var protoPane = document.getElementById("pane-proto");
     var editorTitle = document.getElementById("proto-editor-title");
     var zones = document.querySelectorAll("[data-region]");
+    // Gestor de protocolos (Fase 9): duplicar, favoritar, comparar,
+    // exportar e importar.
+    var gestorBar = document.getElementById("proto-gestor");
+    var btnDup = document.getElementById("proto-dup");
+    var btnFav = document.getElementById("proto-fav");
+    var btnLock = document.getElementById("proto-lock");
+    var btnCmp = document.getElementById("proto-cmp");
+    var btnExp = document.getElementById("proto-exp");
+    var btnImp = document.getElementById("proto-imp");
+    var fileImp = document.getElementById("proto-file");
+    var cmpBox = document.getElementById("proto-compare");
+    var cmpSel = document.getElementById("proto-cmp-alvo");
+    var cmpCorpo = document.getElementById("proto-cmp-corpo");
+    var cmpFechar = document.getElementById("proto-cmp-fechar");
     if (!listEl || !editor || !regionLabel) return;
 
     var FIELDS = ["kv", "mas", "pitch", "scout", "direcao", "modo", "tilt", "rot", "colim", "thick", "kernel", "fov", "dose"];
@@ -78,6 +92,10 @@
           var d = cranioDefaults();
           for (var k in d) { if (d.hasOwnProperty(k)) p[k] = d[k]; }
           if (!p.obs) p.obs = cranioObs();
+          // O cranio e a unica entrada do catalogo que ja vem com valores de
+          // referencia (AAPM/DRL). Nasce travado para nao ser sobrescrito sem
+          // querer; as demais entradas estao em branco e precisam ser editaveis.
+          if (p.bloqueado === undefined) p.bloqueado = true;
           persist(p);
         }
       });
@@ -185,14 +203,118 @@
       setMode("view");
     }
 
+    // ---- gestor de protocolos --------------------------------------------
+    // O modulo de nucleo (core/protocol/gestor.js) trabalha sobre o protocolo
+    // NORMALIZADO; esta tela guarda a forma legada, plana e em texto. As duas
+    // funcoes abaixo sao a unica ponte entre elas.
+    function Gestor() {
+      return window.SimTCCore && window.SimTCCore.gestorProtocolos;
+    }
+    function normalizado(p) {
+      return window.SimTCCore.model.normalizarProtocolo(p);
+    }
+    /** Traz um protocolo normalizado de volta a forma plana desta tela. */
+    function paraPlano(n, regiao) {
+      var r = (n.reconstrucoes && n.reconstrucoes[0]) || {};
+      var num = function (v) { return v == null ? "" : String(v).replace(".", ","); };
+      return {
+        id: n.id, nome: n.nome || "Protocolo importado",
+        regiao: n.regiao || regiao || currentRegion || "",
+        kv: num(n.aquisicao.kv), mas: num(n.aquisicao.mas), pitch: num(n.aquisicao.pitch),
+        scout: (n.scout && n.scout.orientacao) || "lateral",
+        direcao: n.aquisicao.direcao, modo: n.aquisicao.modo,
+        tilt: num(n.aquisicao.tiltGantryDeg), rotacao: num(n.aquisicao.tempoRotacaoS),
+        colimacao: n.aquisicao.colimacao ? (n.aquisicao.colimacao.nDetectores + "x" +
+                   String(n.aquisicao.colimacao.larguraMm).replace(".", ",")) : "",
+        espessura: num(r.espessuraMm), kernel: r.kernel || "", fov: num(r.fovMm),
+        dose: "", obs: n.indicacao || "",
+        bloqueado: !!n.bloqueado, favorito: !!n.favorito,
+        derivadoDe: n.derivadoDe || null, versao: n.versao || 1
+      };
+    }
+
+    function atualizarGestor() {
+      var p = byId(currentId);
+      if (gestorBar) gestorBar.hidden = !p;
+      if (!p) { if (cmpBox) cmpBox.hidden = true; return; }
+      if (btnFav) {
+        btnFav.setAttribute("aria-pressed", p.favorito ? "true" : "false");
+        btnFav.textContent = (p.favorito ? "★" : "☆") + " Favorito";
+      }
+      // Protocolo travado nao se edita: duplica-se. E o comportamento de um
+      // tomografo real, onde os protocolos de fabrica sao somente leitura, e
+      // impede que a referencia didatica seja sobrescrita sem querer.
+      if (btnLock) {
+        btnLock.setAttribute("aria-pressed", p.bloqueado ? "true" : "false");
+        btnLock.textContent = (p.bloqueado ? "🔒 Destravar" : "🔓 Travar");
+      }
+      if (btnEdit) {
+        btnEdit.disabled = !!p.bloqueado;
+        btnEdit.title = p.bloqueado
+          ? "Protocolo de referencia: duplique para editar"
+          : "Editar este protocolo";
+      }
+    }
+
+    function baixarArquivo(nome, texto) {
+      var blob = new Blob([texto], { type: "application/json;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = nome;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    }
+
+    function renderComparacao() {
+      if (!cmpCorpo) return;
+      var a = byId(currentId), b = byId(cmpSel && cmpSel.value);
+      if (!a || !b) { cmpCorpo.innerHTML = "<p class=\"ws-note\">Escolha um protocolo para comparar.</p>"; return; }
+      var difs = Gestor().comparar(normalizado(a), normalizado(b));
+      if (!difs.length) {
+        cmpCorpo.innerHTML = "<p class=\"ws-note\">Os dois protocolos coincidem em todos os " +
+          "parametros que governam a aquisicao.</p>";
+        return;
+      }
+      var mostra = function (v, u) {
+        if (v == null || v === "") return "<em>—</em>";
+        if (v === true) return "ligado"; if (v === false) return "desligado";
+        return String(v).replace(".", ",") + (u ? " " + u : "");
+      };
+      var html = "<table class=\"proto-cmp__tab\"><thead><tr>" +
+        "<th>Parâmetro</th><th>" + esc(a.nome) + "</th><th>" + esc(b.nome) + "</th>" +
+        "</tr></thead><tbody>";
+      difs.forEach(function (d) {
+        html += "<tr><th scope=\"row\">" + esc(d.rotulo) + "</th><td>" +
+          mostra(d.de, d.unidade) + "</td><td class=\"is-dif\">" +
+          mostra(d.para, d.unidade) + "</td></tr>";
+      });
+      html += "</tbody></table><p class=\"ws-note\">" + difs.length +
+        " diferença(s). O que não aparece aqui é igual nos dois.</p>";
+      cmpCorpo.innerHTML = html;
+    }
+
+    function esc(t) {
+      return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c];
+      });
+    }
+
     function renderList() {
       listEl.innerHTML = "";
-      var items = inRegion();
+      var items = inRegion().slice().sort(function (a, b) {
+        // Favoritos primeiro: numa lista de 16 entradas, o que o usuario marcou
+        // deve estar visivel sem rolar.
+        if (!!a.favorito !== !!b.favorito) return a.favorito ? -1 : 1;
+        return String(a.nome).localeCompare(String(b.nome), "pt-BR");
+      });
       if (emptyEl) emptyEl.hidden = items.length !== 0;
       items.forEach(function (p) {
         var li = document.createElement("li");
-        li.className = "proto-list__item" + (p.id === currentId ? " is-active" : "");
-        li.textContent = p.nome;
+        li.className = "proto-list__item" + (p.id === currentId ? " is-active" : "") +
+          (p.favorito ? " is-favorito" : "") + (p.bloqueado ? " is-travado" : "");
+        li.textContent = (p.favorito ? "★ " : "") + p.nome + (p.bloqueado ? " 🔒" : "");
+        if (p.bloqueado) li.title = "Protocolo de referência — duplique para editar";
         li.setAttribute("data-id", p.id);
         li.addEventListener("click", function () { selectProtocol(p.id); });
         listEl.appendChild(li);
@@ -206,6 +328,8 @@
       if (btnNew) btnNew.hidden = false;
       if (btnEdit) btnEdit.hidden = true;
       closeEditor();
+      if (gestorBar) gestorBar.hidden = true;
+      if (cmpBox) cmpBox.hidden = true;
       renderList();
     }
     function selectProtocol(id) {
@@ -219,12 +343,140 @@
       SimTC.examProtocol.name = p ? p.nome : "";
       SimTC.examProtocol.data = p || null;
       if (SimTC.examProtocol.refresh) SimTC.examProtocol.refresh();
+      atualizarGestor();
+    }
+
+    // ---- acoes do gestor -------------------------------------------------
+    if (btnDup) btnDup.addEventListener("click", function () {
+      var p = byId(currentId);
+      if (!p) return;
+      var nome = window.prompt("Nome da cópia:", p.nome + " (cópia)");
+      if (nome === null) return;
+      nome = nome.trim(); if (!nome) return;
+      var copia = paraPlano(Gestor().duplicar(normalizado(p), { nome: nome }), p.regiao);
+      copia.nome = nome;
+      copia.regiao = p.regiao;
+      protocols.push(copia);
+      persist(copia).then(function () {
+        selectProtocol(copia.id);
+        SimTC.showMessage("Cópia \"" + nome + "\" criada e destravada. " +
+          "O protocolo de referência continua intacto.", "success");
+      });
+    });
+
+    if (btnLock) btnLock.addEventListener("click", function () {
+      var p = byId(currentId); if (!p) return;
+      p.bloqueado = !p.bloqueado;
+      persist(p).then(function () {
+        renderList(); atualizarGestor();
+        SimTC.showMessage("Protocolo \"" + p.nome + "\" " +
+          (p.bloqueado ? "travado — duplique para criar variações."
+                       : "destravado."), "info");
+      });
+    });
+
+    if (btnFav) btnFav.addEventListener("click", function () {
+      var p = byId(currentId); if (!p) return;
+      p.favorito = !p.favorito;
+      persist(p).then(function () { renderList(); atualizarGestor(); });
+    });
+
+    if (btnCmp) btnCmp.addEventListener("click", function () {
+      var p = byId(currentId); if (!p || !cmpBox || !cmpSel) return;
+      if (!cmpBox.hidden) { cmpBox.hidden = true; return; }
+      var outros = protocols.filter(function (x) { return x.id !== p.id; });
+      if (!outros.length) {
+        SimTC.showMessage("Só há um protocolo — não há com o que comparar. " +
+          "Duplique este e altere um parâmetro.", "info");
+        return;
+      }
+      cmpSel.innerHTML = outros.map(function (x) {
+        return "<option value=\"" + esc(x.id) + "\">" + esc(x.nome) +
+               " · " + esc(x.regiao) + "</option>";
+      }).join("");
+      cmpBox.hidden = false;
+      renderComparacao();
+    });
+    if (cmpSel) cmpSel.addEventListener("change", renderComparacao);
+    if (cmpFechar) cmpFechar.addEventListener("click", function () { cmpBox.hidden = true; });
+
+    if (btnExp) btnExp.addEventListener("click", function () {
+      var lista = currentRegion ? inRegion() : protocols;
+      if (!lista.length) { SimTC.showMessage("Nada a exportar nesta região.", "warning"); return; }
+
+      // Exporta so o que pode ser EXECUTADO. As entradas do catalogo que ainda
+      // estao em branco (sem kV, sem mAs, sem espessura) nao sao protocolos:
+      // sao lugares reservados. Se fossem para o arquivo, a importacao teria
+      // de recusa-las na volta, e quem recebesse veria uma lista de avisos em
+      // vez do conjunto que esperava.
+      var prontos = [], embranco = [];
+      lista.forEach(function (p) {
+        var n = normalizado(p);
+        var v = window.SimTCCore.validacao.validar(n, {});
+        if (v.podeExecutar) prontos.push(n); else embranco.push(p.nome);
+      });
+      if (!prontos.length) {
+        SimTC.showMessage("Nenhum protocolo desta região está preenchido o bastante " +
+          "para ser exportado. Faltam parâmetros em: " + embranco.join(", ") + ".", "warning");
+        return;
+      }
+      var texto = Gestor().exportar(prontos, { origem: "Simulador Educacional de TC" });
+      var quando = new Date().toISOString().slice(0, 10);
+      baixarArquivo("protocolos-" + (currentRegion || "todos").toLowerCase().replace(/[^a-z0-9]+/g, "-") +
+                    "-" + quando + ".json", texto);
+      SimTC.showMessage(prontos.length + " protocolo(s) exportado(s)." +
+        (embranco.length ? " Fora: " + embranco.length + " ainda em branco (" +
+         embranco.join(", ") + ")." : ""), "success");
+    });
+
+    if (btnImp && fileImp) {
+      btnImp.addEventListener("click", function () { fileImp.value = ""; fileImp.click(); });
+      fileImp.addEventListener("change", function () {
+        var f = fileImp.files && fileImp.files[0];
+        if (!f) return;
+        var leitor = new FileReader();
+        leitor.onload = function () {
+          var r = Gestor().importar(String(leitor.result));
+          if (r.erro) { SimTC.showMessage("Importação recusada: " + r.erro, "error"); return; }
+          // Recusa NAO e silencio: o que ficou de fora e dito, com motivo.
+          if (r.recusados.length) {
+            SimTC.showMessage(r.recusados.length + " protocolo(s) recusado(s) — " +
+              r.recusados.map(function (x) { return x.nome + ": " + x.motivo; }).join(" | "),
+              "warning");
+          }
+          if (!r.aceitos.length) return;
+          var novos = r.aceitos.map(function (n) { return paraPlano(n); });
+          novos.forEach(function (x) { protocols.push(x); });
+          Promise.all(novos.map(persist)).then(function () {
+            var reg = novos[0].regiao;
+            if (reg) selectRegion(reg); else renderList();
+            selectProtocol(novos[0].id);
+            SimTC.showMessage(novos.length + " protocolo(s) importado(s).", "success");
+          });
+        };
+        leitor.onerror = function () { SimTC.showMessage("Não foi possível ler o arquivo.", "error"); };
+        leitor.readAsText(f, "utf-8");
+      });
     }
 
     if (btnEdit) btnEdit.addEventListener("click", function () { if (currentId) openEditor(); });
     if (btnCancel) btnCancel.addEventListener("click", function () { fillFields(byId(currentId)); closeEditor(); });
     if (btnSave) btnSave.addEventListener("click", function () {
       var p = byId(currentId); if (!p) { closeEditor(); return; }
+      // Defesa em profundidade: o botao Editar ja fica desabilitado, mas se a
+      // gravacao for alcancada por outro caminho, a trava vale aqui tambem.
+      if (p.bloqueado) {
+        SimTC.showMessage("\"" + p.nome + "\" está travado. Use Duplicar para " +
+          "criar uma variação editável.", "warning");
+        closeEditor(); return;
+      }
+      // Guarda o estado ANTERIOR antes de sobrescrever: permite voltar atras.
+      try {
+        var n = normalizado(p);
+        Gestor().registrarVersao(n, "edição no editor");
+        p.versao = n.versao;
+        p.historico = n.historico;
+      } catch (e) { /* versionamento e conveniencia: nao impede salvar */ }
       FIELDS.forEach(function (f) { var el = inputEl(f); if (el) p[FIELD_KEYS[f]] = el.value.trim(); });
       persist(p).then(function () { closeEditor(); SimTC.showMessage("Protocolo \"" + p.nome + "\" salvo" + (memoryFallback ? " (temporário)." : "."), "success"); });
     });
