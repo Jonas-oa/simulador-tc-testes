@@ -180,6 +180,20 @@
   // =================================================================
   // EXPORTS — disponíveis via window.SimTC para todos os módulos
   // =================================================================
+  /**
+   * Escape de HTML.
+   *
+   * Existia DUAS vezes, com coberturas diferentes: a copia da aquisicao
+   * escapava a apostrofe e a dos protocolos nao. Duas respostas para a mesma
+   * pergunta de seguranca e uma a mais. Fica a mais estrita.
+   */
+  var ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  function esc(v) {
+    if (v == null) return "";
+    return String(v).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; });
+  }
+
+  SimTC.esc             = esc;
   SimTC.initTheme       = initTheme;
   SimTC.showMessage     = showMessage;
   SimTC.setIndicator    = setIndicator;

@@ -526,11 +526,9 @@
       cmpCorpo.innerHTML = html;
     }
 
-    function esc(t) {
-      return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) {
-        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c];
-      });
-    }
+    // Escape de HTML — em js/shared.js. A copia que existia aqui nao escapava
+    // a apostrofe; a compartilhada escapa.
+    function esc(t) { return SimTC.esc(t); }
 
     function renderList() {
       listEl.innerHTML = "";

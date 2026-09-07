@@ -7,9 +7,10 @@
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
 > Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
-> **ETAPAS 1 a 4 do plano concluídas** — a rede de segurança está de pé, **8 dos 9 P1** estão
-> corrigidos e a interface passou a falar com o núcleo. A próxima ação é a **ETAPA 5**
-> (protocolo tipado de ponta a ponta), que fecha os dois P1 restantes. Ver o BLOCO 5.
+> **ETAPAS 1 a 5 concluídas e a 6 em curso** — a rede de segurança está de pé, **os 9 P1
+> estão corrigidos**, a interface fala com o núcleo, o protocolo é tipado de ponta a ponta e
+> ~860 linhas saíram dos dois monólitos. A ETAPA 6 **não terminou**: o que falta e por quê
+> está no BLOCO 5.
 
 ---
 
@@ -62,10 +63,9 @@ enquanto o defeito correspondente não for corrigido. O placar tem quatro númer
 | **corrigido(s)** | o defeito foi consertado mas o id continua em `PENDENTES` no topo do script. Tire-o de lá. **Reprova** de propósito, para a lista não mentir. |
 | **executados** | se for menor que o total, a suíte travou no meio. |
 
-Hoje o esperado é: `10/10 executados · 2 esperadas · 0 inesperadas · 0 corrigidos` — as duas
-que restam são P1-07 e P1-09, ambas da ETAPA 5. Cada defeito corrigido move um
-número da coluna "esperadas" para "corrigidos"; aí você remove o id de `PENDENTES` e ele
-vira um teste verde permanente.
+Hoje o esperado é: `11/11 executados · 0 esperadas · 0 inesperadas · 0 corrigidos`.
+**A lista `PENDENTES` está vazia** — os nove defeitos P1 da auditoria foram corrigidos.
+Daqui em diante, qualquer vermelho nesta suíte é regressão de verdade e reprova o build.
 
 **Uma armadilha que já custou tempo aqui:** não meça o estado da máquina pelos mostradores.
 `updateReadouts()` roda dentro do `requestAnimationFrame`, enquanto a física roda no relógio
@@ -398,14 +398,33 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
   - [x] **Progresso** — `Core.sessao.progresso()` no topograma e no volume
   - [x] **Contratos** — `app/contratos.js`. Quem oferece a API **declara** o contrato, e a declaração confere os métodos na hora. Ao fim do boot, `script.js` chama `verificar()`. Os quatro contratos (`tableDriveApi`, `examSessionApi`, `mprApi`, `consoleUiApi`) foram definidos pelo que é **realmente consumido**, não pelo que existe no objeto.
   - Fora do contrato de propósito: `SimTC.examProtocol`, que é **dado**, não API — e desde a ETAPA 4 o protocolo do exame também vive em `Core.sessao.protocolo`. A ETAPA 5 decide se ele continua existindo.
-- [ ] **ETAPA 5 — Protocolo tipado de ponta a ponta** *(grande)* — P1-07 e P1-09. Migração idempotente do store; campos numéricos com unidade; um só parser; ligar a trava do protocolo de referência.
+- [x] **ETAPA 5 — Protocolo tipado de ponta a ponta** *(grande)* — concluída em 07/09/2026
+  - [x] **P1-07** — o registro no IndexedDB **é** o modelo tipado: `kv: 120` (número), `fovMm: 450`, `colimacao: {nDetectores, larguraMm, totalMm}`. A tela ganhou camada de apresentação: `fillFields` formata, `doFormulario` lê de volta.
+  - [x] **P1-09** — `normalizarProtocolo` registra `aquisicao.pitchIgnorado` quando um pitch é declarado em sequencial. O valor continua fora da física; a incoerência deixou de ser apagada, e `PITCH_EM_SEQUENCIAL` passa a disparar pelo caminho real.
+  - [x] **Migração idempotente e versionada** — `esquema: 2` no registro. Sem a versão, um banco convertido por uma build intermediária ficava a meio caminho para sempre.
+  - [x] **Campos numéricos com unidade** — `input[type=number]` com faixa; colimação virou dois campos; kernel virou `select`; **o campo de dose saiu do editor** (ela é calculada).
+  - [x] **A trava do protocolo de referência funciona** — o crânio nasce e permanece `bloqueado`. Antes, `p.bloqueado = true` estava dentro de um `if (isClinicallyBlank)` falso justamente para ele.
+  - [x] **Um só parser** — `paraPlano` removida; gestor do núcleo e tela na mesma forma.
+  - Atenção ao editar: `mostrar()` devolve decimal com **ponto**, porque `input[type=number]` rejeita vírgula em silêncio. A vírgula é só para exibir em texto.
 
 ## Bloco C — qualidade (etapas 6 a 10)
 
-- [ ] **ETAPA 6 — Quebrar os dois monólitos** *(muito grande — a próxima)*
-      `js/aquisicao.js` em máquina de fases + telas; `js/sala-exame.js` em cenário,
-      paciente, lasers, física e controles. Extração pura, sem mudar comportamento.
-      Agora é viável: com o estado no núcleo (ETAPA 4), as funções extraídas ficam quase puras.
+- [~] **ETAPA 6 — Quebrar os dois monólitos** *(muito grande — EM CURSO)*
+      Regra seguida em todas as extrações: **o que se CONSTRÓI sai; o que se COMANDA fica.**
+      Geometria e som não guardam estado; fase, física e posicionamento sim.
+  - [x] `js/sala/cenario.js` (269 linhas) — piso, paredes, teto, porta, janela, mobília
+  - [x] `js/sala/gantry.js` (185) — corpo, bore, anéis, arco de varredura
+  - [x] `js/sala/paciente.js` (207) — corpo, avental, membros
+  - [x] `js/aquisicao/som.js` (78) — WebAudio, sem relação com a tela
+  - [x] `js/aquisicao/painel.js` (123) — painel de etapas e de parâmetros
+  - [x] `SimTC.esc` movido para `js/shared.js` — havia duas cópias com coberturas diferentes
+  - [ ] **O que falta, e por quê:** `js/sala-exame.js` (1.377) ainda junta física da mesa,
+        lasers, controles, UI de decúbito e o laço de render; `js/aquisicao.js` (1.811) ainda
+        junta a máquina de fases, o arraste da caixa do topograma, o relatório e a
+        confirmação. Essas partes **compartilham estado mutável em closure** (`tableZ`,
+        `autoDrive`, `phase`, `boxState`), e separá-las não é recorte: é decidir quem passa a
+        ser dono de cada estado. Trabalho da ETAPA 7, quando a camada `ui/` definir as
+        fronteiras — não force antes disso.
 - [ ] **ETAPA 7 — Camada `ui/` e fim das duplicações** *(grande)*
 - [ ] **ETAPA 8 — Um controlador de layout** *(média)*
 - [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*

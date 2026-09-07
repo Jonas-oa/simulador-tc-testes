@@ -18,15 +18,8 @@
 (function () {
   "use strict";
 
-  // Escape de HTML. O relatório, a confirmação e o painel de parâmetros são
-  // montados com innerHTML e recebem texto digitado pelo operador (nome e
-  // prontuário do paciente, campos livres do protocolo). Sem escapar, esse
-  // texto é interpretado como marcação.
-  var ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  function esc(v) {
-    if (v == null) return "";
-    return String(v).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; });
-  }
+  // Escape de HTML — agora em js/shared.js, uma copia so para o projeto.
+  var esc = function (v) { return SimTC.esc(v); };
 
   function initWorkstationViewer() {
     var box = document.getElementById("ws-slice-viewer");
@@ -436,62 +429,10 @@
       });
     }
 
-    // ---- som da máquina (WebAudio sintetizado — offline, sem assets) ----
-    var audio = { ctx: null, master: null, nodes: [] };
-    function soundStart(mode, rotTimeS) {
-      try {
-        var AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        if (!audio.ctx) audio.ctx = new AC();
-        var ctx = audio.ctx;
-        if (ctx.state === "suspended") ctx.resume();
-        soundStop();
-        var t = ctx.currentTime;
-        var master = ctx.createGain();
-        master.gain.setValueAtTime(0.0001, t);
-        master.gain.exponentialRampToValueAtTime(mode === "vol" ? 0.13 : 0.06, t + 0.5);
-        master.connect(ctx.destination);
-        // zumbido grave (motor da mesa / rotor do gantry)
-        var osc = ctx.createOscillator();
-        osc.type = "sawtooth";
-        osc.frequency.value = mode === "vol" ? 52 : 36;
-        var oscGain = ctx.createGain(); oscGain.gain.value = 0.5;
-        osc.connect(oscGain); oscGain.connect(master); osc.start();
-        // ruído filtrado (ventilação/atrito)
-        var len = ctx.sampleRate * 2;
-        var buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        var d = buf.getChannelData(0);
-        for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-        var noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
-        var bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.8;
-        bp.frequency.value = mode === "vol" ? 420 : 200;
-        var nGain = ctx.createGain(); nGain.gain.value = 0.35;
-        noise.connect(bp); bp.connect(nGain); nGain.connect(master); noise.start();
-        if (mode === "vol" && rotTimeS > 0) {
-          // "whoosh" periódico: uma modulação por rotação do gantry
-          var lfo = ctx.createOscillator(); lfo.frequency.value = 1 / rotTimeS;
-          var lfoGain = ctx.createGain(); lfoGain.gain.value = 0.22;
-          lfo.connect(lfoGain); lfoGain.connect(nGain.gain); lfo.start();
-          audio.nodes.push(lfo);
-        }
-        audio.master = master;
-        audio.nodes.push(osc, noise);
-      } catch (e) { /* áudio indisponível — segue sem som */ }
-    }
-    function soundStop() {
-      try {
-        var nodes = audio.nodes, m = audio.master, c = audio.ctx;
-        audio.nodes = []; audio.master = null;
-        if (m && c) {
-          m.gain.cancelScheduledValues(c.currentTime);
-          m.gain.setTargetAtTime(0.0001, c.currentTime, 0.08);
-        }
-        setTimeout(function () {
-          nodes.forEach(function (n) { try { n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} });
-          if (m) { try { m.disconnect(); } catch (e) {} }
-        }, 350);
-      } catch (e) { /* nada a fazer */ }
-    }
+    // Som do equipamento: js/aquisicao/som.js. Os apelidos mantem as ~15
+    // chamadas desta tela legiveis, sem espalhar o nome do modulo por elas.
+    var soundStart = SimTC.SomDoEquipamento.iniciar;
+    var soundStop = SimTC.SomDoEquipamento.parar;
 
     function pad3(n) { n = String(n); while (n.length < 3) n = "0" + n; return n; }
     function srcFor(i) {
@@ -1859,114 +1800,12 @@
     window.addEventListener("resize", fitTopo);
   }
 
-  function initAcqQuadrants() {
-    var seqEl = document.getElementById("acq-seq");
-    var paramsEl = document.getElementById("acq-params");
-
-    // Passos do fluxo atual e a fase em que cada um fica ativo.
-    var STEPS = [
-      { name: "Topograma", sub: "scout", active: ["topoAcq"] },
-      { name: "Planejamento da faixa", sub: "linhas FOV / CC", active: ["plan", "moving"] },
-      { name: "Volume — aquisição", sub: "helicoidal", active: ["volAcq"] },
-      { name: "Revisão / Relatório", sub: "cortes + dose", active: ["review"] }
-    ];
-    var ORDER = ["idle", "topoAcq", "plan", "moving", "volAcq", "review"];
-
-    function stepState(step, phase) {
-      if (step.active.indexOf(phase) >= 0) return "active";
-      // "concluído" se a fase atual está adiante da última fase ativa do passo.
-      var pi = ORDER.indexOf(phase);
-      var maxActive = Math.max.apply(null, step.active.map(function (a) { return ORDER.indexOf(a); }));
-      return pi > maxActive ? "done" : "pending";
-    }
-
-    // Subtítulo do passo de volume reflete o modo do protocolo em exame
-    // (axial sequencial × helicoidal), em vez de um rótulo fixo.
-    function stepSub(s) {
-      if (s.name === "Topograma") {
-        var pt = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
-        return "scout " + ((pt && pt.scout === "frontal") ? "frontal/AP" : "lateral");
-      }
-      if (s.name.indexOf("Volume") === 0) {
-        var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
-        return (p && p.modo === "sequencial") ? "axial sequencial" : "helicoidal";
-      }
-      return s.sub;
-    }
-    function renderSeq(phase) {
-      if (!seqEl) return;
-      phase = ORDER.indexOf(phase) >= 0 ? phase : "idle";
-      var html = "";
-      STEPS.forEach(function (s, i) {
-        var st = stepState(s, phase);
-        var label = st === "active" ? "em curso" : (st === "done" ? "concluído" : "aguardando");
-        html += '<li class="acq-step is-' + st + '">' +
-          '<span class="acq-step__num">' + (st === "done" ? "✓" : (i + 1)) + '</span>' +
-          '<span class="acq-step__body"><span class="acq-step__name">' + s.name + '</span>' +
-          '<span class="acq-step__sub">' + stepSub(s) + '</span></span>' +
-          '<span class="acq-step__state">' + label + '</span></li>';
-      });
-      seqEl.innerHTML = html;
-    }
-
-    function dirTxt(d) {
-      return d === "craniocaudal" ? "Crânio-caudal (mesa entra)" : "Caudo-cranial (mesa sai)";
-    }
-    function modoTxt(m) {
-      return m === "sequencial" ? "Axial sequencial" : "Helicoidal";
-    }
-    function renderParams() {
-      if (!paramsEl) return;
-      var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
-      var html = "";
-      if (!p) {
-        paramsEl.innerHTML = '<p class="acq-params__empty">Nenhum protocolo selecionado.</p>';
-        return;
-      }
-      // O painel lê o modelo TIPADO e formata na hora, com unidade. Antes lia
-      // os campos planos em texto e repetia o que estivesse gravado — inclusive
-      // "≈55 mGy (ref.)" no lugar de um CTDIvol, e um pitch ao lado de
-      // "sequencial". A dose saiu daqui: ela é calculada e aparece na
-      // confirmação, com a faixa do exame, que é o que ela depende.
-      var n = window.SimTCCore.model.normalizarProtocolo(p);
-      var aq = n.aquisicao, r = n.reconstrucoes[0] || {};
-      var un = function (v, u) { return v == null ? null : String(v).replace(".", ",") + (u || ""); };
-      var rows = [
-        ["kV", un(aq.kv)], ["mAs", un(aq.mas)],
-        ["Pitch", aq.modo === "sequencial" ? "não se aplica" : un(aq.pitch)],
-        ["FOV", un(r.fovMm, " mm")],
-        ["Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " +
-          String(aq.colimacao.larguraMm).replace(".", ",") + " mm") : null],
-        ["Esp. corte", un(r.espessuraMm, " mm")],
-        ["Kernel", r.kernel], ["Rotação", un(aq.tempoRotacaoS, " s")],
-        ["Modo", modoTxt(aq.modo)], ["Tilt", un(aq.tiltGantryDeg, "°")]
-      ];
-      rows.forEach(function (linha) {
-        html += '<div class="acq-param"><span class="acq-param__k">' + linha[0] + '</span>' +
-          '<span class="acq-param__v">' + (linha[1] ? esc(linha[1]) : "—") + '</span></div>';
-      });
-      html += '<div class="acq-param acq-param--full"><span class="acq-param__k">Direção</span>' +
-        '<span class="acq-param__v">' + dirTxt(aq.direcao) + '</span></div>';
-      paramsEl.innerHTML = html;
-    }
-
-    var curPhase = "idle";
-    SimTC.aoMudarFase(function (p) {
-      curPhase = p;
-      renderSeq(p);
-      renderParams();
-    });
-    // O protocolo em exame pode mudar sem evento — atualização leve periódica.
-    setInterval(renderParams, 1200);
-    renderSeq("idle");
-    renderParams();
-  }
 
   window.SimTC = window.SimTC || {};
   SimTC.Aquisicao = {
     init: function () {
       initWorkstationViewer();
-      initAcqQuadrants();
+      SimTC.PainelAquisicao.init();
     }
   };
 
