@@ -480,7 +480,7 @@
       var ok = probs.length === 0;
       if (topoBox) topoBox.classList.toggle("is-invalid", !ok);
       var gated = !!(SimTC.tableDriveApi && topoRef); // com 3D: exige mesa em posição
-      if (phase === "plan") {
+      if (MaquinaFases.atual() === "plan") {
         startBtn.disabled = !ok || isMoving || (gated && !atStart);
         if (moveBtn) {
           moveBtn.hidden = !gated;
@@ -527,7 +527,7 @@
       var edge = line.getAttribute("data-edge");
       var axis = (edge === "top" || edge === "bottom") ? "y" : "x";
       line.addEventListener("pointerdown", function (e) {
-        if (phase !== "plan") return;
+        if (MaquinaFases.atual() !== "plan") return;
         e.preventDefault(); e.stopPropagation();
         try { line.setPointerCapture(e.pointerId); } catch (err) {}
         function move(ev) {
@@ -548,6 +548,9 @@
         line.addEventListener("pointermove", move);
         line.addEventListener("pointerup", up);
         line.addEventListener("pointercancel", up);
+      });
+    });
+
     // ---- fases e animações ----
     function stopAnimations() {
       MaquinaFases.clearTopoAnim();
@@ -828,7 +831,7 @@
         return;
       }
       isMoving = true;
-      estadoNoNucleo("posicionando");
+      MaquinaFases.estadoNoNucleo("posicionando");
       renderReadout();
       soundStart("topo", 0);
       var res = SimTC.tableDriveApi.start({
@@ -839,7 +842,7 @@
         label: "POSICIONANDO MESA",
         onDone: function () {
           soundStop(); isMoving = false;
-          estadoNoNucleo("planejando");
+          MaquinaFases.estadoNoNucleo("planejando");
           // Se as linhas mudaram durante o movimento, a posição já não vale.
           var alvo = volumeStartZ();
           atStart = alvo != null && Math.abs(SimTC.tableDriveApi.getPos() - alvo) * 1000 < 3;
@@ -851,14 +854,14 @@
         onAbort: function (motivo) {
           if (MaquinaFases.atual() !== "plan") return;
           soundStop(); isMoving = false; atStart = false;
-          estadoNoNucleo("planejando");
+          MaquinaFases.estadoNoNucleo("planejando");
           renderReadout();
           SimTC.showMessage("Movimentação interrompida: " + motivo, "warning");
         }
       });
       if (!res.ok) {
         soundStop(); isMoving = false;
-        estadoNoNucleo("planejando");
+        MaquinaFases.estadoNoNucleo("planejando");
         renderReadout();
         falhaMesa(res);
       }
@@ -1489,7 +1492,7 @@
     function hideConfirm() { var el = document.getElementById("ws-confirm"); if (el) el.hidden = true; }
 
     function onStart() {
-      if (phase === "plan") {
+      if (MaquinaFases.atual() === "plan") {
         if (problems().length) { renderReadout(); return; }
         if (SimTC.tableDriveApi && topoRef && !atStart) {
           SimTC.showMessage("Use MOVER para levar a mesa à posição inicial da faixa antes de iniciar.", "warning");
@@ -1500,7 +1503,7 @@
         showConfirm();
         return;
       }
-      if (phase !== "idle") return;
+      if (MaquinaFases.atual() !== "idle") return;
 
       // Pré-requisitos para irradiar: quem responde é o NÚCLEO.
       //
@@ -1603,8 +1606,8 @@
     // Stop encerra a simulação em QUALQUER fase e apaga o registro do
     // paciente (um exame por vez, sem memória entre simulações).
     function onStop() {
-      if (phase === "idle") return;
-      var wasDone = (phase === "review");
+      if (MaquinaFases.atual() === "idle") return;
+      var wasDone = (MaquinaFases.atual() === "review");
       toIdle();
       var finish = (SimTC.examSessionApi && SimTC.examSessionApi.end) ? SimTC.examSessionApi.end() : Promise.resolve();
       finish.then(function () {
@@ -1634,7 +1637,7 @@
       var Core = window.SimTCCore;
       if (!Core || !Core.bus || !Core.EVENTOS) return;
       Core.bus.on(Core.EVENTOS.EXAME_ENCERRADO, function () {
-        if (phase === "idle") return;
+        if (MaquinaFases.atual() === "idle") return;
         if (SimTC.examSessionApi && SimTC.examSessionApi.get()) return; // ainda há paciente
         toIdle();
         SimTC.showMessage(
@@ -1646,7 +1649,7 @@
     var confirmCancel = document.getElementById("ws-confirm-cancel");
     if (confirmOk) confirmOk.addEventListener("click", function () {
       hideConfirm();
-      if (phase === "plan") toVolAcq();
+      if (MaquinaFases.atual() === "plan") toVolAcq();
     });
     if (confirmCancel) confirmCancel.addEventListener("click", hideConfirm);
     var reportClose = document.getElementById("ws-report-close");

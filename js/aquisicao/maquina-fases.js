@@ -19,13 +19,23 @@
     review: "revisao"
   };
 
+  /**
+   * Escreve um estado NO VOCABULARIO DO NUCLEO, sem mexer na fase da tela.
+   *
+   * Existe porque o nucleo conhece estados que a tela nao tem — "posicionando"
+   * e o caso: para a tela ainda e a fase de planejamento, enquanto a mesa se
+   * desloca ate o inicio da faixa.
+   */
+  function estadoNoNucleo(estado) {
+    var C = window.SimTCCore;
+    if (!C || !C.sessao || !estado) return;
+    try { C.sessao.mudarFase(estado); } catch (e) { /* estado desconhecido: a tela segue */ }
+  }
+
   /** Muda a fase da tela e leva a mudança ao núcleo. */
   function definirFase(nome) {
     phase = nome;
-    var C = window.SimTCCore;
-    if (C && C.sessao && FASE_NO_NUCLEO[nome]) {
-      try { C.sessao.mudarFase(FASE_NO_NUCLEO[nome]); } catch (e) { /* estado desconhecido: ignora */ }
-    }
+    estadoNoNucleo(FASE_NO_NUCLEO[nome]);
   }
 
   function getFase() {
@@ -49,6 +59,7 @@
   window.SimTC = window.SimTC || {};
   SimTC.MaquinaFases = {
     definirFase: definirFase,
+    estadoNoNucleo: estadoNoNucleo,
     atual: getFase,
     setTopoAnim: setTopoAnim,
     getTopoAnim: getTopoAnim,

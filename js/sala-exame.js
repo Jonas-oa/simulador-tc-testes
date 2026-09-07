@@ -436,7 +436,7 @@
         } catch (e) { iso = null; }
         try {
           C.sessao.atualizarMesa({
-            posM: tableZ, alturaM: tableY,
+            posM: FisicaMesa.getZ(), alturaM: FisicaMesa.getY(),
             pacienteNaMesa: patientPlaced, isoOffsetCm: iso
           });
         } catch (e) { /* núcleo ausente: a sala segue sozinha */ }
@@ -643,7 +643,7 @@
 
       function updateLasers() {
         if (!laserGroup.visible) return;
-        var yFallback = tableY + 0.02; // topo do tampo como piso do laser
+        var yFallback = FisicaMesa.getY() + 0.02; // topo do tampo como piso do laser
         // Sagital central (12h): plano vertical x=0, pinta o topo do corpo.
         updateLongitudinalLine(longCentralLine, laserOriginTop, 0, yFallback);
         // Coronais laterais (3h/9h): plano HORIZONTAL na altura do
@@ -663,9 +663,8 @@
       // -----------------------------------------------------------
       // Controles do console — pressionar e segurar (mouse + touch)
       // -----------------------------------------------------------
-      var SPEED_Y = 0.15; // m/s
-      var SPEED_Z = 0.50; // m/s
-      var moveUp = false, moveDown = false, moveIn = false, moveOut = false;
+      // As velocidades e as quatro travas de movimento moram em
+      // js/fisica-mesa.js; aqui so se COMANDA, por FisicaMesa.setCmd().
       var laserOn = false;
       var alertStatus = "";
       var simulationRunning = false;
@@ -685,7 +684,7 @@
           // ligada e, no instante em que o scan terminava, a mesa arrancava
           // sozinha (medido: 451 mm sem ação do operador). Como no
           // equipamento real, é preciso soltar e pressionar de novo.
-          if (autoDrive) {
+          if (FisicaMesa.ocupada()) {
             SimTC.showMessage("Comandos de mesa bloqueados durante a aquisição. Use Stop para abortar.", "warning");
             return;
           }
@@ -740,10 +739,10 @@
       var btnReset = document.getElementById("btn-reset");
       var btnStop = document.getElementById("btn-stop");
 
-      setHeld(btnUp, function (v) { moveUp = v; });
-      setHeld(btnDown, function (v) { moveDown = v; });
-      setHeld(btnIn, function (v) { moveIn = v; });
-      setHeld(btnOut, function (v) { moveOut = v; });
+      setHeld(btnUp, function (v) { FisicaMesa.setCmd("up", v); });
+      setHeld(btnDown, function (v) { FisicaMesa.setCmd("down", v); });
+      setHeld(btnIn, function (v) { FisicaMesa.setCmd("in", v); });
+      setHeld(btnOut, function (v) { FisicaMesa.setCmd("out", v); });
 
       // Temporizador de segurança do laser: desliga sozinho após 40 s
       // (como no equipamento real, para evitar exposição desnecessária
@@ -777,7 +776,7 @@
         btnZero.addEventListener("click", function () {
           // Define a posição atual da mesa como o ponto zero de referência
           // para a aquisição. O laser transversal marca esse plano.
-          tableZeroRef = tableZ;
+          tableZeroRef = FisicaMesa.getZ();
           updateReadouts(0);
           SimTC.showMessage("Posição da mesa zerada neste ponto (marco zero para a aquisição). Este é um ponto de controle — não é obrigatório para adquirir o exame.", "success");
         });
@@ -792,8 +791,7 @@
 
       if (btnReset) {
         btnReset.addEventListener("click", function () {
-          tableY = 0.80;
-          tableZ = TABLE_Z_MAX;
+          FisicaMesa.reiniciarMesa();
           tableZeroRef = null;
           applyTablePose();
           setLaser(false);
@@ -811,8 +809,11 @@
 
       if (btnStop) {
         btnStop.addEventListener("click", function () {
-          moveUp = moveDown = moveIn = moveOut = false;
-          abortAutoDrive("PARADA DE EMERGÊNCIA — aquisição abortada.");
+          FisicaMesa.setCmd("up", false);
+          FisicaMesa.setCmd("down", false);
+          FisicaMesa.setCmd("in", false);
+          FisicaMesa.setCmd("out", false);
+          FisicaMesa.abortAutoDrive("PARADA DE EMERGÊNCIA — aquisição abortada.");
           var statusEl = document.getElementById("display-status");
           if (statusEl) statusEl.textContent = "PARADO";
           SimTC.showMessage("PARADA DE EMERGÊNCIA acionada. Todos os movimentos foram interrompidos.", "warning");
@@ -956,17 +957,16 @@
 
 
       // Atalhos de teclado (úteis em desktop; não interferem no touch)
+      var SETA_PARA_COMANDO = {
+        ArrowUp: "up", ArrowDown: "down", ArrowRight: "in", ArrowLeft: "out"
+      };
       window.addEventListener("keydown", function (e) {
-        if (e.key === "ArrowUp") moveUp = true;
-        if (e.key === "ArrowDown") moveDown = true;
-        if (e.key === "ArrowRight") moveIn = true;
-        if (e.key === "ArrowLeft") moveOut = true;
+        var cmd = SETA_PARA_COMANDO[e.key];
+        if (cmd) FisicaMesa.setCmd(cmd, true);
       });
       window.addEventListener("keyup", function (e) {
-        if (e.key === "ArrowUp") moveUp = false;
-        if (e.key === "ArrowDown") moveDown = false;
-        if (e.key === "ArrowRight") moveIn = false;
-        if (e.key === "ArrowLeft") moveOut = false;
+        var cmd = SETA_PARA_COMANDO[e.key];
+        if (cmd) FisicaMesa.setCmd(cmd, false);
       });
 
       // -----------------------------------------------------------
@@ -1010,14 +1010,14 @@
         // Zerar), a leitura é relativa a esse ponto (pode ser negativa);
         // caso contrário, 0 mm = totalmente retraída.
         var refZ = (tableZeroRef !== null) ? tableZeroRef : TABLE_Z_MAX;
-        var posMm = (refZ - tableZ) * 1000;
+        var posMm = (refZ - FisicaMesa.getZ()) * 1000;
         var posText = (posMm >= 0 ? "" : "-") + SimTC.fmt.n(Math.abs(posMm), 1).padStart(5, "0");
         escrever(hudPositionEl, "hudPos", posText + " <small>mm</small>", true);
         escrever(displayTableEl, "dispTable", posText + " mm", false);
         escrever(hudSpeedEl, "hudSpeed", SimTC.fmt.n(currentSpeedMmS, 1) + " <small>mm/s</small>", true);
 
         // Altura da mesa em cm (útil para calibrar/verificar os limites).
-        var heightCm = tableY * 100;
+        var heightCm = FisicaMesa.getY() * 100;
         var heightText = SimTC.fmt.n(heightCm, 1);
         escrever(hudHeightEl, "hudHeight", heightText + " <small>cm</small>", true);
         escrever(displayHeightEl, "dispHeight", heightText + " cm", false);
@@ -1027,7 +1027,7 @@
         // (tableY) precisa estar ~14 cm abaixo do isocentro para que o
         // centro do paciente coincida com os 80 cm. Isso ensina o aluno
         // a "descer a mesa" para centralizar o paciente.
-        var patientCenterY = tableY + 0.02 + PATIENT_HALF_THICKNESS;
+        var patientCenterY = FisicaMesa.getY() + 0.02 + PATIENT_HALF_THICKNESS;
         var isoDelta = Math.abs(patientCenterY - ISO_Y);
         if (displayStatusEl && simulationRunning) {
           var estado = (isoDelta <= 0.01) ? "ISOCENTRO OK"
@@ -1044,7 +1044,10 @@
       // ÷ tempo de rotação). Aqui a workstation comanda a mesa e recebe o
       // progresso REAL para revelar a imagem em sincronia.
       // -----------------------------------------------------------
-      var autoDrive = null; // { targetZ, startZ, speed(m/s), onProgress, onDone, onAbort }
+      // A varredura guiada (`autoDrive`) mora em js/fisica-mesa.js. Aqui ficou
+      // uma copia que ninguem mais atribuia — e a guarda acima, que bloqueia os
+      // comandos manuais durante a aquisicao, lia essa copia: era sempre null,
+      // logo a guarda nunca fechava.
       var hintTimer = null, hintEl = null; // realce temporário do comando de recuperação
 
       function setSpin(rotTimeS) {
@@ -1069,7 +1072,9 @@
         gantryGroup.position.set(0, P.y - ry, P.z - rz);
       }
 
-      SimTC.tableDriveApi = {
+      SimTC.contratos.declarar("tableDriveApi", {
+        isPatientOnTable: function () { return !!patientPlaced; },
+        isBusy: function () { return FisicaMesa.ocupada(); },
         in: function () { FisicaMesa.setCmd("in", true); },
         out: function () { FisicaMesa.setCmd("out", true); },
         up: function () { FisicaMesa.setCmd("up", true); },
@@ -1102,7 +1107,7 @@
         },
         setGantryTilt: function (deg) { setGantryTilt(deg); },
         setScan: function (rotTimeS) { setSpin(rotTimeS || 0); }
-      };
+      });
 
       FisicaMesa.setViewCallbacks({
         onMove: function (y, z) {
@@ -1117,6 +1122,10 @@
         },
         onUpdateReadout: function (speedMmS) {
           updateReadouts(speedMmS);
+        },
+        onLabel: function (texto) {
+          var el = document.getElementById("display-status");
+          if (el) el.textContent = texto;
         }
       });
 
@@ -1143,10 +1152,7 @@
         if (spinRotTime > 0) {
           spinArc.rotation.z -= (Math.PI * 2 / spinRotTime) * dt;
         }
-        var speedMmS = 0;
-        if (autoDrive) speedMmS = autoDrive.speed * 1000;
-        else if (moveIn || moveOut) speedMmS = SPEED_Z * 1000;
-        else if (moveUp || moveDown) speedMmS = SPEED_Y * 1000;
+        var speedMmS = FisicaMesa.velocidadeMmS();
         ultimaVelocidadeMmS = speedMmS;
         updateReadouts(speedMmS);
       }

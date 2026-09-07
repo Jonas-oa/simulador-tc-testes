@@ -16,8 +16,11 @@
   var TABLE_Z_MIN = -1.10;
   var BORE_SAFE_Z = 0.20;
 
-  var SPEED_Z = 0.08; // m/s
-  var SPEED_Y = 0.02; // m/s
+  // Velocidades didaticas do console, como estavam antes da extracao deste
+  // modulo. Nao sao as de um equipamento real: sao as que deixam o aluno ver
+  // a mesa entrar e sair sem esperar.
+  var SPEED_Z = 0.50; // m/s — longitudinal
+  var SPEED_Y = 0.15; // m/s — altura
 
   // Estado atual
   var tableY = 0.80; // isocentro inicial
@@ -39,7 +42,9 @@
     onMove: function (y, z) {},
     onAlert: function (msg) {},
     onSpinSet: function (rotTimeS) {},
-    onUpdateReadout: function (speedMmS) {}
+    onUpdateReadout: function (speedMmS) {},
+    /** O que o display digital do console anuncia durante a varredura. */
+    onLabel: function (texto) {}
   };
 
   function setViewCallbacks(cb) {
@@ -126,8 +131,13 @@
     if (autoDrive) {
       return { ok: false, motivo: "Mesa já em movimento" };
     }
-    var dist = opts.distM || 0;
-    var dir = (opts.dir === "caudocranial") ? 1 : -1;
+    // Os quatro chamadores mandam `distanceMm` (MILIMETROS) e `direction`
+    // ("in" | "out"). A extracao passou a ler `distM` e `dir`, que ninguem
+    // manda: `dist` virava 0, o alvo virava a posicao atual e a mesa nunca
+    // saia do lugar — o MOVER e a varredura ficavam esperando uma chegada que
+    // ja tinha acontecido.
+    var dist = Math.max(0.01, (opts.distanceMm || 0) / 1000);
+    var dir = (opts.direction === "in") ? -1 : 1;
     var target = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, tableZ + dir * dist));
     var travel = Math.abs(target - tableZ);
 
@@ -145,6 +155,9 @@
           " do gantry para acomodar a varredura de " + Math.round(dist * 1000) +
           " mm. A aquisição começa em seguida.");
         
+        // Um comando manual pressionado no instante em que a aquisicao
+        // comeca fica suspenso durante o autoDrive e, sem isto, VOLTA A VALER
+        // quando o scan termina: a mesa arranca sozinha, sem acao do operador.
         moveUp = moveDown = moveIn = moveOut = false;
         var opcoesDaVarredura = opts;
         
@@ -199,6 +212,7 @@
       onAbort: opts.onAbort || null
     };
     viewCallbacks.onSpinSet(opts.rotTimeS || 0);
+    viewCallbacks.onLabel(opts.label || (opts.rotTimeS > 0 ? "AQUISIÇÃO HELICOIDAL" : "TOPOGRAMA"));
     return { ok: true, startZ: startZ0, targetZ: target };
   }
 
@@ -227,6 +241,21 @@
     viewCallbacks.onMove(tableY, tableZ);
   }
 
+  /**
+   * Volta a mesa ao estado de partida: altura de isocentro e TOTALMENTE
+   * RETRAIDA. E o botao "Reiniciar" da sala.
+   *
+   * Nao e o mesmo que `zerarMesa()`, que para na BORDA do gantry
+   * (BORE_SAFE_Z). Sao dois destinos diferentes e a diferenca importa: de
+   * BORE_SAFE_Z a mesa ja esta na boca do anel.
+   */
+  function reiniciarMesa() {
+    abortAutoDrive("Mesa reiniciada pelo operador.");
+    tableY = 0.80;
+    tableZ = TABLE_Z_MAX;
+    viewCallbacks.onMove(tableY, tableZ);
+  }
+
   window.SimTC = window.SimTC || {};
   SimTC.FisicaMesa = {
     passoFisica: passoFisica,
@@ -235,6 +264,21 @@
     abortAutoDrive: abortAutoDrive,
     setCmd: setCmd,
     zerarMesa: zerarMesa,
+    reiniciarMesa: reiniciarMesa,
+    /** Ha varredura guiada em curso? (era `!!autoDrive`, que morava na sala) */
+    ocupada: function() { return !!autoDrive; },
+    /**
+     * Velocidade instantanea da mesa, em mm/s, para o mostrador.
+     *
+     * Morava na sala, lendo `autoDrive`, `moveIn`... e as constantes de
+     * velocidade — todos daqui. Ficou lendo variaveis que nao existiam mais.
+     */
+    velocidadeMmS: function() {
+      if (autoDrive) return autoDrive.speed * 1000;
+      if (moveIn || moveOut) return SPEED_Z * 1000;
+      if (moveUp || moveDown) return SPEED_Y * 1000;
+      return 0;
+    },
     getZ: function() { return tableZ; },
     getY: function() { return tableY; }
   };
