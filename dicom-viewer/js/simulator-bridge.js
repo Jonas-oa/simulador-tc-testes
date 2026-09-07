@@ -6,7 +6,7 @@
  * usados para alocar volumes arbitrários dentro do leitor incorporado.
  */
 
-import { Volume } from './volume.js';
+import { Volume } from './volume.js?v=20260906a';
 
 const TIPO_ENTRADA = 'ct-simulator:volume';
 const TIPO_SAUDACAO = 'ct-simulator:hello';
