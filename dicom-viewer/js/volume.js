@@ -12,7 +12,7 @@
  * como a série foi adquirida (axial, sagital ou coronal).
  */
 
-import { ArquivoDicom, TAG } from './dicom.js?v=20260907ao';
+import { ArquivoDicom, TAG } from './dicom.js?v=20260907at';
 
 const EIXOS = ['x', 'y', 'z'];
 

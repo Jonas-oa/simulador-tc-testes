@@ -216,6 +216,11 @@
       var TABLE_Z_MIN = -1.10;
       var BORE_SAFE_Z = 0.20;
       var SAFE_Y_MIN = GANTRY_Y_MIN, SAFE_Y_MAX = GANTRY_Y_MAX;
+      // Meia espessura do corpo, do plano do tampo ao eixo do paciente. E o
+      // numero que ensina a "descer a mesa" para centralizar no isocentro, e
+      // por isso ele NAO pode ser uma constante quando a figura vem de fora:
+      // um modelo importado tem a espessura que tem. Comeca no valor da figura
+      // procedural e e reescrito se um modelo entrar no lugar.
       var PATIENT_HALF_THICKNESS = 0.12;
 
       // -----------------------------------------------------------
@@ -308,6 +313,36 @@
       var patientPose = figura.patientPose;
       var patientStanding = figura.patientStanding;
       var TORSO_R = figura.TORSO_R;
+
+      // ----- Paciente vindo de fora (assets/paciente/paciente.glb) -----
+      //
+      // A troca e ASSINCRONA de proposito: a sala termina de montar com a
+      // figura procedural e o app fica utilizavel na hora. Se houver um modelo
+      // na pasta, ele entra no lugar quando chegar; se nao houver, ou se o
+      // arquivo estiver quebrado, a figura procedural fica e o operador e
+      // avisado. Em nenhum caso a mesa fica vazia.
+      if (SimTC.Sala3D.tentarImportarPaciente) {
+        SimTC.Sala3D.tentarImportarPaciente(patient).then(function (r) {
+          if (!r.trocou) {
+            // Pasta vazia e o caso normal, e nao merece mensagem nenhuma.
+            if (r.motivo && r.motivo.indexOf("sem modelo") !== 0) {
+              SimTC.showMessage("O modelo de paciente em " + SimTC.Sala3D.PASTA_PACIENTE +
+                " nao pode ser lido (" + r.motivo + "). A figura padrao continua na mesa.", "warning");
+            }
+            return;
+          }
+          PATIENT_HALF_THICKNESS = r.medidas.meiaEspessuraM;
+          applyPatientPose();
+          updateReadouts(0);
+          var partes = ["Paciente 3D importado: " +
+            SimTC.fmt.cm(r.medidas.comprimentoM * 100) + " de comprimento, " +
+            SimTC.fmt.cm(r.medidas.larguraM * 100) + " de largura, " +
+            SimTC.fmt.cm(r.medidas.meiaEspessuraM * 200) + " de espessura."];
+          if (r.credito) partes.push(r.credito);
+          if (r.avisos.length) partes.push(r.avisos.join(" "));
+          SimTC.showMessage(partes.join(" "), r.avisos.length ? "warning" : "success");
+        });
+      }
 
       // Estado de posicionamento: enquanto null, o paciente está em pé.
       var patientPlaced = false;
@@ -738,6 +773,43 @@
       var btnStart = document.getElementById("btn-start");
       var btnReset = document.getElementById("btn-reset");
       var btnStop = document.getElementById("btn-stop");
+
+      // ----- Mostrar / ocultar a FIGURA do paciente -----
+      //
+      // E visual, e so. Quem esta na mesa continua na mesa: `patientPlaced`
+      // nao muda, o exame nao muda, o calculo do isocentro nao muda. Serve
+      // para o aluno ver a mesa, os lasers e o plano do isocentro sem o corpo
+      // na frente — e para quem trouxe um modelo pesado poder tira-lo da cena
+      // enquanto posiciona.
+      var btnPaciente = document.getElementById("btn-paciente");
+      var CHAVE_PACIENTE_VISIVEL = "simuladorTC.pacienteVisivel";
+      var pacienteVisivel = true;
+      try {
+        if (localStorage.getItem(CHAVE_PACIENTE_VISIVEL) === "0") pacienteVisivel = false;
+      } catch (e) { /* sem persistência: vale só para esta janela */ }
+
+      function mostrarPaciente(sim) {
+        pacienteVisivel = !!sim;
+        patient.visible = pacienteVisivel;
+        if (btnPaciente) {
+          btnPaciente.setAttribute("aria-pressed", pacienteVisivel ? "true" : "false");
+          btnPaciente.setAttribute("title", pacienteVisivel
+            ? "Ocultar a figura do paciente (não altera o exame)"
+            : "Mostrar a figura do paciente");
+        }
+        try { localStorage.setItem(CHAVE_PACIENTE_VISIVEL, pacienteVisivel ? "1" : "0"); }
+        catch (e) { /* sem persistência */ }
+      }
+      if (btnPaciente) {
+        btnPaciente.addEventListener("click", function () {
+          mostrarPaciente(!pacienteVisivel);
+          SimTC.showMessage(pacienteVisivel
+            ? "Figura do paciente visível."
+            : "Figura do paciente oculta — é só a imagem: o posicionamento e o exame seguem valendo.",
+            "info");
+        });
+      }
+      mostrarPaciente(pacienteVisivel);
 
       setHeld(btnUp, function (v) { FisicaMesa.setCmd("up", v); });
       setHeld(btnDown, function (v) { FisicaMesa.setCmd("down", v); });

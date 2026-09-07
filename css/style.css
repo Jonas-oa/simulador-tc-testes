@@ -458,7 +458,7 @@ body {
   gap: 8px;
 }
 .panel__row--top { grid-template-columns: 1fr 1fr 1fr; }
-.panel__row--bottom { grid-template-columns: 1fr 1fr; }
+.panel__row--bottom { grid-template-columns: repeat(3, 1fr); }
 
 /* Botões gerais do painel */
 .pad-btn {
