@@ -248,10 +248,60 @@
       return manifest ? manifest.cortes : 0;
     }
 
-    // Anuncia a fase do exame (idle/topoAcq/plan/moving/volAcq/review)
-    // para módulos desacoplados — ex.: o PiP da sala 3D no modo console.
-    function announcePhase(p) {
-      try { document.dispatchEvent(new CustomEvent("ct:phase", { detail: { phase: p } })); } catch (e) { /* sem suporte */ }
+    // ---- FASE DO EXAME ---------------------------------------------------
+    // Quem guarda a fase é o NÚCLEO. `phase` continua aqui porque é a máquina
+    // de estados desta tela e é lida em caminho quente, mas toda mudança passa
+    // por definirFase() e chega ao ScanRun da sessão — que é o que outros
+    // módulos consultam e o que o barramento anuncia.
+    //
+    // Antes, a fase existia só nesta closure e era anunciada por um
+    // CustomEvent no `document`, em paralelo ao barramento: dois canais para o
+    // mesmo fato, e o estado da sessão nunca sabia em que pé estava o exame.
+    var FASE_NO_NUCLEO = {
+      idle: "ocioso", topoAcq: "scout", plan: "planejando",
+      volAcq: "adquirindo", recon: "reconstruindo", review: "revisao"
+    };
+    /** Anuncia ao núcleo um estado do EQUIPAMENTO, sem mexer na fase da tela. */
+    function estadoNoNucleo(estado) {
+      var C = window.SimTCCore;
+      if (!C || !C.sessao || !estado) return;
+      try { C.sessao.mudarFase(estado); } catch (e) { /* estado desconhecido: a tela segue */ }
+    }
+    /** Muda a fase da tela e leva a mudança ao núcleo. */
+    function definirFase(nome) {
+      phase = nome;
+      estadoNoNucleo(FASE_NO_NUCLEO[nome]);
+    }
+
+    /**
+     * Leva a faixa planejada ao nucleo.
+     *
+     * O plano so existia como percentagem das linhas na caixa do topograma,
+     * dentro desta closure. Com ele no ScanRun, `Core.sessao` passa a
+     * responder quantos cortes cada reconstrucao produz (cortesPorReconstrucao)
+     * e o comprimento em mm fica registrado com o exame, em vez de ser
+     * recalculado por quem precisar.
+     */
+    function definirPlanoNoNucleo() {
+      var C = window.SimTCCore;
+      if (!C || !C.sessao) return;
+      var f = faixaEmMm();
+      if (!f || !isFinite(f.inicioMm) || !isFinite(f.fimMm)) return;
+      try {
+        var pp = protocolParams();
+        C.sessao.definirPlano({
+          inicioMm: f.inicioMm, fimMm: f.fimMm,
+          direcao: pp.direcao, tiltDeg: pp.tiltDeg,
+          refMesaM: topoRef ? topoRef.startZ : null
+        });
+      } catch (e) { /* plano invalido: a validacao dira o que falta */ }
+    }
+
+    /** Progresso da varredura (0..1) no nucleo. */
+    function progressoNoNucleo(k) {
+      var C = window.SimTCCore;
+      if (!C || !C.sessao) return;
+      try { C.sessao.progresso(k); } catch (e) { /* ignora */ }
     }
     // Referência espacial do topograma: onde a mesa ESTAVA quando cada
     // ponto da imagem foi varrido. Permite ao MOVER levar a mesa de volta
@@ -664,6 +714,7 @@
           line.removeEventListener("pointercancel", up);
           // Faixa mudou → a posição inicial mudou → exigir novo MOVER.
           if (atStart) { atStart = false; renderReadout(); }
+          definirPlanoNoNucleo();
         }
         line.addEventListener("pointermove", move);
         line.addEventListener("pointerup", up);
@@ -684,9 +735,8 @@
       if (SimTC.tableDriveApi && SimTC.tableDriveApi.setScan) SimTC.tableDriveApi.setScan(0);
     }
     function toIdle() {
-      phase = "idle"; loaded = false; lastSlice = 0; lastAcq = null;
+      definirFase("idle"); loaded = false; lastSlice = 0; lastAcq = null;
       if (ctrl) ctrl.classList.remove("is-acquiring");
-      announcePhase("idle");
       topoRef = null; atStart = false; isMoving = false;
       protoExame = null;   // libera o protocolo ao encerrar
       if (SimTC.tableDriveApi && SimTC.tableDriveApi.setGantryTilt) SimTC.tableDriveApi.setGantryTilt(0);
@@ -737,8 +787,7 @@
       }
     }
     function toTopoAcq() {
-      phase = "topoAcq";
-      announcePhase("topoAcq");
+      definirFase("topoAcq");
       placeholder.hidden = true;
       img.hidden = true; ctrl.hidden = true;
       if (topo) topo.hidden = false;
@@ -759,7 +808,7 @@
           posicionarAntes: true,
           speedMmS: TOPO_SPEED_MMS,
           rotTimeS: 0, // scout: tubo estacionário, gantry não gira
-          onProgress: function (k) { setTopoClip(k); },
+          onProgress: function (k) { setTopoClip(k); progressoNoNucleo(k); },
           onDone: function () { soundStop(); toPlan(); },
           onAbort: function (motivo) {
             if (phase !== "topoAcq") return;
@@ -796,9 +845,8 @@
     }
 
     function toPlan(keepBox) {
-      phase = "plan";
+      definirFase("plan");
       if (ctrl) ctrl.classList.remove("is-acquiring");
-      announcePhase("plan");
       topoImg.style.clipPath = "";
       if (topoBox) topoBox.hidden = false;
       if (readout) readout.hidden = false;
@@ -851,6 +899,7 @@
       if (SimTC.tableDriveApi && SimTC.tableDriveApi.setGantryTilt) SimTC.tableDriveApi.setGantryTilt(protocolParams().tiltDeg);
       fitTopo();
       applyBox(); renderReadout(); // renderReadout pode voltar a travar o Iniciar
+      definirPlanoNoNucleo();
       if (stopBtn) stopBtn.disabled = false;
       if (!keepBox) SimTC.showMessage("Topograma adquirido — ajuste a faixa (base↔vértice) e o FOV, depois Iniciar.", "success");
     }
@@ -949,7 +998,7 @@
         return;
       }
       isMoving = true;
-      announcePhase("moving");
+      estadoNoNucleo("posicionando");
       renderReadout();
       soundStart("topo", 0);
       var res = SimTC.tableDriveApi.start({
@@ -960,7 +1009,7 @@
         label: "POSICIONANDO MESA",
         onDone: function () {
           soundStop(); isMoving = false;
-          announcePhase("plan");
+          estadoNoNucleo("planejando");
           // Se as linhas mudaram durante o movimento, a posição já não vale.
           var alvo = volumeStartZ();
           atStart = alvo != null && Math.abs(SimTC.tableDriveApi.getPos() - alvo) * 1000 < 3;
@@ -972,14 +1021,14 @@
         onAbort: function (motivo) {
           if (phase !== "plan") return;
           soundStop(); isMoving = false; atStart = false;
-          announcePhase("plan");
+          estadoNoNucleo("planejando");
           renderReadout();
           SimTC.showMessage("Movimentação interrompida: " + motivo, "warning");
         }
       });
       if (!res.ok) {
         soundStop(); isMoving = false;
-        announcePhase("plan");
+        estadoNoNucleo("planejando");
         renderReadout();
         falhaMesa(res);
       }
@@ -992,8 +1041,8 @@
     // Premissa didática: axial_000 = corte mais INFERIOR (base) — a ordem
     // inverte no crânio-caudal. Validação clínica do usuário.
     function toVolAcq() {
-      phase = "volAcq"; loaded = false;
-      announcePhase("volAcq");
+      definirFase("volAcq"); loaded = false;
+      definirPlanoNoNucleo();   // a faixa que sera irradiada, registrada no exame
       hideConfirm();
       if (topo) topo.hidden = true;
       if (readout) readout.hidden = true;
@@ -1093,7 +1142,7 @@
           posicionarAntes: true,
           speedMmS: speed,
           rotTimeS: pp.rotacaoS, // liga o arco de varredura girando no bore
-          onProgress: function (k) { paintProg(k); },
+          onProgress: function (k) { paintProg(k); progressoNoNucleo(k); },
           onDone: function () { soundStop(); toRecon(); },
           onAbort: function (motivo) {
             if (phase !== "volAcq") return;
@@ -1247,9 +1296,8 @@
     // dos PNG só para habilitar coronal e sagital. Ele saiu: a série que o
     // motor acabou de produzir já é o volume, com os HU verdadeiros.
     function toRecon() {
-      phase = "recon";
+      definirFase("recon");
       if (ctrl) ctrl.classList.remove("is-acquiring");
-      announcePhase("volAcq"); // painel mantém "Volume" ativo durante a recon
       slider.disabled = true;
       startBtn.disabled = true; startBtn.textContent = "Reconstruindo…";
       counter.textContent = "Reconstruindo volume…";
@@ -1290,9 +1338,8 @@
     }
 
     function toReview() {
-      phase = "review";
+      definirFase("review");
       if (ctrl) ctrl.classList.remove("is-acquiring");
-      announcePhase("review");
       buildReport();
       // O relatório NÃO cobre a imagem automaticamente — foco no exame;
       // fica disponível no botão destacado.
@@ -1420,7 +1467,7 @@
     // remontado dos PNG e convertia os cinzas de volta em HU pela inversa da
     // janela — declarando `unidadeHU: true` para uma faixa que na prática ia
     // de -160 a +239. Sumiu junto com o volume que o alimentava.
-    SimTC.mprApi = {
+    SimTC.contratos.declarar("mprApi", {
       hasVolume: function () {
         return temSerie();
       },
@@ -1433,7 +1480,7 @@
       exportVolume: function () {
         return payloadDaSerieReconstruida();
       }
-    };
+    });
 
     // Iniciar é contextual: em idle adquire o topograma; em plan (com a
     // caixa válida — senão fica travado) inicia a aquisição do volume.
@@ -1892,9 +1939,7 @@
     }
 
     var curPhase = "idle";
-    document.addEventListener("ct:phase", function (e) {
-      var p = e.detail && e.detail.phase;
-      if (!p) return;
+    SimTC.aoMudarFase(function (p) {
       curPhase = p;
       renderSeq(p);
       renderParams();

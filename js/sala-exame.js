@@ -887,7 +887,7 @@
         patient.rotation.set(-Math.PI / 2, 0, 0);
         patient.position.set(0, 0.85, 0); // eleva para os pés tocarem o chão
         if (displayPositionEl) displayPositionEl.textContent = "AGUARDANDO";
-        avisarNucleoDaMesa();
+        avisarNucleoDaMesa(true);
       }
 
       function applyPatientPose() {
@@ -941,24 +941,43 @@
       function placePatient() {
         patientPlaced = true;
         applyPatientPose();
-        avisarNucleoDaMesa();
+        avisarNucleoDaMesa(true);
       }
 
       /**
-       * Informa o núcleo do estado da mesa.
+       * Informa o núcleo do estado da mesa: posição, altura, paciente e
+       * desvio do isocentro.
        *
        * A sala mantinha isso só em closure, e o núcleo — que tem o estado de
        * sessão e a lista de pré-requisitos para irradiar — seguia achando que
        * o paciente não estava na mesa. Medido: a interface dizia `true` e
        * Core.sessao.mesa.pacienteNaMesa dizia `false` no mesmo instante.
        * Duas verdades sobre o mesmo exame.
+       *
+       * É chamada do passo de física, que roda dezenas de vezes por segundo
+       * durante um movimento — daí a limitação de taxa. Um movimento que
+       * termina sempre gera o último aviso, porque o passo seguinte já não
+       * tem `moved` e o intervalo terá passado.
        */
-      function avisarNucleoDaMesa() {
+      var ultimoAvisoMesa = 0;
+      function avisarNucleoDaMesa(forcar) {
         var C = window.SimTCCore;
         if (!C || !C.sessao) return;
+        var agora = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        if (!forcar && agora - ultimoAvisoMesa < 200) return;
+        ultimoAvisoMesa = agora;
+        var iso = null;
+        try {
+          if (patientPlaced && patientPose) {
+            var v = new THREE.Vector3();
+            patientPose.getWorldPosition(v);
+            iso = (v.y - ISO_Y) * 100;
+          }
+        } catch (e) { iso = null; }
         try {
           C.sessao.atualizarMesa({
-            posM: tableZ, alturaM: tableY, pacienteNaMesa: patientPlaced
+            posM: tableZ, alturaM: tableY,
+            pacienteNaMesa: patientPlaced, isoOffsetCm: iso
           });
         } catch (e) { /* núcleo ausente: a sala segue sozinha */ }
       }
@@ -1576,7 +1595,7 @@
         if (ad.onAbort) ad.onAbort(motivo || "Aquisição interrompida.");
       }
 
-      SimTC.tableDriveApi = {
+      SimTC.contratos.declarar("tableDriveApi", {
         isPatientOnTable: function () { return !!patientPlaced; },
         isBusy: function () { return !!autoDrive; },
         // opts: { distanceMm, direction: "in"|"out", speedMmS, rotTimeS (0 = topograma), onProgress, onDone, onAbort }
@@ -1718,7 +1737,7 @@
         // Liga/desliga o arco de varredura girando SEM mover a mesa (usado no
         // step-and-shoot: aquisição com a mesa parada entre os passos).
         setScan: function (rotTimeS) { setSpin(rotTimeS || 0); }
-      };
+      });
 
       // -----------------------------------------------------------
       // Loop de animação, física e intertravamento de segurança
@@ -1786,6 +1805,7 @@
           tableY = nextY;
           tableZ = nextZ;
           applyTablePose();
+          avisarNucleoDaMesa();
         }
 
         var anyMoveFlag = moveUp || moveDown || moveIn || moveOut;

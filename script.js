@@ -78,6 +78,19 @@
     window.__ctSimulator = window.__ctSimulator || {};
     window.__ctSimulator.version = "core-20260830a";
     window.__ctSimulator.core = window.SimTCCore || null;
+
+    // 7) Confere os contratos entre modulos. Antes, um modulo que falhasse no
+    //    meio do init deixava um ponteiro nulo e as guardas defensivas
+    //    (`if (SimTC.x)`) escondiam o buraco: sumia uma funcionalidade sem
+    //    nenhum sinal. Agora o boot diz o que faltou.
+    if (window.SimTC && SimTC.contratos) {
+      var r = SimTC.contratos.verificar();
+      if (!r.ok) {
+        reportError("contratos nao cumpridos: " +
+          (r.ausentes.length ? "ausentes " + r.ausentes.join("; ") + ". " : "") +
+          (r.incompletos.length ? "incompletos " + r.incompletos.join("; ") + "." : ""));
+      }
+    }
   }
 
   if (document.readyState === "loading") {

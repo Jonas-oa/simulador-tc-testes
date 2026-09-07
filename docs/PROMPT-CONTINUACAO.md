@@ -7,9 +7,9 @@
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
 > Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
-> **ETAPAS 1, 2 e 3 do plano concluídas** — a rede de segurança está de pé e **8 dos 9 P1**
-> estão corrigidos. A próxima ação é a **ETAPA 4** (ligar a interface ao núcleo), que é a
-> maior do plano. Ver o checklist no BLOCO 5.
+> **ETAPAS 1 a 4 do plano concluídas** — a rede de segurança está de pé, **8 dos 9 P1** estão
+> corrigidos e a interface passou a falar com o núcleo. A próxima ação é a **ETAPA 5**
+> (protocolo tipado de ponta a ponta), que fecha os dois P1 restantes. Ver o BLOCO 5.
 
 ---
 
@@ -143,7 +143,10 @@ tempo procurando sujeira: não há.
 - `js/` — 7.130 linhas de interface que **reimplementou o mesmo domínio** em closures,
   **sem nenhum teste**.
 
-As duas discordam em execução. Medido, no mesmo instante e sobre o mesmo exame:
+As duas discordavam em execução. **A ETAPA 4 fechou essa distância**: fase, mesa, plano,
+protocolo e progresso passam pelo `Core.sessao`, e o barramento do núcleo virou o único canal
+de eventos. O que segue é o retrato de ANTES, guardado porque explica de onde vieram os
+defeitos — e porque é o teste de que não voltem:
 
 ```
 núcleo     sessao.mesa.pacienteNaMesa   false        interface  isPatientOnTable()  true
@@ -336,8 +339,10 @@ core/          domínio puro, sem DOM  ── JÁ EXISTE E ESTÁ CERTO
   bus.js         canal único de eventos
 
 app/           composição — só liga as peças
-  boot.js        substitui script.js; ordem explícita e verificada
-  contratos.js   substitui os 5 ponteiros globais mutáveis de shared.js
+  contratos.js   FEITO na ETAPA 4 — quem oferece API declara o contrato, e o
+                 boot verifica. Substituiu a guarda `if (SimTC.x)`, que
+                 escondia módulo faltando em vez de acusar.
+  boot.js        (a fazer) substitui script.js; ordem explícita e verificada
 
 modulos/       uma pasta por setor, com fronteira declarada
   sala/  worklist/  protocolos/  aquisicao/  leitor/
@@ -385,8 +390,14 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
 
 ## Bloco B — estrutura (etapas 4 e 5)
 
-- [ ] **ETAPA 4 — Ligar a interface ao núcleo** *(grande — maior risco do plano)*
-      Fazer **estado a estado**: mesa → protocolo → plano → fase, com o fluxo completo verde entre cada um. `ct:phase` vira evento do bus; os ponteiros globais viram `app/contratos.js`.
+- [x] **ETAPA 4 — Ligar a interface ao núcleo** *(grande)* — concluída em 07/09/2026
+  - [x] **Fase** — `Core.sessao.mudarFase()` passa a guardar o estado do ScanRun. O `CustomEvent("ct:phase")` no `document` **sumiu**: agora há um canal só, o barramento do núcleo. `js/shared.js` traduz o vocabulário do domínio para o da tela (`SimTC.aoMudarFase`), e os três consumidores assinam por lá.
+  - [x] **Mesa** — `Core.sessao.atualizarMesa()` chamada do passo de física (limitada a 5×/s), com posição, altura, paciente e desvio do isocentro
+  - [x] **Protocolo** — já ligado na ETAPA 2
+  - [x] **Plano** — `Core.sessao.definirPlano()` ao semear a caixa, ao fim de cada arraste e ao irradiar
+  - [x] **Progresso** — `Core.sessao.progresso()` no topograma e no volume
+  - [x] **Contratos** — `app/contratos.js`. Quem oferece a API **declara** o contrato, e a declaração confere os métodos na hora. Ao fim do boot, `script.js` chama `verificar()`. Os quatro contratos (`tableDriveApi`, `examSessionApi`, `mprApi`, `consoleUiApi`) foram definidos pelo que é **realmente consumido**, não pelo que existe no objeto.
+  - Fora do contrato de propósito: `SimTC.examProtocol`, que é **dado**, não API — e desde a ETAPA 4 o protocolo do exame também vive em `Core.sessao.protocolo`. A ETAPA 5 decide se ele continua existindo.
 - [ ] **ETAPA 5 — Protocolo tipado de ponta a ponta** *(grande)* — P1-07 e P1-09. Migração idempotente do store; campos numéricos com unidade; um só parser; ligar a trava do protocolo de referência.
 
 ## Bloco C — qualidade (etapas 6 a 10)

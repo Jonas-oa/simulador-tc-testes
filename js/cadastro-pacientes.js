@@ -243,7 +243,7 @@
     }
 
     // ---- API consumida pela aquisição -----------------------------------
-    SimTC.examSessionApi = {
+    SimTC.contratos.declarar("examSessionApi", {
       get: function () { return worklist.selecionado(); },
 
       /**
@@ -287,7 +287,7 @@
       },
 
       listarEstudos: function () { return estudos.slice(); }
-    };
+    });
 
     // ---- cadastro --------------------------------------------------------
     function addPatient() {

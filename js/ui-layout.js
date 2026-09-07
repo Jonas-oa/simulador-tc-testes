@@ -394,14 +394,14 @@
       if (!bar.hidden || body.classList.contains("is-mobile")) updateInfo();
     }, 1200);
 
-    SimTC.consoleUiApi = {
+    SimTC.contratos.declarar("consoleUiApi", {
       isConsole: function () { return state.on && isDesktop(); },
       getStep: function () { return state.step; },
       setStep: function (st) {
         if (STEPS.indexOf(st) < 0) return;
         state.step = st; persist(); apply();
       }
-    };
+    });
 
     apply();
   }
@@ -454,9 +454,7 @@
       requestAnimationFrame(function () { window.dispatchEvent(new Event("resize")); });
     }
 
-    document.addEventListener("ct:phase", function (e) {
-      var p = e.detail && e.detail.phase;
-      if (!p) return;
+    SimTC.aoMudarFase(function (p) {
       // Nova aquisição reexibe o PiP mesmo se o aluno o ocultou antes.
       if ((p === "topoAcq" || p === "volAcq" || p === "moving") && curPhase !== p) userHidden = false;
       curPhase = p;

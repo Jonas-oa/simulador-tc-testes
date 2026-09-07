@@ -123,7 +123,47 @@
   }
 
   // =================================================================
-  // 4) PONTEIROS DE API COMPARTILHADOS ENTRE MODULOS
+  // 4) FASE DO EXAME — um canal só
+  //
+  // A aquisição anunciava a fase por um CustomEvent no `document`
+  // ("ct:phase"), em paralelo ao barramento do núcleo. Eram dois canais de
+  // evento para o mesmo fato, e o do DOM não deixava rastro no estado da
+  // sessão: quem quisesse saber em que pé estava o exame tinha de escutar a
+  // tela, não o domínio.
+  //
+  // Agora o anúncio é um só: `Core.sessao.mudarFase()` grava no ScanRun e
+  // emite FASE_MUDOU no barramento. Este módulo oferece a tradução do
+  // vocabulário do domínio para o da tela e a assinatura pronta, para que
+  // nenhum consumidor precise conhecer o mapa.
+  // =================================================================
+  var FASE_DA_TELA = {
+    ocioso: "idle",
+    scout: "topoAcq",
+    planejando: "plan",
+    posicionando: "moving",
+    adquirindo: "volAcq",
+    // A tela mantém "Volume" ativo durante a reconstrução: para o operador é
+    // o mesmo passo do console, e o painel de etapas não deve piscar.
+    reconstruindo: "volAcq",
+    revisao: "review",
+    abortado: "idle"
+  };
+
+  /**
+   * Assina a mudança de fase do exame, já no vocabulário da tela.
+   * @param {function(string):void} fn recebe "idle"|"topoAcq"|"plan"|"moving"|"volAcq"|"review"
+   */
+  function aoMudarFase(fn) {
+    var Core = window.SimTCCore;
+    if (!Core || !Core.bus || !Core.EVENTOS) return;
+    Core.bus.on(Core.EVENTOS.FASE_MUDOU, function (d) {
+      var daTela = FASE_DA_TELA[d && d.estado];
+      if (daTela) fn(daTela);
+    });
+  }
+
+  // =================================================================
+  // 5) PONTEIROS DE API COMPARTILHADOS ENTRE MODULOS
   // Cada módulo preenche o ponteiro que lhe cabe; outros o consomem.
   // =================================================================
   // Ponte entre cadastro e aquisição: UM exame por vez, sem memória.
@@ -143,6 +183,8 @@
   SimTC.initTheme       = initTheme;
   SimTC.showMessage     = showMessage;
   SimTC.setIndicator    = setIndicator;
+  SimTC.aoMudarFase     = aoMudarFase;
+  SimTC.FASE_DA_TELA    = FASE_DA_TELA;
   SimTC.REGIOES         = REGIOES_DISPLAY;
   SimTC.openAppDB       = openAppDB;
   SimTC.dbStoreAll      = dbStoreAll;

@@ -100,10 +100,9 @@
       }
     });
 
-    document.addEventListener("ct:phase", function (event) {
-      var phase = event.detail && event.detail.phase;
-      if (phase === "review") sendVolume();
-      if (phase === "idle" && !(SimTC.mprApi && SimTC.mprApi.hasVolume && SimTC.mprApi.hasVolume())) {
+    SimTC.aoMudarFase(function (fase) {
+      if (fase === "review") sendVolume();
+      if (fase === "idle" && !(SimTC.mprApi && SimTC.mprApi.hasVolume && SimTC.mprApi.hasVolume())) {
         setStatus("Adquira um exame ou abra uma série DICOM no leitor", "warning");
       }
     });
