@@ -11,7 +11,23 @@ Esta pasta contém a interface e o motor do repositório
   DICOM locais.
 - `js/simulator-bridge.js` é a camada de integração específica do simulador.
 
-Os volumes gerados a partir dos PNGs do simulador possuem HU aproximados pela
-inversão da janela de exibição e servem apenas ao treinamento de ferramentas.
-Séries DICOM locais continuam usando pixels, geometria e HU dos próprios
-arquivos.
+O simulador envia a **série reconstruída**: `Int16Array` com os HU que a
+retroprojeção filtrada produziu, mais o `pixelMm` e o `incrementoMm` que a
+própria reconstrução definiu. Séries DICOM locais continuam usando pixels,
+geometria e HU dos próprios arquivos.
+
+> Até setembro de 2026 o simulador enviava um volume remontado a partir dos
+> PNG já janelados, com HU aproximados pela inversa da janela — e declarava
+> `unidadeHU: true` para uma faixa que ia de −160 a +239. Esse caminho foi
+> removido; a medida de HU no leitor passou a valer.
+
+## Fronteira de vendor
+
+Esta pasta é **cópia de outro repositório**. As ferramentas de medida daqui
+(`js/medidas.js`) e as do simulador (`../js/medidas.js`) calculam distância,
+ângulo e ROI de forma parecida, e essa duplicação é **deliberada**: unificá-las
+exigiria acoplar este leitor ao `core/` do simulador, quebrando tanto a
+possibilidade de rodá-lo sozinho quanto a de ressincronizar com o Leitor-Dicon.
+Os dois modelos também diferem de verdade — aqui se mede num volume com
+espaçamento por eixo em 3D; lá, numa série reconstruída com `pixelMm` escalar,
+no plano axial.

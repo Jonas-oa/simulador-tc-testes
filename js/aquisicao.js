@@ -604,8 +604,8 @@
         }
       }
       if (!readout) return;
-      var cc = Math.max(0, rangeSpan()).toFixed(0);
-      var ap = Math.max(0, fovSpan()).toFixed(0);
+      var cc = SimTC.fmt.n(Math.max(0, rangeSpan()), 0);
+      var ap = SimTC.fmt.n(Math.max(0, fovSpan()), 0);
       var pp = protocolParams();
       var scoutTxt = pp.scout === "frontal" ? "frontal/AP" : "lateral";
       var fovLbl = pp.scout === "frontal" ? "FOV R-L" : "FOV A-P";
@@ -767,7 +767,7 @@
           var off = SimTC.tableDriveApi.getIsoOffsetCm();
           topoRef.isoOff = off;
           if (off != null && Math.abs(off) > 4) {
-            SimTC.showMessage("Atenção: eixo do paciente ~" + Math.abs(off).toFixed(0) + " cm " +
+            SimTC.showMessage("Atenção: eixo do paciente ~" + SimTC.fmt.cm(Math.abs(off), 0) + " " +
               (off > 0 ? "acima" : "abaixo") + " do isocentro — no equipamento real o topograma LATERAL sai magnificado e o cálculo automático de dose é afetado. Ajuste a ALTURA da mesa.", "warning");
           }
         }
@@ -863,20 +863,20 @@
       var isoTxt = (iso == null)
         ? "não avaliado"
         : (Math.abs(iso) <= 4
-          ? '<span class="is-good">no isocentro (' + iso.toFixed(1) + ' cm)</span>'
-          : '<span class="is-bad">fora do isocentro (' + iso.toFixed(1) + ' cm) — magnificação no topograma lateral</span>');
+          ? '<span class="is-good">no isocentro (' + SimTC.fmt.cm(iso) + ')</span>'
+          : '<span class="is-bad">fora do isocentro (' + SimTC.fmt.cm(iso) + ') — magnificação no topograma lateral</span>');
       var rows = [];
       if (pac) rows.push("<strong>Paciente:</strong> " + esc(pac.nome) + " · " + (pac.prontuario ? "Pront. " + esc(pac.prontuario) : "s/ prontuário") + (pac.regiao ? " · " + esc(pac.regiao) : ""));
       var modoTxt = pp.modo === "sequencial" ? "axial sequencial" : "helicoidal";
-      var tiltTxt = (pp.tiltDeg ? (", tilt " + pp.tiltDeg.toFixed(0) + "°") : "");
+      var tiltTxt = (pp.tiltDeg ? (", tilt " + SimTC.fmt.graus(pp.tiltDeg)) : "");
       var scoutTxt = pp.scout === "frontal" ? "topograma frontal/AP" : "topograma lateral";
       var fovLbl = pp.scout === "frontal" ? "FOV R-L" : "FOV A-P";
       rows.push("<strong>Protocolo:</strong> " + (prot ? esc(prot.nome) : "—") + " · " + scoutTxt + " · " + modoTxt + tiltTxt + " · direção " + (pp.direcao === "craniocaudal" ? "crânio-caudal (mesa entra)" : "caudo-cranial (mesa sai)"));
-      rows.push("<strong>Faixa varrida:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + Math.max(0, fovSpan()).toFixed(0) + "% da imagem");
+      rows.push("<strong>Faixa varrida:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + SimTC.fmt.pct(Math.max(0, fovSpan())) + " da imagem");
       if (pp.modo === "sequencial") {
-        rows.push("<strong>Mesa:</strong> passo a passo (step-and-shoot) · colimação " + pp.colim.toFixed(1) + " mm · rotação " + pp.rotacaoS.toFixed(1) + " s");
+        rows.push("<strong>Mesa:</strong> passo a passo (step-and-shoot) · colimação " + SimTC.fmt.mm(pp.colim) + " · rotação " + SimTC.fmt.s(pp.rotacaoS));
       } else {
-        rows.push("<strong>Mesa:</strong> " + Math.round(speed) + " mm/s (pitch " + pp.pitch + " × colimação " + pp.colim.toFixed(1) + " mm ÷ rotação " + pp.rotacaoS.toFixed(1) + " s)");
+        rows.push("<strong>Mesa:</strong> " + SimTC.fmt.mmPorS(speed) + " (pitch " + SimTC.fmt.n(pp.pitch) + " × colimação " + SimTC.fmt.mm(pp.colim) + " ÷ rotação " + SimTC.fmt.s(pp.rotacaoS) + ")");
       }
       rows.push("<strong>Posicionamento no isocentro:</strong> " + isoTxt);
       // ---- DOSE CALCULADA (Fase 6) ------------------------------------
@@ -886,14 +886,14 @@
       // e o SSDE corrige pelo diametro efetivo medido no proprio volume.
       var dz = SimTC.MotorImagem && SimTC.MotorImagem.dose();
       if (dz && dz.ctdivol != null) {
-        rows.push("<strong>CTDIvol:</strong> " + dz.ctdivol.toFixed(1) +
-          " mGy <small>(fantoma de " + dz.fantomaCm + " cm · CTDIw ÷ pitch)</small>");
-        rows.push("<strong>DLP:</strong> " + Math.round(dz.dlp) +
-          " mGy·cm <small>(CTDIvol × " + (dz.comprimentoMm / 10).toFixed(1) + " cm)</small>");
+        rows.push("<strong>CTDIvol:</strong> " + SimTC.fmt.mGy(dz.ctdivol) +
+          " <small>(fantoma de " + dz.fantomaCm + " cm · CTDIw ÷ pitch)</small>");
+        rows.push("<strong>DLP:</strong> " + SimTC.fmt.mGycm(dz.dlp) +
+          " <small>(CTDIvol × " + SimTC.fmt.cm(dz.comprimentoMm / 10) + ")</small>");
         if (dz.ssdeMGy != null) {
-          rows.push("<strong>SSDE:</strong> " + dz.ssdeMGy.toFixed(1) +
-            " mGy <small>(diâmetro efetivo " + dz.diametroEfetivoCm.toFixed(1) +
-            " cm · fator " + dz.fatorSSDE.toFixed(2) + " · AAPM 204)</small>");
+          rows.push("<strong>SSDE:</strong> " + SimTC.fmt.mGy(dz.ssdeMGy) +
+            " <small>(diâmetro efetivo " + SimTC.fmt.cm(dz.diametroEfetivoCm) +
+            " · fator " + SimTC.fmt.n(dz.fatorSSDE, 2) + " · AAPM 204)</small>");
           if (dz.ssdeMGy > dz.ctdivol * 1.1) {
             rows.push('<span class="is-bad">Paciente menor que o fantoma: a dose real é MAIOR que o CTDIvol indica.</span>');
           } else if (dz.ssdeMGy < dz.ctdivol * 0.9) {
@@ -901,8 +901,8 @@
           }
         }
         if (dz.doseEfetivaMSv != null) {
-          rows.push("<strong>Dose efetiva (estimada):</strong> " + dz.doseEfetivaMSv.toFixed(2) +
-            " mSv <small>(DLP × k = " + dz.kEfetiva + ", fator de conversão regional)</small>");
+          rows.push("<strong>Dose efetiva (estimada):</strong> " + SimTC.fmt.mSv(dz.doseEfetivaMSv) +
+            " <small>(DLP × k = " + dz.kEfetiva + ", fator de conversão regional)</small>");
         }
         if (dz.drlDLP) {
           rows.push(dz.acimaDoDRL
@@ -1261,7 +1261,7 @@
             var ped = pedidas[q] && pedidas[q].espessuraMm;
             if (ped && obtidas[q].espessuraMm > ped * 1.05) {
               limitadas.push(obtidas[q].nome + " (" + ped + " → " +
-                obtidas[q].espessuraMm.toFixed(2) + " mm)");
+                SimTC.fmt.mm(obtidas[q].espessuraMm, 2) + ")");
             }
           }
           if (limitadas.length) {
@@ -1395,7 +1395,7 @@
         inverterMonocromatico: false,
         label: pac && pac.nome ? pac.nome : "Exame simulado",
         notes: "HU reconstruídos por FBP a partir de projeções com ruído de Poisson" +
-          (dz && dz.ctdivol != null ? " · CTDIvol " + dz.ctdivol.toFixed(1) + " mGy" : "") +
+          (dz && dz.ctdivol != null ? " · CTDIvol " + SimTC.fmt.mGy(dz.ctdivol) : "") +
           ". Uso educacional — sem valor diagnóstico.",
         attribution: (manifest && manifest.fonte) ? manifest.fonte.nome : "Simulador TC Educacional"
       };
@@ -1443,12 +1443,12 @@
       rows.push("<strong>Paciente:</strong> " + (pac ? esc(pac.nome) + (pac.prontuario ? " · Pront. " + esc(pac.prontuario) : "") : "—"));
       var scoutTxt = pp.scout === "frontal" ? "frontal/AP" : "lateral";
       var fovLbl = pp.scout === "frontal" ? "FOV R-L" : "FOV A-P";
-      rows.push("<strong>Protocolo:</strong> " + (prot ? esc(prot.nome) : "—") + " · scout " + scoutTxt + " · " + modoTxt + (pp.tiltDeg ? (", tilt " + pp.tiltDeg.toFixed(0) + "°") : "") + " · " + (pp.direcao === "craniocaudal" ? "crânio-caudal" : "caudo-cranial"));
-      rows.push("<strong>Faixa:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + Math.max(0, fovSpan()).toFixed(0) + "%");
+      rows.push("<strong>Protocolo:</strong> " + (prot ? esc(prot.nome) : "—") + " · scout " + scoutTxt + " · " + modoTxt + (pp.tiltDeg ? (", tilt " + SimTC.fmt.graus(pp.tiltDeg)) : "") + " · " + (pp.direcao === "craniocaudal" ? "crânio-caudal" : "caudo-cranial"));
+      rows.push("<strong>Faixa:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + SimTC.fmt.pct(Math.max(0, fovSpan())));
       if (rel && rel.ctdivol != null && rel.dlp != null) {
-        rows.push("<strong>Dose prevista:</strong> CTDIvol " + rel.ctdivol.toFixed(1) +
-          " mGy · DLP " + Math.round(rel.dlp) +
-          " mGy·cm <small>(calculado de kV, mAs, pitch e faixa)</small>");
+        rows.push("<strong>Dose prevista:</strong> CTDIvol " + SimTC.fmt.mGy(rel.ctdivol) +
+          " · DLP " + SimTC.fmt.mGycm(rel.dlp) +
+          " <small>(calculado de kV, mAs, pitch e faixa)</small>");
       } else {
         rows.push("<strong>Dose prevista:</strong> não calculada — informe kV e mAs no protocolo.");
       }
@@ -1456,7 +1456,7 @@
       rows.push(chk(!!pac, "Paciente cadastrado"));
       rows.push(chk(!SimTC.tableDriveApi || SimTC.tableDriveApi.isPatientOnTable(), "Paciente posicionado na mesa"));
       rows.push(chk(problems().length === 0, "Faixa e FOV válidos"));
-      if (iso != null) rows.push(chk(Math.abs(iso) <= 4, "Isocentro (" + iso.toFixed(1) + " cm do centro)"));
+      if (iso != null) rows.push(chk(Math.abs(iso) <= 4, "Isocentro (" + SimTC.fmt.cm(iso) + " do centro)"));
       // ---- ACHADOS DO MOTOR DE VALIDACAO (Fase 10) ---------------------
       // Confirmacao INFORMADA, nao bloqueio: o aluno ve a consequencia
       // prevista e decide. So ERRO impede — e erro aqui significa

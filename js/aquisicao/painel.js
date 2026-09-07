@@ -85,16 +85,18 @@
       // confirmação, com a faixa do exame, que é o que ela depende.
       var n = window.SimTCCore.model.normalizarProtocolo(p);
       var aq = n.aquisicao, r = n.reconstrucoes[0] || {};
-      var un = function (v, u) { return v == null ? null : String(v).replace(".", ",") + (u || ""); };
+      // Formatacao: js/ui/formatar.js. Este painel tinha a sua propria, e
+      // era a UNICA tela que ja escrevia com virgula — o resto do app dizia
+      // "87.0 mGy" com ponto. Agora e uma convencao so.
+      var F = SimTC.fmt;
       var rows = [
-        ["kV", un(aq.kv)], ["mAs", un(aq.mas)],
-        ["Pitch", aq.modo === "sequencial" ? "não se aplica" : un(aq.pitch)],
-        ["FOV", un(r.fovMm, " mm")],
-        ["Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " +
-          String(aq.colimacao.larguraMm).replace(".", ",") + " mm") : null],
-        ["Esp. corte", un(r.espessuraMm, " mm")],
-        ["Kernel", r.kernel], ["Rotação", un(aq.tempoRotacaoS, " s")],
-        ["Modo", modoTxt(aq.modo)], ["Tilt", un(aq.tiltGantryDeg, "°")]
+        ["kV", F.n(aq.kv)], ["mAs", F.n(aq.mas)],
+        ["Pitch", aq.modo === "sequencial" ? "não se aplica" : F.n(aq.pitch)],
+        ["FOV", F.mm(r.fovMm, 0)],
+        ["Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " + F.mm(aq.colimacao.larguraMm)) : null],
+        ["Esp. corte", F.mm(r.espessuraMm)],
+        ["Kernel", r.kernel], ["Rotação", F.s(aq.tempoRotacaoS)],
+        ["Modo", modoTxt(aq.modo)], ["Tilt", F.graus(aq.tiltGantryDeg)]
       ];
       rows.forEach(function (linha) {
         html += '<div class="acq-param"><span class="acq-param__k">' + linha[0] + '</span>' +

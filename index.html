@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907q" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907q" />
+  <link rel="stylesheet" href="css/style.css?v=20260907u" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907u" />
 </head>
 <body data-theme="dark">
 
@@ -425,7 +425,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907q"
+          src="dicom-viewer/index.html?embedded=1&v=20260907u"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -439,64 +439,68 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907q";</script>
+  <script>window.__SIMTC_REV__ = "20260907u";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907q"></script>
+  <script src="js/phantoms.js?v=20260907u"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907q"></script>
-  <script src="core/clock.js?v=20260907q"></script>
-  <script src="core/model/patient.js?v=20260907q"></script>
-  <script src="core/model/protocol.js?v=20260907q"></script>
-  <script src="core/model/exam.js?v=20260907q"></script>
-  <script src="core/state.js?v=20260907q"></script>
-  <script src="core/phantom/volume.js?v=20260907q"></script>
-  <script src="core/phantom/acervo.js?v=20260907q"></script>
-  <script src="core/acquisition/fisica.js?v=20260907q"></script>
-  <script src="core/acquisition/noise.js?v=20260907q"></script>
-  <script src="core/acquisition/projector.js?v=20260907q"></script>
-  <script src="core/acquisition/scan.js?v=20260907q"></script>
-  <script src="core/dose/ctdi.js?v=20260907q"></script>
-  <script src="core/dose/aec.js?v=20260907q"></script>
-  <script src="core/protocol/validacao.js?v=20260907q"></script>
-  <script src="core/protocol/gestor.js?v=20260907q"></script>
-  <script src="core/dicom/writer.js?v=20260907q"></script>
-  <script src="core/recon/serie.js?v=20260907q"></script>
+  <script src="core/bus.js?v=20260907u"></script>
+  <script src="core/clock.js?v=20260907u"></script>
+  <script src="core/model/patient.js?v=20260907u"></script>
+  <script src="core/model/protocol.js?v=20260907u"></script>
+  <script src="core/model/exam.js?v=20260907u"></script>
+  <script src="core/state.js?v=20260907u"></script>
+  <script src="core/phantom/volume.js?v=20260907u"></script>
+  <script src="core/phantom/acervo.js?v=20260907u"></script>
+  <script src="core/acquisition/fisica.js?v=20260907u"></script>
+  <script src="core/acquisition/noise.js?v=20260907u"></script>
+  <script src="core/acquisition/projector.js?v=20260907u"></script>
+  <script src="core/acquisition/scan.js?v=20260907u"></script>
+  <script src="core/dose/ctdi.js?v=20260907u"></script>
+  <script src="core/dose/aec.js?v=20260907u"></script>
+  <script src="core/protocol/validacao.js?v=20260907u"></script>
+  <script src="core/protocol/gestor.js?v=20260907u"></script>
+  <script src="core/dicom/writer.js?v=20260907u"></script>
+  <script src="core/recon/serie.js?v=20260907u"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907q"></script>
+  <script src="js/shared.js?v=20260907u"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907q"></script>
+  <script src="app/contratos.js?v=20260907u"></script>
+
+  <!-- Camada ui/: como o app escreve numero, num lugar so (ETAPA 7) -->
+  <script src="js/ui/formatar.js?v=20260907u"></script>
+  <script src="js/ui/confirmar.js?v=20260907u"></script>
 
   <!-- Módulos de telas -->
   <!-- Peças que sairam do monolito da sala (ETAPA 6) -->
-  <script src="js/sala/cenario.js?v=20260907q"></script>
-  <script src="js/sala/paciente.js?v=20260907q"></script>
-  <script src="js/sala/gantry.js?v=20260907q"></script>
-  <script src="js/sala-exame.js?v=20260907q"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907q"></script>
-  <script src="js/protocolos.js?v=20260907q"></script>
+  <script src="js/sala/cenario.js?v=20260907u"></script>
+  <script src="js/sala/paciente.js?v=20260907u"></script>
+  <script src="js/sala/gantry.js?v=20260907u"></script>
+  <script src="js/sala-exame.js?v=20260907u"></script>
+  <script src="js/cadastro-pacientes.js?v=20260907u"></script>
+  <script src="js/protocolos.js?v=20260907u"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907q"></script>
-  <script src="js/motor-imagem.js?v=20260907q"></script>
-  <script src="js/exportar-dicom.js?v=20260907q"></script>
-  <script src="js/medidas.js?v=20260907q"></script>
+  <script src="js/fonte-volume.js?v=20260907u"></script>
+  <script src="js/motor-imagem.js?v=20260907u"></script>
+  <script src="js/exportar-dicom.js?v=20260907u"></script>
+  <script src="js/medidas.js?v=20260907u"></script>
   <!-- Peças que sairam do monolito da aquisicao (ETAPA 6) -->
-  <script src="js/aquisicao/som.js?v=20260907q"></script>
-  <script src="js/aquisicao/painel.js?v=20260907q"></script>
-  <script src="js/aquisicao.js?v=20260907q"></script>
-  <script src="js/mpr.js?v=20260907q"></script>
-  <script src="js/ui-layout.js?v=20260907q"></script>
+  <script src="js/aquisicao/som.js?v=20260907u"></script>
+  <script src="js/aquisicao/painel.js?v=20260907u"></script>
+  <script src="js/aquisicao.js?v=20260907u"></script>
+  <script src="js/mpr.js?v=20260907u"></script>
+  <script src="js/ui-layout.js?v=20260907u"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907q"></script>
+  <script src="script.js?v=20260907u"></script>
 
   <!-- Controlador de abas mobile (independente) -->
-  <script src="js/mobile-tabs.js?v=20260907q"></script>
+  <script src="js/mobile-tabs.js?v=20260907u"></script>
 </body>
 </html>

@@ -12,8 +12,24 @@
  * FOV/matriz — não a imagem em tons de cinza da tela. Uma distância medida
  * aqui é a distância física.
  *
- * Depende de: js/motor-imagem.js
+ * Depende de: js/motor-imagem.js, js/ui/formatar.js
  * Script clássico.
+ *
+ * DUPLICAÇÃO DELIBERADA. Existe um segundo módulo de medidas em
+ * `dicom-viewer/js/medidas.js`, e a auditoria o apontou como duplicação. A
+ * ETAPA 7 decidiu NÃO unificar, e o motivo fica registrado aqui para que
+ * ninguém "conserte" isso por engano:
+ *
+ *   • `dicom-viewer/` é cópia vendorizada de outro repositório
+ *     (Jonas-oa/Leitor-Dicon), com licença própria e um README que aponta o
+ *     commit de origem. Unificar exigiria acoplá-lo ao `core/` deste projeto,
+ *     e ressincronizar com o upstream deixaria de ser possível.
+ *   • Os modelos diferem de verdade: lá se mede num volume com espaçamento
+ *     por eixo, em três planos; aqui, numa série reconstruída com `pixelMm`
+ *     escalar, só no axial.
+ *
+ * O que os dois têm em comum é a fórmula, não a estrutura. A fronteira é de
+ * vendor, e nomear a fronteira vale mais do que apagá-la.
  */
 (function () {
   "use strict";
@@ -142,13 +158,13 @@
           linha(ctx, p[0], p[1]);
           alca(ctx, p[0]); alca(ctx, p[1]);
           var d = distanciaMm(p[0], p[1]);
-          if (d != null) rotulo(ctx, meio(p[0], p[1]), d.toFixed(1) + " mm");
+          if (d != null) rotulo(ctx, meio(p[0], p[1]), SimTC.fmt.mm(d));
         } else if (m.tipo === "angulo" && p.length >= 2) {
           linha(ctx, p[0], p[1]);
           if (p.length >= 3) {
             linha(ctx, p[1], p[2]);
             var a = anguloGraus(p[0], p[1], p[2]);
-            if (a != null) rotulo(ctx, p[1], a.toFixed(1) + "°");
+            if (a != null) rotulo(ctx, p[1], SimTC.fmt.graus(a, 1));
           }
           p.forEach(function (q) { alca(ctx, q); });
         } else if (m.tipo === "roi" && p.length >= 2) {
@@ -184,17 +200,17 @@
         var p = m.pontos;
         if (m.tipo === "distancia" && p.length >= 2) {
           var d = distanciaMm(p[0], p[1]);
-          html += item(i, "Distância", d != null ? d.toFixed(1) + " mm" : "—");
+          html += item(i, "Distância", d != null ? SimTC.fmt.mm(d) : "—");
         } else if (m.tipo === "angulo" && p.length >= 3) {
           var a = anguloGraus(p[0], p[1], p[2]);
-          html += item(i, "Ângulo", a != null ? a.toFixed(1) + "°" : "—");
+          html += item(i, "Ângulo", a != null ? SimTC.fmt.graus(a, 1) : "—");
         } else if (m.tipo === "roi" && p.length >= 2) {
           var e = m.resultado;
           if (e) {
             html += item(i, "ROI",
-              "<b>" + e.media.toFixed(1) + " HU</b> ± " + e.dp.toFixed(1) +
+              "<b>" + SimTC.fmt.hu(e.media) + "</b> ± " + SimTC.fmt.n(e.dp, 1) +
               " <small>(mín " + e.min + " · máx " + e.max + " · " +
-              e.pixels + " px · " + e.areaMm2.toFixed(0) + " mm²)</small>");
+              e.pixels + " px · " + SimTC.fmt.mm2(e.areaMm2) + ")</small>");
           }
         }
       });

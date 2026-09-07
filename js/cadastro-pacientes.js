@@ -138,9 +138,19 @@
         del.textContent = "✕";
         del.addEventListener("click", function (ev) {
           ev.stopPropagation();       // excluir não é selecionar
-          if (!window.confirm("Excluir o paciente \"" + p.nome + "\" da lista de trabalho?")) return;
-          worklist.remover(p.id);
-          persistDel(p.id).then(function () { renderList(); renderExamList(); });
+          // Confirmação do app (js/ui/confirmar.js), não a do navegador: esta
+          // diz o que se perde, e o foco começa no Cancelar.
+          SimTC.confirmar({
+            titulo: "Excluir o paciente da lista de trabalho?",
+            texto: "\"" + p.nome + "\" sai da lista. Os exames já realizados " +
+                   "continuam no histórico, mas deixam de apontar para um paciente " +
+                   "cadastrado. Se houver um exame em curso com ele, o exame é interrompido.",
+            acao: "Excluir paciente"
+          }).then(function (sim) {
+            if (!sim) return;
+            worklist.remover(p.id);
+            persistDel(p.id).then(function () { renderList(); renderExamList(); });
+          });
         });
         li.appendChild(del);
 
@@ -231,10 +241,18 @@
         del.setAttribute("aria-label", "Excluir exame");
         del.textContent = "✕";
         del.addEventListener("click", function () {
-          if (!window.confirm("Excluir este exame do histórico?")) return;
-          estudos = estudos.filter(function (x) { return x.studyUID !== e.studyUID; });
-          if (!memoryFallback) SimTC.dbStoreDel("estudos", e.studyUID).catch(function () {});
-          renderEstudos();
+          SimTC.confirmar({
+            titulo: "Excluir este exame do histórico?",
+            texto: "O registro de " + (e.pacienteNome || "paciente") +
+                   (e.protocoloNome ? " (" + e.protocoloNome + ")" : "") +
+                   " é apagado do dispositivo. Não há como recuperá-lo.",
+            acao: "Excluir exame"
+          }).then(function (sim) {
+            if (!sim) return;
+            estudos = estudos.filter(function (x) { return x.studyUID !== e.studyUID; });
+            if (!memoryFallback) SimTC.dbStoreDel("estudos", e.studyUID).catch(function () {});
+            renderEstudos();
+          });
         });
         li.appendChild(del);
 

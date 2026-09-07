@@ -63,23 +63,10 @@
     // apresentacao explicita: `paraFormulario` formata numeros para os campos
     // e `doFormulario` os le de volta. Nada mais interpreta texto.
 
-    /**
-     * Numero -> valor do campo. Vazio quando nao ha.
-     *
-     * DECIMAL COM PONTO, e nao com virgula: os campos do editor sao
-     * `input[type=number]`, e um valor com virgula e INVALIDO para eles — o
-     * navegador o descarta em silencio e o campo aparece vazio. Foi o que
-     * aconteceu com a colimacao (0,6 mm) e o tempo de rotacao (0,5 s) na
-     * primeira versao desta tela tipada: o protocolo tinha o valor, o editor
-     * mostrava em branco, e salvar por cima o apagaria.
-     *
-     * A virgula continua sendo a forma de EXIBIR — em texto, fora de campo
-     * numerico (ver `renderParams` na tela de aquisicao). `ler()` aceita as
-     * duas, porque um arquivo importado pode trazer qualquer uma.
-     */
-    function mostrar(n) {
-      return (n == null || !isFinite(n)) ? "" : String(n);
-    }
+    // Valor para input[type=number]: js/ui/formatar.js. A regra de por que e
+    // PONTO e nao virgula esta la, com o defeito que a originou.
+    function mostrar(n) { return SimTC.fmt.paraCampo(n); }
+
     /** Texto do campo -> numero, ou null. Aceita virgula e ponto. */
     function ler(v) {
       if (v == null) return null;

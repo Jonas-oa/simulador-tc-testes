@@ -997,14 +997,14 @@
         // caso contrário, 0 mm = totalmente retraída.
         var refZ = (tableZeroRef !== null) ? tableZeroRef : TABLE_Z_MAX;
         var posMm = (refZ - tableZ) * 1000;
-        var posText = (posMm >= 0 ? "" : "-") + Math.abs(posMm).toFixed(1).padStart(5, "0");
+        var posText = (posMm >= 0 ? "" : "-") + SimTC.fmt.n(Math.abs(posMm), 1).padStart(5, "0");
         if (hudPositionEl) hudPositionEl.innerHTML = posText + " <small>mm</small>";
         if (displayTableEl) displayTableEl.textContent = posText + " mm";
-        if (hudSpeedEl) hudSpeedEl.innerHTML = currentSpeedMmS.toFixed(1) + " <small>mm/s</small>";
+        if (hudSpeedEl) hudSpeedEl.innerHTML = SimTC.fmt.n(currentSpeedMmS, 1) + " <small>mm/s</small>";
 
         // Altura da mesa em cm (útil para calibrar/verificar os limites).
         var heightCm = tableY * 100;
-        var heightText = heightCm.toFixed(1);
+        var heightText = SimTC.fmt.n(heightCm, 1);
         if (hudHeightEl) hudHeightEl.innerHTML = heightText + " <small>cm</small>";
         if (displayHeightEl) displayHeightEl.textContent = heightText + " cm";
 

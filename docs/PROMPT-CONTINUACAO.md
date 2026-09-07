@@ -9,8 +9,8 @@
 > Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
 > **ETAPAS 1 a 5 concluídas e a 6 em curso** — a rede de segurança está de pé, **os 9 P1
 > estão corrigidos**, a interface fala com o núcleo, o protocolo é tipado de ponta a ponta e
-> ~860 linhas saíram dos dois monólitos. A ETAPA 6 **não terminou**: o que falta e por quê
-> está no BLOCO 5.
+> ~860 linhas saíram dos dois monólitos e a camada `ui/` começou. As ETAPAS 6 e 7 **não
+> terminaram**: o que falta, e por quê, está no BLOCO 5.
 
 ---
 
@@ -425,7 +425,14 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
         `autoDrive`, `phase`, `boxState`), e separá-las não é recorte: é decidir quem passa a
         ser dono de cada estado. Trabalho da ETAPA 7, quando a camada `ui/` definir as
         fronteiras — não force antes disso.
-- [ ] **ETAPA 7 — Camada `ui/` e fim das duplicações** *(grande)*
+- [~] **ETAPA 7 — Camada `ui/` e fim das duplicações** *(grande — EM CURSO)*
+  - [x] `js/ui/formatar.js` — **como este app escreve número, num lugar só.** Havia 31 `toFixed()` espalhados por três arquivos, e `toFixed` devolve PONTO: o app, que é em português, dizia "CTDIvol 87.0 mGy" ao lado de um painel que dizia "0,6 mm". Agora é uma convenção, com unidade junto e travessão para valor ausente.
+  - [x] `js/ui/confirmar.js` — **uma confirmação só para o que não se desfaz.** Irradiar tinha modal próprio; excluir paciente e apagar exame usavam `window.confirm`. As duas ações irreversíveis usavam o mecanismo mais pobre. O novo diálogo diz o que se perde, o foco começa em Cancelar e Esc/clique fora cancelam.
+  - [x] `SimTC.esc` — feito na ETAPA 6.
+  - [x] **Medidas duplicadas: decidido NÃO unificar.** `dicom-viewer/` é cópia vendorizada de outro repositório (Jonas-oa/Leitor-Dicon), com licença e README próprios, e não referencia nada fora da própria pasta. Unificar exigiria acoplá-lo ao `core/` e impediria ressincronizar com o upstream. A razão está escrita nos dois arquivos, para ninguém "consertar" por engano.
+  - [ ] `js/ui/campo.js` e `js/ui/lista.js` — a camada de componente propriamente dita. Campo, lista e item ainda são HTML string montado em cada módulo.
+  - [ ] **Shell do leitor** — `app.js` (581) e `app-celular.js` (533) têm 12 funções homônimas, e o do celular não recebeu medidas nem slab. É trabalho DENTRO da pasta vendorizada: `comum.js` já existe para o que é compartilhado, e é para lá que essas funções devem ir.
+  - [ ] `window.prompt` em `js/protocolos.js` (nomear cópia, nomear protocolo novo) — precisa de um modal de ENTRADA, que o `confirmar.js` não cobre.
 - [ ] **ETAPA 8 — Um controlador de layout** *(média)*
 - [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*
       Acrescentar aos itens da auditoria: os mostradores (HUD, display do console, isocentro)
