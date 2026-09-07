@@ -44,12 +44,60 @@
     var cmpFechar = document.getElementById("proto-cmp-fechar");
     if (!listEl || !editor || !regionLabel) return;
 
-    var FIELDS = ["kv", "mas", "pitch", "scout", "direcao", "modo", "tilt", "rot", "colim", "thick", "kernel", "fov", "dose"];
-    var FIELD_KEYS = { kv: "kv", mas: "mas", pitch: "pitch", scout: "scout", direcao: "direcao", modo: "modo", tilt: "tilt", rot: "rotacao", colim: "colimacao", thick: "espessura", kernel: "kernel", fov: "fov", dose: "dose" };
-    // Orientação padrão do topograma por região: lateral em crânio/coluna
+    // ---- O REGISTRO E O MODELO TIPADO ------------------------------------
+    //
+    // Ate a ETAPA 5, o que se gravava era a forma plana, em texto:
+    //
+    //     kv: "120"   pitch: "0,55"   fov: "220-250 mm"
+    //     dose: "~55 mGy (ref.)"
+    //     espessura: "5,0 mm encefalo / 1,25 mm osso"
+    //
+    // O modelo tipado existia em core/model/protocol.js, mas era calculado sob
+    // demanda por cada consumidor e descartado — nunca era o que ficava no
+    // banco. Dai vinham dois parsers divergentes, um FOV que era uma faixa num
+    // campo de valor unico, uma espessura com dois valores no mesmo campo, e
+    // uma dose digitada que reaparecia no arquivo do exame depois de a Fase 6
+    // ter passado a calcula-la.
+    //
+    // Agora o registro E o modelo tipado. Esta tela ganha uma camada de
+    // apresentacao explicita: `paraFormulario` formata numeros para os campos
+    // e `doFormulario` os le de volta. Nada mais interpreta texto.
+
+    /**
+     * Numero -> valor do campo. Vazio quando nao ha.
+     *
+     * DECIMAL COM PONTO, e nao com virgula: os campos do editor sao
+     * `input[type=number]`, e um valor com virgula e INVALIDO para eles — o
+     * navegador o descarta em silencio e o campo aparece vazio. Foi o que
+     * aconteceu com a colimacao (0,6 mm) e o tempo de rotacao (0,5 s) na
+     * primeira versao desta tela tipada: o protocolo tinha o valor, o editor
+     * mostrava em branco, e salvar por cima o apagaria.
+     *
+     * A virgula continua sendo a forma de EXIBIR — em texto, fora de campo
+     * numerico (ver `renderParams` na tela de aquisicao). `ler()` aceita as
+     * duas, porque um arquivo importado pode trazer qualquer uma.
+     */
+    function mostrar(n) {
+      return (n == null || !isFinite(n)) ? "" : String(n);
+    }
+    /** Texto do campo -> numero, ou null. Aceita virgula e ponto. */
+    function ler(v) {
+      if (v == null) return null;
+      var s = String(v).trim().replace(",", ".");
+      if (!s) return null;
+      var n = parseFloat(s);
+      return isFinite(n) ? n : null;
+    }
+
+    function tipado(cru) {
+      return window.SimTCCore.model.normalizarProtocolo(cru || {});
+    }
+
+    // Orientacao padrao do topograma por regiao: lateral em cranio/coluna
     // (perfil), frontal (AP) na maioria dos demais exames.
     function defaultScout(regiao) {
-      return (regiao === "Crânio" || regiao === "Coluna") ? "lateral" : "frontal";
+      return (regiao === "Cranio" || regiao === "Cr\u00e2nio" ||
+              regiao === "Coluna") ? "lateral" : "frontal";
     }
     function inputEl(f) { return document.getElementById("ws-param-" + f); }
 
@@ -59,105 +107,143 @@
     var mode = "view";
     var memoryFallback = false;
 
+    /** Protocolo novo: tipado, com os campos clinicos em branco de proposito. */
     function blank(id, nome, regiao) {
-      return { id: id, nome: nome, regiao: regiao, kv: "", mas: "", pitch: "", scout: defaultScout(regiao), direcao: "caudocranial", modo: "helicoidal", tilt: "", rotacao: "", colimacao: "", espessura: "", kernel: "", fov: "", dose: "", obs: "" };
+      var p = tipado({ id: id, nome: nome, regiao: regiao,
+                       scout: defaultScout(regiao), modo: "helicoidal" });
+      p.id = id; p.nome = nome; p.regiao = regiao;
+      p.esquema = ESQUEMA;
+      return p;
     }
 
-    // Etapa D — valores DIDÁTICOS de referência (AAPM / DRLs) para TC de crânio.
-    // Editáveis pelo usuário; ele é o responsável técnico pelos parâmetros finais.
+    /**
+     * Um protocolo esta "em branco" quando faltam os quatro parametros sem os
+     * quais o exame nao pode existir. Pitch, colimacao e rotacao tem padrao de
+     * equipamento; kV, mAs, espessura e FOV nao tem — e sao exatamente os que
+     * o motor de validacao cobra.
+     */
+    function isClinicallyBlank(p) {
+      var aq = (p && p.aquisicao) || {};
+      var r = (p && p.reconstrucoes && p.reconstrucoes[0]) || {};
+      return aq.kv == null && aq.mas == null && r.espessuraMm == null && r.fovMm == null;
+    }
+
+    /** Aplica um remendo tipado sobre o protocolo. */
+    function aplicar(p, patch) {
+      var aq = p.aquisicao, r = p.reconstrucoes[0];
+      if (patch.modo) aq.modo = patch.modo;
+      if (patch.kv != null) aq.kv = patch.kv;
+      if (patch.mas != null) aq.mas = patch.mas;
+      if (patch.pitch !== undefined) aq.pitch = (aq.modo === "sequencial") ? null : patch.pitch;
+      if (patch.rotacaoS != null) aq.tempoRotacaoS = patch.rotacaoS;
+      if (patch.tiltDeg != null) aq.tiltGantryDeg = patch.tiltDeg;
+      if (patch.direcao) aq.direcao = patch.direcao;
+      if (patch.colimacao) {
+        aq.colimacao = { nDetectores: patch.colimacao[0], larguraMm: patch.colimacao[1],
+                         totalMm: patch.colimacao[0] * patch.colimacao[1] };
+      }
+      if (patch.scout) p.scout.orientacao = patch.scout;
+      if (patch.espessuraMm != null) { r.espessuraMm = patch.espessuraMm; r.incrementoMm = patch.espessuraMm; }
+      if (patch.kernel) r.kernel = patch.kernel;
+      if (patch.fovMm != null) r.fovMm = patch.fovMm;
+      // Bandeira derivada: recalculada a cada remendo.
+      aq.pitchIgnorado = aq.modo === "sequencial" && patch.pitch != null;
+      return p;
+    }
+
+    // Referencias DIDATICAS (AAPM / DRL) para TC de cranio. Editaveis: quem
+    // define o parametro final do servico e o responsavel tecnico.
+    //
+    // O cranio e a unica entrada do catalogo que ja nasce com valores, e por
+    // isso nasce TRAVADA. Ate a ETAPA 5 essa trava nunca chegava a ser
+    // aplicada: `p.bloqueado = true` estava dentro de um `if (isClinicallyBlank)`
+    // que era falso justamente para o cranio, que nasce preenchido. Medido:
+    // zero de dezesseis protocolos travados, em qualquer caminho de carga.
+    //
+    // O pitch some daqui: o cranio e sequencial, e no step-and-shoot a mesa
+    // fica parada durante a rotacao. O catalogo trazia "0,55" ao lado de
+    // "sequencial" — a contradicao exata que o motor de validacao existe para
+    // acusar, e que ele nao conseguia ver.
     function cranioDefaults() {
       return {
-        kv: "120",
-        mas: "300",
-        pitch: "0,55",
-        scout: "lateral",
-        direcao: "caudocranial",
-        modo: "sequencial",
-        tilt: "0",
-        rotacao: "1,0",
-        colimacao: "64 × 0,6 mm",
-        espessura: "5,0 mm encéfalo / 1,25 mm osso",
-        kernel: "Encéfalo (liso) + Osso (nítido)",
-        fov: "220–250 mm",
-        dose: "≈55 mGy (ref.)"
+        kv: 120, mas: 300, modo: "sequencial", pitch: null,
+        rotacaoS: 1.0, tiltDeg: 0, direcao: "caudocranial", scout: "lateral",
+        colimacao: [64, 0.6], espessuraMm: 5.0, kernel: "liso", fovMm: 240
       };
     }
-    function cranioObs() { return "Valores didáticos de referência (AAPM/DRL). Ajuste conforme o serviço."; }
+    function cranioObs() {
+      return "Valores did\u00e1ticos de refer\u00eancia (AAPM/DRL). Ajuste conforme o servi\u00e7o. " +
+             "A dose n\u00e3o \u00e9 digitada: CTDIvol e DLP saem do c\u00e1lculo.";
+    }
 
-    // Valores de PARTIDA para as demais entradas do catálogo.
+    // Valores de PARTIDA para as demais entradas do catalogo.
     //
-    // Antes só o crânio vinha preenchido e as outras quinze ficavam em branco.
-    // Enquanto o acervo tinha volume só para crânio e tórax isso passava
-    // despercebido; com abdome, pelve e coluna cobertos, o efeito ficou
-    // evidente e imediato: o aluno escolhia o protocolo, chegava até a
-    // confirmação e recebia "Tensão do tubo (kV) não definida" — cinco
-    // impedimentos que ele não tinha como saber que precisava preencher. Um
-    // simulador que só examina cabeça não é um simulador de tomógrafo.
+    // Antes so o cranio vinha preenchido e as outras quinze ficavam em branco:
+    // o aluno escolhia o protocolo, chegava a confirmacao e recebia "Tensao do
+    // tubo (kV) nao definida" — impedimentos que ele nao tinha como saber que
+    // precisava preencher.
     //
-    // São referências DIDÁTICAS de adulto médio, na mesma linha das do crânio,
-    // e continuam editáveis: quem define o parâmetro final do serviço é o
-    // responsável técnico. Preenchem apenas entradas em branco — nada que o
-    // usuário tenha digitado é sobrescrito.
+    // Sao referencias DIDATICAS de adulto medio, editaveis, e preenchem apenas
+    // entradas em branco: nada que o usuario tenha digitado e sobrescrito.
     var PADROES = {
-      face:      { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "lateral" },
-      saf:       { kv: "120", mas: "150", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "lateral" },
-      orbitas:   { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "180 mm", scout: "lateral" },
-      atm:       { kv: "120", mas: "200", pitch: "0,8",  espessura: "0,6 mm", kernel: "Osso (nítido)",    fov: "160 mm", scout: "lateral" },
-      pescoco:   { kv: "120", mas: "250", pitch: "0,8",  espessura: "2,0 mm", kernel: "Partes moles",     fov: "220 mm", scout: "lateral" },
-      torax:     { kv: "120", mas: "150", pitch: "1,0",  espessura: "2,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
-      torax_ar:  { kv: "120", mas: "200", pitch: "1,0",  espessura: "1,0 mm", kernel: "Pulmão (nítido)",  fov: "450 mm", scout: "frontal" },
-      abd_total: { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
-      abd_sup:   { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
-      pelve:     { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
-      col_cerv:  { kv: "120", mas: "250", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
-      col_tor:   { kv: "120", mas: "300", pitch: "0,8",  espessura: "2,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
-      col_lomb:  { kv: "120", mas: "300", pitch: "0,8",  espessura: "2,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
-      memb_sup:  { kv: "120", mas: "150", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "frontal" },
-      memb_inf:  { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "250 mm", scout: "frontal" }
+      face:      { kv: 120, mas: 200, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 200, scout: "lateral" },
+      saf:       { kv: 120, mas: 150, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 200, scout: "lateral" },
+      orbitas:   { kv: 120, mas: 200, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 180, scout: "lateral" },
+      atm:       { kv: 120, mas: 200, pitch: 0.8, espessuraMm: 0.6, kernel: "nitido", fovMm: 160, scout: "lateral" },
+      pescoco:   { kv: 120, mas: 250, pitch: 0.8, espessuraMm: 2.0, kernel: "liso",   fovMm: 220, scout: "lateral" },
+      torax:     { kv: 120, mas: 150, pitch: 1.0, espessuraMm: 2.0, kernel: "liso",   fovMm: 450, scout: "frontal" },
+      torax_ar:  { kv: 120, mas: 200, pitch: 1.0, espessuraMm: 1.0, kernel: "nitido", fovMm: 450, scout: "frontal" },
+      abd_total: { kv: 120, mas: 250, pitch: 0.9, espessuraMm: 3.0, kernel: "liso",   fovMm: 450, scout: "frontal" },
+      abd_sup:   { kv: 120, mas: 250, pitch: 0.9, espessuraMm: 3.0, kernel: "liso",   fovMm: 450, scout: "frontal" },
+      pelve:     { kv: 120, mas: 250, pitch: 0.9, espessuraMm: 3.0, kernel: "liso",   fovMm: 450, scout: "frontal" },
+      col_cerv:  { kv: 120, mas: 250, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 450, scout: "lateral" },
+      col_tor:   { kv: 120, mas: 300, pitch: 0.8, espessuraMm: 2.0, kernel: "nitido", fovMm: 450, scout: "lateral" },
+      col_lomb:  { kv: 120, mas: 300, pitch: 0.8, espessuraMm: 2.0, kernel: "nitido", fovMm: 450, scout: "lateral" },
+      memb_sup:  { kv: 120, mas: 150, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 200, scout: "frontal" },
+      memb_inf:  { kv: 120, mas: 200, pitch: 0.8, espessuraMm: 1.0, kernel: "nitido", fovMm: 250, scout: "frontal" }
     };
-    var COMUNS = { modo: "helicoidal", direcao: "caudocranial",
-                   tilt: "0", rotacao: "0,5", colimacao: "64 × 0,6 mm" };
+    var COMUNS = { modo: "helicoidal", direcao: "caudocranial", tiltDeg: 0,
+                   rotacaoS: 0.5, colimacao: [64, 0.6] };
     function padroesObs() {
-      return "Valores didáticos de referência para adulto médio. " +
-             "Ajuste conforme o serviço e o porte do paciente. " +
+      return "Valores did\u00e1ticos de refer\u00eancia para adulto m\u00e9dio. " +
+             "Ajuste conforme o servi\u00e7o e o porte do paciente. " +
              "O FOV precisa CONTER o paciente: neste motor o recorte de campo " +
-             "acontece antes da projeção, então um FOV menor trunca de verdade " +
-             "— não é reconstrução dirigida.";
+             "acontece antes da proje\u00e7\u00e3o, ent\u00e3o um FOV menor trunca de verdade " +
+             "\u2014 n\u00e3o \u00e9 reconstru\u00e7\u00e3o dirigida.";
     }
 
     function aplicarPadroesSeEmBranco() {
       protocols.forEach(function (p) {
         var d = PADROES[p.id];
         if (!d || !isClinicallyBlank(p)) return;
-        for (var k in COMUNS) { if (COMUNS.hasOwnProperty(k) && !p[k]) p[k] = COMUNS[k]; }
-        for (var j in d) { if (d.hasOwnProperty(j)) p[j] = d[j]; }
+        aplicar(p, COMUNS);
+        aplicar(p, d);
         if (!p.obs) p.obs = padroesObs();
         persist(p);
       });
     }
-    function isClinicallyBlank(p) {
-      return !(p.kv || p.mas || p.pitch || p.colimacao || p.espessura || p.kernel || p.fov || p.dose);
-    }
+
     function applyCranioDefaultsIfBlank() {
       protocols.forEach(function (p) {
-        if (p.id === "cranio" && isClinicallyBlank(p)) {
-          var d = cranioDefaults();
-          for (var k in d) { if (d.hasOwnProperty(k)) p[k] = d[k]; }
+        if (p.id !== "cranio") return;
+        var mudou = false;
+        if (isClinicallyBlank(p)) {
+          aplicar(p, cranioDefaults());
           if (!p.obs) p.obs = cranioObs();
-          // O cranio e a unica entrada do catalogo que ja vem com valores de
-          // referencia (AAPM/DRL). Nasce travado para nao ser sobrescrito sem
-          // querer; as demais entradas estao em branco e precisam ser editaveis.
-          if (p.bloqueado === undefined) p.bloqueado = true;
-          persist(p);
+          mudou = true;
         }
+        // A trava vale para o cranio SEMPRE, nao so quando ele nasce em
+        // branco — ver o comentario em cranioDefaults().
+        if (p.bloqueado !== true) { p.bloqueado = true; mudou = true; }
+        if (mudou) persist(p);
       });
     }
 
-    // Catálogo canônico de protocolos por região (fixos — NÃO podem ser
-    // apagados). Nomes didáticos definidos pelo operador; parâmetros dos
-    // demais ficam em branco até ele preencher/validar. ensureCatalog roda
-    // a cada carga: recria o que faltar e re-preenche o crânio se vier em
-    // branco (auto-recuperação contra estados antigos do banco).
+    // Catalogo canonico de protocolos por regiao (fixos — NAO podem ser
+    // apagados). Nomes didaticos definidos pelo operador; os parametros dos
+    // demais ficam em branco ate ele preencher/validar. ensureCatalog roda a
+    // cada carga: recria o que faltar e re-preenche o cranio se vier em
+    // branco (auto-recuperacao contra estados antigos do banco).
     var CATALOGO = [
       { id: "cranio",   nome: "Crânio",           regiao: "Crânio" },
       { id: "face",     nome: "Face",             regiao: "Crânio" },
@@ -176,22 +262,7 @@
       { id: "memb_sup", nome: "Membro superior",  regiao: "Membros" },
       { id: "memb_inf", nome: "Membro inferior",  regiao: "Membros" }
     ];
-    // Migração: campos estruturados (modo/tilt/rotacao) adicionados depois.
-    // Garante-os em protocolos salvos por versões anteriores. O crânio ganha
-    // os padrões didáticos (sequencial, tilt 0, rotação 1,0); os demais,
-    // helicoidal por padrão. Só persiste quando de fato completou algo.
-    function ensureStructuredFields() {
-      protocols.forEach(function (p) {
-        var changed = false;
-        if (p.modo === undefined || p.modo === "") {
-          p.modo = (p.id === "cranio") ? "sequencial" : "helicoidal"; changed = true;
-        }
-        if (p.tilt === undefined) { p.tilt = (p.id === "cranio") ? "0" : ""; changed = true; }
-        if (p.rotacao === undefined) { p.rotacao = (p.id === "cranio") ? "1,0" : ""; changed = true; }
-        if (p.scout === undefined || p.scout === "") { p.scout = defaultScout(p.regiao); changed = true; }
-        if (changed) persist(p);
-      });
-    }
+
     function ensureCatalog() {
       CATALOGO.forEach(function (c) {
         if (!byId(c.id)) {
@@ -202,17 +273,88 @@
       });
       applyCranioDefaultsIfBlank();
       aplicarPadroesSeEmBranco();
-      ensureStructuredFields();
     }
     function cranioSeed() {
-      var p = blank("cranio", "Crânio", "Crânio");
-      var d = cranioDefaults();
-      for (var k in d) { if (d.hasOwnProperty(k)) p[k] = d[k]; }
+      var p = aplicar(blank("cranio", "Crânio", "Crânio"), cranioDefaults());
       p.obs = cranioObs();
+      p.bloqueado = true;   // referencia didatica: duplique para variar
       return p;
     }
     function seedDefaults() { return [cranioSeed(), blank("torax", "Tórax", "Tórax")]; }
     function persist(o) { if (memoryFallback) return Promise.resolve(); return SimTC.dbStorePut("protocolos", o).catch(function () { memoryFallback = true; }); }
+
+    /**
+     * Normaliza preservando o que e desta tela e do gestor.
+     *
+     * normalizarProtocolo devolve a forma canonica do dominio e nada alem —
+     * nao conhece favorito, historico nem derivadoDe. Passar um registro por
+     * ele sem reatar esses campos apagaria o historico de versoes do aluno.
+     */
+    function normalizarPreservando(cru) {
+      var n = tipado(cru);
+      n.id = cru.id || n.id;
+      n.nome = cru.nome || n.nome;
+      n.regiao = cru.regiao || n.regiao;
+      n.favorito = !!cru.favorito;
+      n.bloqueado = !!cru.bloqueado;
+      if (cru.historico) n.historico = cru.historico;
+      if (cru.derivadoDe) n.derivadoDe = cru.derivadoDe;
+      return n;
+    }
+
+    /**
+     * Migracao para o modelo tipado, idempotente.
+     *
+     * Roda em banco de aluno, entao nao pode assumir nada: converte o que
+     * ainda esta na forma plana e deixa quieto o que ja esta tipado. Um
+     * registro tipado se reconhece por ter `aquisicao`.
+     */
+    // Versao do formato do REGISTRO. Sobe quando a forma gravada muda de um
+    // jeito que exige conserto no que ja esta em disco.
+    //
+    //   1  forma plana em texto (kv: "120", fov: "220-250 mm")
+    //   2  modelo tipado
+    var ESQUEMA = 2;
+
+    function migrarParaTipado(lista) {
+      var convertidos = 0, reparados = 0;
+      var saida = lista.map(function (r) {
+        var jaTipado = r && r.aquisicao && r.reconstrucoes;
+        var n = r;
+        if (!jaTipado) { convertidos++; n = normalizarPreservando(r); }
+
+        // O registro so e considerado migrado quando carrega a versao. Sem
+        // isto, um banco convertido por uma versao intermediaria ficava a meio
+        // caminho para sempre: `aquisicao` ja existia, a migracao pulava, e o
+        // conserto abaixo nunca era aplicado.
+        if (n.esquema !== ESQUEMA) {
+          // Um pitch declarado em modo sequencial nao e um erro do OPERADOR: e
+          // uma sobra do formato antigo, em que o catalogo trazia "0,55" ao
+          // lado de "sequencial" e o valor nunca chegava a fisica. Mantida, a
+          // marca faria a validacao travar o exame num protocolo de referencia
+          // que o aluno nem pode editar — um beco sem saida herdado.
+          //
+          // Daqui em diante o editor impede a combinacao (o campo se desabilita
+          // no sequencial) e a validacao acusa o que vier de fora, por
+          // importacao — que e onde a incoerencia significa alguma coisa.
+          if (n.aquisicao.modo === "sequencial" && n.aquisicao.pitch == null) {
+            n.aquisicao.pitchIgnorado = false;
+          }
+          n.esquema = ESQUEMA;
+          if (jaTipado) reparados++;
+        }
+        return n;
+      });
+      if (convertidos || reparados) {
+        Promise.all(saida.map(persist)).then(function () {
+          if (convertidos) {
+            SimTC.showMessage(convertidos + " protocolo(s) convertidos para o formato " +
+              "num\u00e9rico: os par\u00e2metros deixaram de ser texto livre.", "info");
+          }
+        });
+      }
+      return saida;
+    }
 
     function inRegion() { return protocols.filter(function (p) { return p.regiao === currentRegion; }); }
     function byId(id) { for (var i = 0; i < protocols.length; i++) if (protocols[i].id === id) return protocols[i]; return null; }
@@ -222,19 +364,72 @@
         zones[i].classList.toggle("is-active", zones[i].getAttribute("data-region") === currentRegion);
       }
     }
+    // Campos do editor, na ordem em que aparecem.
+    var CAMPOS = ["kv", "mas", "pitch", "scout", "direcao", "modo", "tilt",
+                  "rot", "colim-n", "colim-w", "thick", "kernel", "fov"];
+
+    /** Modelo tipado -> campos do formulario. */
     function fillFields(p) {
-      FIELDS.forEach(function (f) { var el = inputEl(f); if (el) el.value = p ? (p[FIELD_KEYS[f]] || "") : ""; });
-      var dirEl = inputEl("direcao");
-      if (dirEl && !dirEl.value) dirEl.value = "caudocranial"; // protocolos antigos sem o campo
-      var modoEl = inputEl("modo");
-      if (modoEl && !modoEl.value) modoEl.value = "helicoidal"; // idem
-      var scoutEl = inputEl("scout");
-      if (scoutEl && !scoutEl.value) scoutEl.value = defaultScout(p ? p.regiao : null); // idem
+      var aq = (p && p.aquisicao) || {};
+      var r = (p && p.reconstrucoes && p.reconstrucoes[0]) || {};
+      var col = aq.colimacao || {};
+      var v = {
+        kv: mostrar(aq.kv), mas: mostrar(aq.mas), pitch: mostrar(aq.pitch),
+        scout: (p && p.scout && p.scout.orientacao) || defaultScout(p ? p.regiao : null),
+        direcao: aq.direcao || "caudocranial",
+        modo: aq.modo || "helicoidal",
+        tilt: mostrar(aq.tiltGantryDeg), rot: mostrar(aq.tempoRotacaoS),
+        "colim-n": mostrar(col.nDetectores), "colim-w": mostrar(col.larguraMm),
+        thick: mostrar(r.espessuraMm), kernel: r.kernel || "padrao", fov: mostrar(r.fovMm)
+      };
+      CAMPOS.forEach(function (f) { var el = inputEl(f); if (el) el.value = v[f]; });
+      atualizarCamposDoModo();
     }
+
+    /**
+     * Pitch nao se aplica ao sequencial. Em vez de aceitar o valor e descarta-lo
+     * em silencio — que foi o que deixou o catalogo carregar "0,55" ao lado de
+     * "sequencial" —, o campo se desabilita e se esvazia.
+     */
+    function atualizarCamposDoModo() {
+      var modoEl = inputEl("modo"), pitchEl = inputEl("pitch");
+      if (!modoEl || !pitchEl) return;
+      var seq = modoEl.value === "sequencial";
+      pitchEl.disabled = seq || mode !== "edit";
+      pitchEl.placeholder = seq ? "não se aplica ao sequencial" : "0,1–3";
+      if (seq) pitchEl.value = "";
+    }
+
+    /** Campos do formulario -> modelo tipado, sobre o protocolo dado. */
+    function doFormulario(p) {
+      var val = function (f) { var el = inputEl(f); return el ? el.value : ""; };
+      aplicar(p, {
+        modo: val("modo") || "helicoidal",
+        direcao: val("direcao") || "caudocranial",
+        scout: val("scout") || defaultScout(p.regiao),
+        kv: ler(val("kv")), mas: ler(val("mas")),
+        pitch: ler(val("pitch")),
+        rotacaoS: ler(val("rot")), tiltDeg: ler(val("tilt")),
+        espessuraMm: ler(val("thick")), kernel: val("kernel") || "padrao",
+        fovMm: ler(val("fov"))
+      });
+      var nDet = ler(val("colim-n")), larg = ler(val("colim-w"));
+      if (nDet != null && larg != null) aplicar(p, { colimacao: [nDet, larg] });
+      // Campo apagado significa APAGADO: sem isto, limpar o kV no editor
+      // deixava o valor antigo no banco e o operador acreditava te-lo removido.
+      var aq = p.aquisicao, r = p.reconstrucoes[0];
+      if (ler(val("kv")) == null) aq.kv = null;
+      if (ler(val("mas")) == null) aq.mas = null;
+      if (ler(val("thick")) == null) { r.espessuraMm = null; r.incrementoMm = null; }
+      if (ler(val("fov")) == null) r.fovMm = null;
+      return p;
+    }
+
     function setMode(m) {
       mode = m;
       var editing = (m === "edit");
-      FIELDS.forEach(function (f) { var el = inputEl(f); if (el) el.disabled = !editing; });
+      CAMPOS.forEach(function (f) { var el = inputEl(f); if (el) el.disabled = !editing; });
+      atualizarCamposDoModo();
       if (actionsView) actionsView.hidden = editing;
       if (actionsEdit) actionsEdit.hidden = !editing;
     }
@@ -266,25 +461,9 @@
     function normalizado(p) {
       return window.SimTCCore.model.normalizarProtocolo(p);
     }
-    /** Traz um protocolo normalizado de volta a forma plana desta tela. */
-    function paraPlano(n, regiao) {
-      var r = (n.reconstrucoes && n.reconstrucoes[0]) || {};
-      var num = function (v) { return v == null ? "" : String(v).replace(".", ","); };
-      return {
-        id: n.id, nome: n.nome || "Protocolo importado",
-        regiao: n.regiao || regiao || currentRegion || "",
-        kv: num(n.aquisicao.kv), mas: num(n.aquisicao.mas), pitch: num(n.aquisicao.pitch),
-        scout: (n.scout && n.scout.orientacao) || "lateral",
-        direcao: n.aquisicao.direcao, modo: n.aquisicao.modo,
-        tilt: num(n.aquisicao.tiltGantryDeg), rotacao: num(n.aquisicao.tempoRotacaoS),
-        colimacao: n.aquisicao.colimacao ? (n.aquisicao.colimacao.nDetectores + "x" +
-                   String(n.aquisicao.colimacao.larguraMm).replace(".", ",")) : "",
-        espessura: num(r.espessuraMm), kernel: r.kernel || "", fov: num(r.fovMm),
-        dose: "", obs: n.indicacao || "",
-        bloqueado: !!n.bloqueado, favorito: !!n.favorito,
-        derivadoDe: n.derivadoDe || null, versao: n.versao || 1
-      };
-    }
+    // `paraPlano` foi embora com a ETAPA 5: o gestor do nucleo e esta tela
+    // trabalham na MESMA forma agora, e nao ha mais o que converter entre elas.
+    // Restou apenas reatar o que o gestor nao conhece (favorito, historico).
 
     function atualizarGestor() {
       var p = byId(currentId);
@@ -414,9 +593,10 @@
       var nome = window.prompt("Nome da cópia:", p.nome + " (cópia)");
       if (nome === null) return;
       nome = nome.trim(); if (!nome) return;
-      var copia = paraPlano(Gestor().duplicar(normalizado(p), { nome: nome }), p.regiao);
+      var copia = Gestor().duplicar(normalizado(p), { nome: nome });
       copia.nome = nome;
       copia.regiao = p.regiao;
+      copia.favorito = false;
       protocols.push(copia);
       persist(copia).then(function () {
         selectProtocol(copia.id);
@@ -506,7 +686,7 @@
               "warning");
           }
           if (!r.aceitos.length) return;
-          var novos = r.aceitos.map(function (n) { return paraPlano(n); });
+          var novos = r.aceitos.map(function (n) { return normalizarPreservando(n); });
           novos.forEach(function (x) { protocols.push(x); });
           Promise.all(novos.map(persist)).then(function () {
             var reg = novos[0].regiao;
@@ -519,6 +699,10 @@
         leitor.readAsText(f, "utf-8");
       });
     }
+
+    // Trocar o modo no editor reavalia o campo de pitch na hora.
+    var modoSel = inputEl("modo");
+    if (modoSel) modoSel.addEventListener("change", atualizarCamposDoModo);
 
     if (btnEdit) btnEdit.addEventListener("click", function () { if (currentId) openEditor(); });
     if (btnCancel) btnCancel.addEventListener("click", function () { fillFields(byId(currentId)); closeEditor(); });
@@ -538,7 +722,7 @@
         p.versao = n.versao;
         p.historico = n.historico;
       } catch (e) { /* versionamento e conveniencia: nao impede salvar */ }
-      FIELDS.forEach(function (f) { var el = inputEl(f); if (el) p[FIELD_KEYS[f]] = el.value.trim(); });
+      doFormulario(p);
       persist(p).then(function () { closeEditor(); SimTC.showMessage("Protocolo \"" + p.nome + "\" salvo" + (memoryFallback ? " (temporário)." : "."), "success"); });
     });
     if (btnNew) btnNew.addEventListener("click", function () {
@@ -568,7 +752,7 @@
       SimTC.showMessage("Protocolos em modo temporário: " + err.message, "info");
       return seedDefaults();
     }).then(function (list) {
-      protocols = list;
+      protocols = migrarParaTipado(list);
       ensureCatalog();
       selectRegion("Crânio");
     });

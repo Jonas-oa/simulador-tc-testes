@@ -50,7 +50,10 @@
 
     // ---- ERROS: incoerência interna ou impossibilidade ------------------
 
-    if (aq.modo === "sequencial" && aq.pitch != null) {
+    // `pitch != null` pega o objeto montado à mão; `pitchIgnorado` pega o
+    // caminho REAL, em que a normalização já zerou o pitch — e onde, até a
+    // ETAPA 5, esta regra nunca chegava a disparar.
+    if (aq.modo === "sequencial" && (aq.pitch != null || aq.pitchIgnorado)) {
       out.push(achado(ERRO, "PITCH_EM_SEQUENCIAL", "aquisicao.pitch",
         "Pitch definido em modo axial sequencial.",
         "No step-and-shoot a mesa fica parada durante a rotação: não há avanço por rotação, logo pitch não é definido."));

@@ -1918,23 +1918,35 @@
     function renderParams() {
       if (!paramsEl) return;
       var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
-      var rows = [
-        ["kV", p && p.kv], ["mAs", p && p.mas], ["Pitch", p && p.pitch], ["FOV", p && p.fov],
-        ["Colimação", p && p.colimacao], ["Esp. corte", p && p.espessura],
-        ["Kernel", p && p.kernel], ["CTDIvol", p && p.dose],
-        ["Modo", p && modoTxt(p.modo)], ["Tilt", p && (p.tilt !== "" && p.tilt != null ? p.tilt + "°" : null)]
-      ];
       var html = "";
       if (!p) {
-        html = '<p class="acq-params__empty">Nenhum protocolo selecionado.</p>';
-      } else {
-        rows.forEach(function (r) {
-          html += '<div class="acq-param"><span class="acq-param__k">' + r[0] + '</span>' +
-            '<span class="acq-param__v">' + (r[1] ? esc(r[1]) : "—") + '</span></div>';
-        });
-        html += '<div class="acq-param acq-param--full"><span class="acq-param__k">Direção</span>' +
-          '<span class="acq-param__v">' + dirTxt(p.direcao) + '</span></div>';
+        paramsEl.innerHTML = '<p class="acq-params__empty">Nenhum protocolo selecionado.</p>';
+        return;
       }
+      // O painel lê o modelo TIPADO e formata na hora, com unidade. Antes lia
+      // os campos planos em texto e repetia o que estivesse gravado — inclusive
+      // "≈55 mGy (ref.)" no lugar de um CTDIvol, e um pitch ao lado de
+      // "sequencial". A dose saiu daqui: ela é calculada e aparece na
+      // confirmação, com a faixa do exame, que é o que ela depende.
+      var n = window.SimTCCore.model.normalizarProtocolo(p);
+      var aq = n.aquisicao, r = n.reconstrucoes[0] || {};
+      var un = function (v, u) { return v == null ? null : String(v).replace(".", ",") + (u || ""); };
+      var rows = [
+        ["kV", un(aq.kv)], ["mAs", un(aq.mas)],
+        ["Pitch", aq.modo === "sequencial" ? "não se aplica" : un(aq.pitch)],
+        ["FOV", un(r.fovMm, " mm")],
+        ["Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " +
+          String(aq.colimacao.larguraMm).replace(".", ",") + " mm") : null],
+        ["Esp. corte", un(r.espessuraMm, " mm")],
+        ["Kernel", r.kernel], ["Rotação", un(aq.tempoRotacaoS, " s")],
+        ["Modo", modoTxt(aq.modo)], ["Tilt", un(aq.tiltGantryDeg, "°")]
+      ];
+      rows.forEach(function (linha) {
+        html += '<div class="acq-param"><span class="acq-param__k">' + linha[0] + '</span>' +
+          '<span class="acq-param__v">' + (linha[1] ? esc(linha[1]) : "—") + '</span></div>';
+      });
+      html += '<div class="acq-param acq-param--full"><span class="acq-param__k">Direção</span>' +
+        '<span class="acq-param__v">' + dirTxt(aq.direcao) + '</span></div>';
       paramsEl.innerHTML = html;
     }
 

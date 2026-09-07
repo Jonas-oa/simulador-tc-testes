@@ -92,10 +92,13 @@
   //   Os três que restam têm etapa marcada no plano; não são esquecimento.
   //   ETAPA 3 (07/09/2026) corrigiu e tirou daqui:
   //     P1-05 o MPR interno de 8 bits
-  var PENDENTES = new Set([
-    "P1-07",   // ETAPA 5 — protocolo tipado de ponta a ponta
-    "P1-09"    // ETAPA 5 — depende do protocolo tipado
-  ]);
+  //   ETAPA 5 (07/09/2026) corrigiu e tirou daqui:
+  //     P1-07 protocolo tipado de ponta a ponta
+  //     P1-09 pitch em sequencial acusado pelo caminho real
+  //
+  // A lista está VAZIA: os nove defeitos P1 da auditoria estão corrigidos.
+  // Daqui em diante, qualquer vermelho nesta suíte é regressão de verdade.
+  var PENDENTES = new Set([]);
 
   var PREFIXO = "ZZ-TESTE-REGRESSAO";
 
@@ -173,8 +176,13 @@
     zona.dispatchEvent(new M("click", { bubbles: true }));
     await dormir(400);
     var itens = Array.prototype.slice.call(D().querySelectorAll("#proto-list li"));
-    var alvo = itens.filter(function (li) { return li.textContent.trim() === idProto; })[0];
-    ok(alvo, 'protocolo "' + idProto + '" não está na lista da região Crânio');
+    // Prefixo, não igualdade: o item carrega marcas de estado além do nome
+    // (o cadeado do protocolo travado, a estrela do favorito).
+    var alvo = itens.filter(function (li) {
+      return li.textContent.trim().indexOf(idProto) === 0;
+    })[0];
+    ok(alvo, 'protocolo "' + idProto + '" não está na lista da região Crânio. Há: ' +
+      itens.map(function (li) { return li.textContent.trim(); }).join(", "));
     alvo.dispatchEvent(new M("click", { bubbles: true }));
     await ate(function () { return W().SimTC.examProtocol && W().SimTC.examProtocol.data; },
       "o protocolo ser selecionado", 8000);
@@ -192,7 +200,7 @@
     // não serve de rede de segurança. Então o valor é ajustado aqui, no objeto
     // em memória. Não há `persist()` no caminho, e o app é recarregado entre
     // as fases: nada disso chega ao banco.
-    W().SimTC.examProtocol.data.fov = "400 mm";
+    W().SimTC.examProtocol.data.reconstrucoes[0].fovMm = 400;
   }
 
   /** Adquire o topograma e leva a mesa ao início da faixa. */
@@ -263,11 +271,21 @@
     var p = protos.filter(function (x) { return x.id === "cranio"; })[0];
     ok(p, "protocolo de referência 'cranio' não está no banco");
     // Critério de aceite da Fase 9: nenhum campo numérico aceita texto livre.
-    ok(typeof p.kv === "number" || (p.aquisicao && typeof p.aquisicao.kv === "number"),
-      "kV gravado como " + JSON.stringify(p.kv) + " — deveria ser número");
-    var dose = p.dose == null ? "" : String(p.dose);
-    ok(!/≈|ref\.|mGy/i.test(dose),
-      'dose gravada como ' + JSON.stringify(dose) + ' — a Fase 9 exige que deixe de ser texto');
+    ok(p.aquisicao && p.reconstrucoes,
+      "o registro ainda está na forma plana: sem `aquisicao` nem `reconstrucoes`");
+    ok(typeof p.aquisicao.kv === "number",
+      "kV gravado como " + JSON.stringify(p.aquisicao.kv) + " — deveria ser número");
+    ok(typeof p.reconstrucoes[0].fovMm === "number",
+      "FOV gravado como " + JSON.stringify(p.reconstrucoes[0].fovMm) +
+      " — deveria ser número (era a faixa \"220–250 mm\" num campo de valor único)");
+    // A dose nao se digita. No modelo tipado ela e um objeto de valores
+    // CALCULADOS; o texto legado sobrevive so como referencia historica, em
+    // `ctdivolLegado`, e nunca como insumo.
+    ok(p.dose && typeof p.dose === "object" && !("ctdivol" in p) ,
+      "dose ainda gravada como texto livre: " + JSON.stringify(p.dose));
+    ok(p.dose.ctdivolLegado == null || typeof p.dose.ctdivolLegado === "number",
+      "a referência histórica de dose deveria ser número, e é " +
+      JSON.stringify(p.dose.ctdivolLegado));
   });
 
   teste("P1-08", "comandos de mesa respondem ao teclado", async function () {
@@ -325,6 +343,72 @@
       "pelo caminho que a tela usa (core/model/protocol.js:147)");
   });
 
+  teste("R-01", "o editor mostra e devolve o protocolo sem perder valor", async function () {
+    // Ida e volta pelo formulario. Existe porque a tipagem da ETAPA 5 trouxe
+    // um defeito que nenhuma outra verificacao pegava: `mostrar()` formatava
+    // com virgula e os campos sao `input[type=number]`, que rejeitam virgula
+    // em silencio. A colimacao de 0,6 mm e a rotacao de 0,5 s chegavam VAZIAS
+    // ao editor, e salvar por cima as apagaria. As suites nao abriam o editor.
+    var M = W().MouseEvent, d = D();
+    d.querySelector('[data-step="pacproto"]').click();
+    await dormir(400);
+    d.querySelector('.bodymap__zone[data-region="Tórax"]').dispatchEvent(new M("click", { bubbles: true }));
+    await dormir(400);
+    var itens = Array.prototype.slice.call(d.querySelectorAll("#proto-list li"));
+    var alvo = itens.filter(function (li) { return li.textContent.trim().indexOf("Tórax") === 0; })[0];
+    ok(alvo, "protocolo de tórax não está na lista");
+    alvo.dispatchEvent(new M("click", { bubbles: true }));
+    await dormir(500);
+
+    var db = await W().SimTC.dbStoreAll("protocolos");
+    var antes = db.filter(function (x) { return x.id === "torax"; })[0];
+    ok(antes && antes.aquisicao, "protocolo de tórax não está tipado no banco");
+    var esperado = {
+      kv: antes.aquisicao.kv, mas: antes.aquisicao.mas, pitch: antes.aquisicao.pitch,
+      rot: antes.aquisicao.tempoRotacaoS,
+      colimN: antes.aquisicao.colimacao.nDetectores,
+      colimW: antes.aquisicao.colimacao.larguraMm,
+      esp: antes.reconstrucoes[0].espessuraMm, fov: antes.reconstrucoes[0].fovMm
+    };
+
+    $("ws-protocol-edit").click();
+    await dormir(500);
+    ok(!$("proto-editor").hidden, "o editor não abriu");
+
+    // Nenhum campo preenchido pode chegar em branco ao formulario.
+    var vazios = [];
+    [["kv", esperado.kv], ["mas", esperado.mas], ["pitch", esperado.pitch],
+     ["rot", esperado.rot], ["colim-n", esperado.colimN], ["colim-w", esperado.colimW],
+     ["thick", esperado.esp], ["fov", esperado.fov]].forEach(function (par) {
+      var el = $("ws-param-" + par[0]);
+      if (par[1] != null && el && el.value === "") vazios.push(par[0] + " (esperado " + par[1] + ")");
+    });
+    ok(!vazios.length, "campos chegaram vazios ao editor: " + vazios.join(", "));
+
+    // Salvar SEM MEXER em nada nao pode alterar o protocolo.
+    $("ws-protocol-save").click();
+    await dormir(800);
+    var depois = (await W().SimTC.dbStoreAll("protocolos"))
+      .filter(function (x) { return x.id === "torax"; })[0];
+    var mudou = [];
+    if (depois.aquisicao.kv !== esperado.kv) mudou.push("kV " + esperado.kv + "→" + depois.aquisicao.kv);
+    if (depois.aquisicao.mas !== esperado.mas) mudou.push("mAs " + esperado.mas + "→" + depois.aquisicao.mas);
+    if (depois.aquisicao.pitch !== esperado.pitch) mudou.push("pitch " + esperado.pitch + "→" + depois.aquisicao.pitch);
+    if (depois.aquisicao.tempoRotacaoS !== esperado.rot) mudou.push("rotação " + esperado.rot + "→" + depois.aquisicao.tempoRotacaoS);
+    if (depois.aquisicao.colimacao.larguraMm !== esperado.colimW) mudou.push("colimação " + esperado.colimW + "→" + depois.aquisicao.colimacao.larguraMm);
+    if (depois.reconstrucoes[0].espessuraMm !== esperado.esp) mudou.push("espessura " + esperado.esp + "→" + depois.reconstrucoes[0].espessuraMm);
+    if (depois.reconstrucoes[0].fovMm !== esperado.fov) mudou.push("FOV " + esperado.fov + "→" + depois.reconstrucoes[0].fovMm);
+    ok(!mudou.length, "salvar sem editar alterou o protocolo: " + mudou.join(", "));
+
+    // Devolve o app ao estado em que estava: este teste selecionou um
+    // protocolo, e o proximo (P1-01) precisa justamente de NENHUM. Um teste
+    // que mexe em estado compartilhado e nao o restaura vira armadilha para
+    // quem escrever o proximo.
+    W().SimTC.examProtocol.name = "";
+    W().SimTC.examProtocol.data = null;
+    try { W().SimTCCore.sessao.selecionarProtocolo(null); } catch (e) { /* ignora */ }
+  });
+
   teste("P1-01", "iniciar sem protocolo é bloqueado", async function () {
     pacienteDeTeste("sem-protocolo");
     await porNaMesa();
@@ -371,8 +455,9 @@
     pacienteDeTeste("tilt");
     await porNaMesa();
     await selecionarProtocolo("Crânio");
-    // Protocolo do exame com tilt negativo, pelo mesmo contrato que a tela usa.
-    W().SimTC.examProtocol.data.tilt = "-15";
+    // Protocolo do exame com tilt negativo, na forma TIPADA — que desde a
+    // ETAPA 5 e a unica que existe no banco e no contrato entre os modulos.
+    W().SimTC.examProtocol.data.aquisicao.tiltGantryDeg = -15;
 
     // Espiona o valor que a aquisição REALMENTE manda para o gantry.
     var recebido = null;
@@ -500,7 +585,7 @@
   // Execução
   // =====================================================================
   var FASES = {
-    "P1-07": "A", "P1-08": "A", "P1-09": "A", "P1-01": "A",
+    "P1-07": "A", "P1-08": "A", "P1-09": "A", "R-01": "A", "P1-01": "A",
     "P1-02": "B", "P1-06": "B",
     "P1-03": "C", "P1-04a": "C", "P1-04b": "C", "P1-05": "C"
   };

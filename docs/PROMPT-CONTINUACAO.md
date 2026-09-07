@@ -123,7 +123,7 @@ Leitura complementar, nesta ordem:
 |---|---|
 | 0 a 7 | Completas e commitadas |
 | 8 — Viewer e MPR | **Quase.** O MPR da tela de aquisição passou a sair da série reconstruída (ETAPA 3). Medidas (distância, ângulo, ROI em HU) e slab (média/MIP/MinIP) prontos no leitor. **Faltam:** reformatação **oblíqua** e ROI **elíptica/poligonal** (a atual é circular). |
-| 9 — Protocol Manager | **Parcial.** Duplicar, travar, comparar, versionar, exportar/importar e o motor de validação existem e funcionam. **Falta o essencial:** o protocolo persistido ainda é **texto livre** (ver P1-07). |
+| 9 — Protocol Manager | **Completa.** Duplicar, travar, comparar, versionar, exportar/importar, motor de validação — e, desde a ETAPA 5, o protocolo persistido é **tipado**, com unidade e faixa. O critério de aceite (nenhum campo numérico aceita texto livre) está atendido. |
 | 10 — Educacional | **1 de 4.** A confirmação informada existe (e é a melhor parte do app), mas `education/` e `engines/` (perfis de fabricante) **não existem**. |
 | 11 — Testes/perf | **Parcial.** 114 testes verdes + 10 de regressão (8 verdes, 2 vermelhos de propósito — ver BLOCO 0), rodando em CI desde a ETAPA 1. **Falta:** cobertura medida do `core/`, orçamento de performance verificável e testes de caos além dos dois que a regressão cobre. |
 
@@ -380,8 +380,8 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
   - [x] P1-01 confirmação exige protocolo — nova `pendenciasParaIniciar()` na tela, que **pergunta ao núcleo**. Para isso, `protocolos.js` passou a chamar `Core.sessao.selecionarProtocolo()` e `sala-exame.js` a chamar `Core.sessao.atualizarMesa()`: os dois primeiros fios reais entre interface e núcleo.
   - [x] P1-08 teclado no dpad — `setHeld()` ganhou `keydown`/`keyup` para Enter e Espaço, ignorando auto-repetição
   - [x] P1-06 abortar exame ao excluir o paciente — a aquisição assina `EVENTOS.EXAME_ENCERRADO`
-  - [ ] P1-07 protocolo tipado *(ETAPA 5 — é migração de dados, não correção cirúrgica)*
-  - [ ] P1-09 pitch em sequencial *(ETAPA 5 — depende do protocolo tipado)*
+  - [x] P1-07 protocolo tipado — feito na ETAPA 5
+  - [x] P1-09 pitch em sequencial — feito na ETAPA 5
 - [x] **ETAPA 3 — Matar o MPR interno** *(média)* — concluída em 07/09/2026
   - [x] P1-05: `buildVolume`/`buildReformat`/`spacing` apagados (−165 linhas em `js/aquisicao.js`); a reformatação passou para `js/motor-imagem.js`, junto da série, lendo o `Int16Array` com `pixelMm` e `incrementoMm` da própria reconstrução
   - [x] Os três consumidores do coronal passaram a concordar: 256 na tela, 256 na `mprApi`, 256 na série (era 261 / 256 / 256)
@@ -402,7 +402,10 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
 
 ## Bloco C — qualidade (etapas 6 a 10)
 
-- [ ] **ETAPA 6 — Quebrar os dois monólitos** *(muito grande — só depois da etapa 4)*
+- [ ] **ETAPA 6 — Quebrar os dois monólitos** *(muito grande — a próxima)*
+      `js/aquisicao.js` em máquina de fases + telas; `js/sala-exame.js` em cenário,
+      paciente, lasers, física e controles. Extração pura, sem mudar comportamento.
+      Agora é viável: com o estado no núcleo (ETAPA 4), as funções extraídas ficam quase puras.
 - [ ] **ETAPA 7 — Camada `ui/` e fim das duplicações** *(grande)*
 - [ ] **ETAPA 8 — Um controlador de layout** *(média)*
 - [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*

@@ -142,9 +142,19 @@
         kv: naFaixa(num(aq.kv), 70, 150, null, "kV", coercoes),
         mas: naFaixa(num(aq.mas), 1, 2000, null, "mAs", coercoes),
         tempoRotacaoS: naFaixa(num(aq.tempoRotacaoS != null ? aq.tempoRotacaoS : aq.rotacao), 0.2, 3, 1.0, "tempo de rotação", coercoes),
-        // Pitch não se aplica ao sequencial — manter null evita o erro
-        // clássico de "pitch em step-and-shoot".
+        // Pitch não se aplica ao sequencial: manter null impede que a física
+        // use um avanço que não existe no step-and-shoot.
         pitch: modo === "sequencial" ? null : naFaixa(num(aq.pitch), 0.1, 3, 1.0, "pitch", coercoes),
+        // ...mas zerar em silêncio APAGAVA a incoerência que o motor de
+        // validação existe para acusar. A regra "pitch em modo sequencial é
+        // ERRO" nunca disparava pelo caminho real, porque a normalização
+        // acontece antes dela — e o teste que a cobria forçava o estado à mão,
+        // documentando isso num comentário. O protocolo de crânio do catálogo
+        // tinha exatamente essa contradição (pitch 0,55 + sequencial) e o app
+        // exibia as duas lado a lado sem dizer nada.
+        //
+        // A bandeira preserva o fato sem devolver o valor à física.
+        pitchIgnorado: modo === "sequencial" && num(aq.pitch) != null,
         colimacao: colim,
         direcao: umDe(aq.direcao, DIRECOES, "caudocranial"),
         tiltGantryDeg: naFaixa(num(aq.tiltGantryDeg != null ? aq.tiltGantryDeg : aq.tilt), -30, 30, 0, "tilt do gantry", coercoes)

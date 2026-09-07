@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907g" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907g" />
+  <link rel="stylesheet" href="css/style.css?v=20260907m" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907m" />
 </head>
 <body data-theme="dark">
 
@@ -370,9 +370,9 @@
             <span class="proto2__region" id="proto-editor-title">Protocolo</span>
           </div>
           <div class="ws-params">
-                <label class="ws-field"><span class="ws-field__label">kV</span><input class="ws-input" id="ws-param-kv" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">mAs</span><input class="ws-input" id="ws-param-mas" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">Pitch</span><input class="ws-input" id="ws-param-pitch" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Tensão do tubo (kV)</span><input class="ws-input" id="ws-param-kv" type="number" min="70" max="150" step="1" placeholder="70–150" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Produto corrente-tempo (mAs)</span><input class="ws-input" id="ws-param-mas" type="number" min="1" max="2000" step="1" placeholder="1–2000" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Pitch</span><input class="ws-input" id="ws-param-pitch" type="number" min="0.1" max="3" step="0.05" placeholder="0,1–3 (só no helicoidal)" disabled></label>
                 <label class="ws-field"><span class="ws-field__label">Topograma (scout)</span><select class="ws-input" id="ws-param-scout" disabled>
                   <option value="lateral">Lateral (perfil — crânio/coluna)</option>
                   <option value="frontal">Frontal / AP (maioria dos exames)</option>
@@ -386,18 +386,28 @@
                   <option value="helicoidal">Helicoidal (espiral)</option>
                 </select></label>
                 <label class="ws-field"><span class="ws-field__label">Tilt do gantry (°)</span><input class="ws-input" id="ws-param-tilt" type="number" min="-30" max="30" step="1" placeholder="0" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">Tempo de rotação (s)</span><input class="ws-input" id="ws-param-rot" type="text" placeholder="1,0" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">Colimação</span><input class="ws-input" id="ws-param-colim" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">Esp. corte</span><input class="ws-input" id="ws-param-thick" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">Kernel</span><input class="ws-input" id="ws-param-kernel" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">FOV</span><input class="ws-input" id="ws-param-fov" type="text" placeholder="—" disabled></label>
-                <label class="ws-field"><span class="ws-field__label">CTDIvol</span><input class="ws-input" id="ws-param-dose" type="text" placeholder="—" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Tempo de rotação (s)</span><input class="ws-input" id="ws-param-rot" type="number" min="0.2" max="3" step="0.05" placeholder="0,2–3" disabled></label>
+                <!-- Colimação é n × largura, e é assim que ela entra na física
+                     (v_mesa = pitch × colimação ÷ t_rot). Dois campos, em vez
+                     de um texto "64 × 0,6 mm" que precisava ser interpretado. -->
+                <label class="ws-field"><span class="ws-field__label">Colimação — detectores</span><input class="ws-input" id="ws-param-colim-n" type="number" min="1" max="1024" step="1" placeholder="64" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Colimação — largura (mm)</span><input class="ws-input" id="ws-param-colim-w" type="number" min="0.1" max="80" step="0.05" placeholder="0,6" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Esp. de corte (mm)</span><input class="ws-input" id="ws-param-thick" type="number" min="0.4" max="20" step="0.1" placeholder="0,4–20" disabled></label>
+                <label class="ws-field"><span class="ws-field__label">Kernel</span><select class="ws-input" id="ws-param-kernel" disabled>
+                  <option value="liso">Liso — partes moles, encéfalo</option>
+                  <option value="padrao">Padrão</option>
+                  <option value="nitido">Nítido — osso, pulmão</option>
+                </select></label>
+                <label class="ws-field"><span class="ws-field__label">FOV (mm)</span><input class="ws-input" id="ws-param-fov" type="number" min="50" max="700" step="5" placeholder="50–700" disabled></label>
           </div>
           <div class="ws-actions" id="ws-actions-edit" hidden>
             <button class="ws-btn ws-btn--primary" id="ws-protocol-save" type="button">Salvar</button>
             <button class="ws-btn ws-btn--ghost" id="ws-protocol-cancel" type="button">Cancelar</button>
           </div>
-          <p class="ws-note">Valores técnicos definidos e validados por você; salvos no dispositivo.</p>
+          <p class="ws-note">Valores técnicos definidos e validados por você; salvos no dispositivo
+            como números, com unidade e faixa. <strong>A dose não se digita:</strong> CTDIvol e DLP
+            são calculados a partir de kV, mAs, pitch e do comprimento da faixa, e aparecem na
+            confirmação antes de irradiar.</p>
         </div>
       </div>
     </section>
@@ -415,7 +425,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907g"
+          src="dicom-viewer/index.html?embedded=1&v=20260907m"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -429,57 +439,57 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907g";</script>
+  <script>window.__SIMTC_REV__ = "20260907m";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907g"></script>
+  <script src="js/phantoms.js?v=20260907m"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907g"></script>
-  <script src="core/clock.js?v=20260907g"></script>
-  <script src="core/model/patient.js?v=20260907g"></script>
-  <script src="core/model/protocol.js?v=20260907g"></script>
-  <script src="core/model/exam.js?v=20260907g"></script>
-  <script src="core/state.js?v=20260907g"></script>
-  <script src="core/phantom/volume.js?v=20260907g"></script>
-  <script src="core/phantom/acervo.js?v=20260907g"></script>
-  <script src="core/acquisition/fisica.js?v=20260907g"></script>
-  <script src="core/acquisition/noise.js?v=20260907g"></script>
-  <script src="core/acquisition/projector.js?v=20260907g"></script>
-  <script src="core/acquisition/scan.js?v=20260907g"></script>
-  <script src="core/dose/ctdi.js?v=20260907g"></script>
-  <script src="core/dose/aec.js?v=20260907g"></script>
-  <script src="core/protocol/validacao.js?v=20260907g"></script>
-  <script src="core/protocol/gestor.js?v=20260907g"></script>
-  <script src="core/dicom/writer.js?v=20260907g"></script>
-  <script src="core/recon/serie.js?v=20260907g"></script>
+  <script src="core/bus.js?v=20260907m"></script>
+  <script src="core/clock.js?v=20260907m"></script>
+  <script src="core/model/patient.js?v=20260907m"></script>
+  <script src="core/model/protocol.js?v=20260907m"></script>
+  <script src="core/model/exam.js?v=20260907m"></script>
+  <script src="core/state.js?v=20260907m"></script>
+  <script src="core/phantom/volume.js?v=20260907m"></script>
+  <script src="core/phantom/acervo.js?v=20260907m"></script>
+  <script src="core/acquisition/fisica.js?v=20260907m"></script>
+  <script src="core/acquisition/noise.js?v=20260907m"></script>
+  <script src="core/acquisition/projector.js?v=20260907m"></script>
+  <script src="core/acquisition/scan.js?v=20260907m"></script>
+  <script src="core/dose/ctdi.js?v=20260907m"></script>
+  <script src="core/dose/aec.js?v=20260907m"></script>
+  <script src="core/protocol/validacao.js?v=20260907m"></script>
+  <script src="core/protocol/gestor.js?v=20260907m"></script>
+  <script src="core/dicom/writer.js?v=20260907m"></script>
+  <script src="core/recon/serie.js?v=20260907m"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907g"></script>
+  <script src="js/shared.js?v=20260907m"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907g"></script>
+  <script src="app/contratos.js?v=20260907m"></script>
 
   <!-- Módulos de telas -->
-  <script src="js/sala-exame.js?v=20260907g"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907g"></script>
-  <script src="js/protocolos.js?v=20260907g"></script>
+  <script src="js/sala-exame.js?v=20260907m"></script>
+  <script src="js/cadastro-pacientes.js?v=20260907m"></script>
+  <script src="js/protocolos.js?v=20260907m"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907g"></script>
-  <script src="js/motor-imagem.js?v=20260907g"></script>
-  <script src="js/exportar-dicom.js?v=20260907g"></script>
-  <script src="js/medidas.js?v=20260907g"></script>
-  <script src="js/aquisicao.js?v=20260907g"></script>
-  <script src="js/mpr.js?v=20260907g"></script>
-  <script src="js/ui-layout.js?v=20260907g"></script>
+  <script src="js/fonte-volume.js?v=20260907m"></script>
+  <script src="js/motor-imagem.js?v=20260907m"></script>
+  <script src="js/exportar-dicom.js?v=20260907m"></script>
+  <script src="js/medidas.js?v=20260907m"></script>
+  <script src="js/aquisicao.js?v=20260907m"></script>
+  <script src="js/mpr.js?v=20260907m"></script>
+  <script src="js/ui-layout.js?v=20260907m"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907g"></script>
+  <script src="script.js?v=20260907m"></script>
 
   <!-- Controlador de abas mobile (independente) -->
-  <script src="js/mobile-tabs.js?v=20260907g"></script>
+  <script src="js/mobile-tabs.js?v=20260907m"></script>
 </body>
 </html>
