@@ -14,23 +14,38 @@
 /* eslint-env worker */
 "use strict";
 
-importScripts(
-  "../core/bus.js",
-  "../core/clock.js",
-  "../core/model/patient.js",
-  "../core/model/protocol.js",
-  "../core/model/exam.js",
-  "../core/state.js",
-  "../core/phantom/volume.js",
-  "../core/phantom/acervo.js",
-  "../core/acquisition/fisica.js",
-  "../core/acquisition/noise.js",
-  "../core/acquisition/projector.js",
-  "../core/acquisition/scan.js",
-  "../core/dose/ctdi.js",
-  "../core/dose/aec.js",
-  "../core/recon/serie.js"
-);
+// A revisao de cache vem na URL do proprio Worker (js/motor-imagem.js a poe
+// ali). Republicar aqui deixa o acervo versionar as URLs do volume tambem
+// dentro do Worker — senao ele buscaria o manifesto sem versao e poderia ler
+// do cache uma procedencia que nao corresponde ao volume carregado.
+try {
+  var _rev = (self.location.search || "").replace(/^\?/, "");
+  var _m = /(?:^|&)v=([0-9a-z]+)/.exec(_rev);
+  if (_m) self.__SIMTC_REV__ = _m[1];
+} catch (e) { /* sem location: segue sem versao */ }
+
+// Os proprios modulos do nucleo levam a revisao: sem ela o Worker tem cache
+// separado do da pagina e pode rodar uma versao do core diferente da que a
+// interface carregou — o tipo de divergencia que nao da erro, so resultado
+// errado.
+var _v = self.__SIMTC_REV__ ? "?v=" + self.__SIMTC_REV__ : "";
+importScripts.apply(self, [
+  "../core/bus.js" + _v,
+  "../core/clock.js" + _v,
+  "../core/model/patient.js" + _v,
+  "../core/model/protocol.js" + _v,
+  "../core/model/exam.js" + _v,
+  "../core/state.js" + _v,
+  "../core/phantom/volume.js" + _v,
+  "../core/phantom/acervo.js" + _v,
+  "../core/acquisition/fisica.js" + _v,
+  "../core/acquisition/noise.js" + _v,
+  "../core/acquisition/projector.js" + _v,
+  "../core/acquisition/scan.js" + _v,
+  "../core/dose/ctdi.js" + _v,
+  "../core/dose/aec.js" + _v,
+  "../core/recon/serie.js" + _v
+]);
 
 var C = self.SimTCCore;
 

@@ -42,8 +42,16 @@
     "espessura_mm": 1.25,
     "kernel": "STANDARD",
     "fabricante": "GE MEDICAL SYSTEMS",
-    "modelo": "LightSpeed16"
+    "modelo": "LightSpeed16",
+    "fonte": "TCIA · LIDC-IDRI"
   },
   "convertido_em": "2026-09-01T19:48:46.009974+00:00",
-  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
+  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica.",
+  "credito": {
+    "rotulo": "Tórax",
+    "fonte": "TCIA · LIDC-IDRI",
+    "licenca": "CC BY 3.0",
+    "doi": "10.7937/K9/TCIA.2015.LO9QL9SX",
+    "sujeito": null
+  }
 }

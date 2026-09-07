@@ -1544,12 +1544,74 @@
           var target = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, tableZ + dir * dist));
           var travel = Math.abs(target - tableZ);
           if (travel < dist * 0.98) {
-            // A varredura precisa de curso NA DIREÇÃO programada; quando falta,
-            // a recuperação é deslocar a mesa no sentido CONTRÁRIO para ganhar
-            // espaço. Dizer isso explicitamente evita o beco sem saída em que o
-            // aluno relê "reposicione a mesa" sem saber para que lado.
+            // Curso insuficiente NA DIREÇÃO programada. Antes isto era só uma
+            // recusa, e era um beco sem saída: num protocolo caudocranial a
+            // mesa SAI enquanto varre, e a partir do repouso (totalmente
+            // recuada) não existe curso nenhum para fora — o exame recusava
+            // sempre, e o aluno tinha de adivinhar quantos milímetros avançar
+            // antes de tentar de novo.
+            //
+            // Um tomógrafo real não age assim: posicionar a mesa no início da
+            // varredura é parte do início da varredura. Então, quando dá para
+            // ganhar o curso movendo no sentido contrário, o console POSICIONA
+            // e emenda a aquisição — dizendo o que fez, para que continue
+            // sendo uma lição sobre curso de mesa e não uma mágica.
+            //
+            // Só quem VARRE pede isso (`posicionarAntes: true`). Um comando de
+            // posicionamento — o MOVER, o avanço entre cortes do sequencial —
+            // já É o posicionamento: pré-posicioná-lo criava um movimento a
+            // mais e fazia o guardião da faixa acusar que ela mudou sozinha.
             var faltamMm = Math.round((dist - travel) * 1000);
             var acao = (dir < 0) ? "out" : "in";
+            var partida = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, target - dir * dist));
+            var cursoDaPartida = Math.abs(
+              Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, partida + dir * dist)) - partida);
+
+            if (opts.posicionarAntes === true && cursoDaPartida >= dist * 0.98) {
+              var deslocMm = Math.round(Math.abs(partida - tableZ) * 1000);
+              SimTC.showMessage(
+                "Mesa posicionada " + deslocMm + " mm " +
+                (partida < tableZ ? "para dentro" : "para fora") +
+                " do gantry para acomodar a varredura de " + Math.round(dist * 1000) +
+                " mm. A aquisição começa em seguida.", "info");
+              moveUp = moveDown = moveIn = moveOut = false;
+              var opcoesDaVarredura = opts;
+              autoDrive = {
+                targetZ: partida,
+                startZ: tableZ,
+                speed: Math.max(0.02, SPEED_Z),   // reposicionar é rápido: não é varredura
+                onProgress: null,
+                onAbort: opts.onAbort || null,
+                onDone: function () {
+                  // Emenda a varredura de verdade, agora com curso disponível.
+                  var seg = {};
+                  for (var k in opcoesDaVarredura) {
+                    if (Object.prototype.hasOwnProperty.call(opcoesDaVarredura, k)) {
+                      seg[k] = opcoesDaVarredura[k];
+                    }
+                  }
+                  seg.posicionarAntes = false;
+                  var r2 = SimTC.tableDriveApi.start(seg);
+                  // Se ainda assim faltar curso, o operador precisa saber —
+                  // silêncio aqui deixaria o exame parado sem explicação.
+                  if (!r2 || !r2.ok) {
+                    SimTC.showMessage("Não foi possível iniciar após posicionar: " +
+                      ((r2 && r2.motivo) || "curso indisponível"), "warning");
+                    if (opcoesDaVarredura.onAbort) {
+                      opcoesDaVarredura.onAbort((r2 && r2.motivo) || "curso indisponível");
+                    }
+                  }
+                }
+              };
+              setSpin(0);
+              // `startZ` e a posicao onde a VARREDURA comeca — depois do
+              // posicionamento, nao antes. Quem chama guarda isso como
+              // referencia do topograma; devolver a posicao atual faria o
+              // inicio da faixa cair fora do curso da mesa.
+              return { ok: true, posicionando: true,
+                       deslocamentoMm: deslocMm, startZ: partida };
+            }
+
             return {
               ok: false,
               acao: acao,

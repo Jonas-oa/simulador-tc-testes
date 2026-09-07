@@ -94,6 +94,26 @@
     return { w: w, h: h, cinza: out, mmPorPixel: proj.mmPorPixel };
   }
 
+  /**
+   * Recorta o eixo crânio-caudal da projeção a uma faixa em milímetros.
+   *
+   * O eixo CC é a LARGURA da projeção crua (Core.Volume.scout monta assim),
+   * então recortar é ficar com um intervalo de colunas.
+   */
+  function recortarCC(proj, z0Mm, z1Mm) {
+    var mmPorCol = proj.mmPorPixel[0];
+    var c0 = Math.max(0, Math.floor(z0Mm / mmPorCol));
+    var c1 = Math.min(proj.w, Math.ceil(z1Mm / mmPorCol));
+    var w = Math.max(2, c1 - c0);
+    var out = new Uint8ClampedArray(w * proj.h);
+    for (var y = 0; y < proj.h; y++) {
+      var de = y * proj.w + c0;
+      var para = y * w;
+      for (var x = 0; x < w; x++) out[para + x] = proj.cinza[de + x];
+    }
+    return { w: w, h: proj.h, cinza: out, mmPorPixel: proj.mmPorPixel };
+  }
+
   function pintarProporcional(proj) {
     var base = pintar(proj.w, proj.h, proj.cinza);
     var mmX = proj.mmPorPixel[0], mmY = proj.mmPorPixel[1];
@@ -161,7 +181,7 @@
         janela_exibicao: { wl: v.janelaPadrao.wl, ww: v.janelaPadrao.ww },
         hu_min: m.hu_min, hu_max: m.hu_max,
         extensao_mm: m.extensao_mm || null,
-        fonte: { nome: rotuloFonte(v.id), licenca: licencaDe(v.id) }
+        fonte: { nome: rotuloFonte(v), licenca: licencaDe(v) }
       };
     },
 
@@ -178,15 +198,49 @@
       return url;
     },
 
-    /** Topograma por projeção real do volume. */
+    /**
+     * Trecho do volume que o TOPOGRAMA cobre, em mm a partir do corte
+     * inferior.
+     *
+     * Um scout não varre o cadáver inteiro: cobre a região que vai ser
+     * examinada, com folga para o operador enquadrar. Fazer o topograma varrer
+     * todo o volume tinha uma consequência concreta e imediata — o volume de
+     * tronco passou a 694 mm, e a mesa precisava desse curso ANTES de começar.
+     * Num protocolo caudocranial, que retira a mesa enquanto varre, isso é
+     * curso que não existe a partir do repouso: a aquisição recusava com
+     * "faltam 695 mm" e o exame simplesmente não saía do lugar.
+     *
+     * A faixa vem do padrão da região (core/phantom/acervo.js) com 25% de
+     * folga de cada lado, presa aos limites do volume. Sem padrão declarado,
+     * cobre o volume todo — que é o comportamento certo para um volume feito
+     * sob medida para uma região só.
+     */
+    faixaTopograma: function (regiao) {
+      var v = Fonte.volume(regiao);
+      if (!v) return null;
+      var L = v.dims[2] * v.spacingMm[2];
+      var fp = Core.Acervo.faixaPadrao(regiao);
+      if (!fp) return { z0Mm: 0, z1Mm: L, comprimentoMm: L };
+      var folga = (fp.fimMm - fp.inicioMm) * 0.25;
+      var z0 = Math.max(0, fp.inicioMm - folga);
+      var z1 = Math.min(L, fp.fimMm + folga);
+      if (!(z1 - z0 > 20)) return { z0Mm: 0, z1Mm: L, comprimentoMm: L };
+      return { z0Mm: z0, z1Mm: z1, comprimentoMm: z1 - z0 };
+    },
+
+    /** Topograma por projeção real do volume, limitado à faixa da região. */
     scout: function (regiao, orientacao) {
       var v = Fonte.volume(regiao);
       if (!v) return null;
       var orient = orientacao === "frontal" ? "frontal" : "lateral";
-      var chave = v.id + ":" + orient;
+      var f = Fonte.faixaTopograma(regiao);
+      var chave = v.id + ":" + orient + ":" + Math.round(f.z0Mm) + "-" + Math.round(f.z1Mm);
       if (cacheScout[chave]) return cacheScout[chave];
+      // Recorta ANTES de inverter: na projeção crua o eixo CC ainda cresce com
+      // o índice z, que é como a faixa está expressa.
+      var proj = recortarCC(v.scout(orient), f.z0Mm, f.z1Mm);
       // Superior primeiro: à esquerda no lateral, em cima no frontal.
-      var proj = inverterCC(v.scout(orient));
+      proj = inverterCC(proj);
       // No frontal, o eixo CC vai para a vertical.
       if (orient === "frontal") proj = transpor(proj);
       var url = pintarProporcional(proj);
@@ -201,14 +255,23 @@
     limitesAnatomicos: function (regiao, orientacao) {
       var v = Fonte.volume(regiao);
       if (!v) return null;
-      var chave = v.id + ":" + (orientacao === "frontal" ? "frontal" : "lateral");
+      var f = Fonte.faixaTopograma(regiao);
+      var chave = v.id + ":" + (orientacao === "frontal" ? "frontal" : "lateral") +
+                  ":" + Math.round(f.z0Mm) + "-" + Math.round(f.z1Mm);
       if (!cacheLimites[chave]) {
         var l = v.limitesAnatomicos(orientacao);
-        // O núcleo devolve frações do índice z (z cresce para superior); o
-        // topograma exibe superior primeiro. Sem esta inversão, a validação
-        // compararia a caixa desenhada com a anatomia do lado oposto.
+        var L = v.dims[2] * v.spacingMm[2];
+        // O núcleo devolve frações do índice z sobre o VOLUME inteiro; o
+        // topograma mostra só a faixa recortada, e com o superior primeiro.
+        // As duas conversões têm de andar juntas: sem a inversão a validação
+        // compara a caixa com a anatomia do lado oposto; sem o reenquadramento
+        // na faixa, compara com uma escala que não é a da imagem exibida.
+        var aMm = l.cc[0] * L, bMm = l.cc[1] * L;
+        var comp = f.comprimentoMm;
+        var fa = (f.z1Mm - bMm) / comp;   // topo da imagem = z1
+        var fb = (f.z1Mm - aMm) / comp;
         cacheLimites[chave] = {
-          cc: [1 - l.cc[1], 1 - l.cc[0]],
+          cc: [Math.max(0, Math.min(1, fa)), Math.max(0, Math.min(1, fb))],
           perp: l.perp
         };
       }
@@ -221,16 +284,36 @@
       return v ? v.dims[2] * v.spacingMm[2] : null;
     },
 
+    /** Comprimento que o TOPOGRAMA cobre — é o curso que a mesa percorre. */
+    comprimentoTopogramaMm: function (regiao) {
+      var f = Fonte.faixaTopograma(regiao);
+      return f ? f.comprimentoMm : null;
+    },
+
     /**
      * Converte fração do topograma no eixo crânio-caudal (0 = extremidade
-     * SUPERIOR exibida) para milímetro no volume (0 = primeiro corte, que é o
-     * INFERIOR). É a única conversão entre as duas convenções; quem precisar
-     * de milímetros a partir da caixa de planejamento passa por aqui.
+     * SUPERIOR exibida) para milímetro no VOLUME (0 = primeiro corte, que é o
+     * INFERIOR). É a única conversão entre as duas convenções, e leva em conta
+     * que o topograma mostra apenas a faixa da região.
      */
     fracaoCCparaMm: function (regiao, fracao) {
-      var L = Fonte.comprimentoCCmm(regiao);
-      if (L == null) return null;
-      return (1 - fracao) * L;
+      var f = Fonte.faixaTopograma(regiao);
+      if (!f) return null;
+      return f.z1Mm - fracao * f.comprimentoMm;
+    },
+
+    /**
+     * Inversa exata de fracaoCCparaMm: milímetro no VOLUME -> fração do
+     * topograma. Existe como par declarado porque quem semeia a caixa de
+     * planejamento precisa ir nesta direção, e fazer a conta "na mão" no outro
+     * arquivo foi exatamente o que quebrou: dividir um milímetro do volume
+     * pelo comprimento do topograma mistura dois referenciais e encolheu uma
+     * faixa de 66% para 15%.
+     */
+    mmParaFracaoCC: function (regiao, mm) {
+      var f = Fonte.faixaTopograma(regiao);
+      if (!f || !(f.comprimentoMm > 0)) return null;
+      return (f.z1Mm - mm) / f.comprimentoMm;
     },
 
     limparCache: function () {
@@ -240,23 +323,31 @@
     }
   };
 
-  var ROTULOS = {
-    cranio: "Crânio", torax: "Tórax",
-    tronco: "Tronco (tórax inferior, abdome, pelve, coluna lombar)"
+  // Procedência vem do MANIFESTO do volume, não de uma tabela paralela aqui.
+  // A tabela existia e ficou desatualizada quando os volumes foram trocados: a
+  // legenda passou a creditar CPTAC-CCRCC para um volume do TotalSegmentator.
+  // Em dado CC BY isso não é um texto velho, é descumprimento da licença — a
+  // atribuição é a única condição que a licença impõe. Mantendo o crédito ao
+  // lado do dado que ele descreve, trocar um implica trocar o outro.
+  var CREDITO_RESERVA = {
+    rotulo: "", fonte: "origem não declarada no manifesto",
+    licenca: "", doi: "", sujeito: null
   };
-  var FONTES = {
-    cranio: "TCIA · CPTAC-AML",
-    torax: "TCIA · LIDC-IDRI",
-    tronco: "TCIA · CPTAC-CCRCC"
-  };
-  var LICENCAS = {
-    cranio: "CC BY 4.0 — DOI 10.7937/tcia.2019.b6foe619.",
-    torax: "CC BY 3.0 — DOI 10.7937/K9/TCIA.2015.LO9QL9SX.",
-    tronco: "CC BY 4.0 — DOI 10.7937/k9/tcia.2018.oblamn27."
-  };
-  function rotuloRegiao(regiao, v) { return ROTULOS[v.id] || regiao || v.id; }
-  function rotuloFonte(id) { return FONTES[id] || "TCIA"; }
-  function licencaDe(id) { return LICENCAS[id] || ""; }
+  function creditoDe(v) {
+    return (v && v.manifest && v.manifest.credito) || CREDITO_RESERVA;
+  }
+  function rotuloRegiao(regiao, v) {
+    return creditoDe(v).rotulo || regiao || (v && v.id) || "";
+  }
+  function rotuloFonte(v) {
+    var c = creditoDe(v);
+    return c.fonte + (c.sujeito ? " · sujeito " + c.sujeito : "");
+  }
+  function licencaDe(v) {
+    var c = creditoDe(v);
+    if (!c.licenca) return "";
+    return c.licenca + (c.doi ? " — DOI " + c.doi + "." : ".");
+  }
 
   window.SimTC = window.SimTC || {};
   SimTC.FonteVolume = Fonte;

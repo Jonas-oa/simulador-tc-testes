@@ -83,6 +83,58 @@
       };
     }
     function cranioObs() { return "Valores didáticos de referência (AAPM/DRL). Ajuste conforme o serviço."; }
+
+    // Valores de PARTIDA para as demais entradas do catálogo.
+    //
+    // Antes só o crânio vinha preenchido e as outras quinze ficavam em branco.
+    // Enquanto o acervo tinha volume só para crânio e tórax isso passava
+    // despercebido; com abdome, pelve e coluna cobertos, o efeito ficou
+    // evidente e imediato: o aluno escolhia o protocolo, chegava até a
+    // confirmação e recebia "Tensão do tubo (kV) não definida" — cinco
+    // impedimentos que ele não tinha como saber que precisava preencher. Um
+    // simulador que só examina cabeça não é um simulador de tomógrafo.
+    //
+    // São referências DIDÁTICAS de adulto médio, na mesma linha das do crânio,
+    // e continuam editáveis: quem define o parâmetro final do serviço é o
+    // responsável técnico. Preenchem apenas entradas em branco — nada que o
+    // usuário tenha digitado é sobrescrito.
+    var PADROES = {
+      face:      { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "lateral" },
+      saf:       { kv: "120", mas: "150", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "lateral" },
+      orbitas:   { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "180 mm", scout: "lateral" },
+      atm:       { kv: "120", mas: "200", pitch: "0,8",  espessura: "0,6 mm", kernel: "Osso (nítido)",    fov: "160 mm", scout: "lateral" },
+      pescoco:   { kv: "120", mas: "250", pitch: "0,8",  espessura: "2,0 mm", kernel: "Partes moles",     fov: "220 mm", scout: "lateral" },
+      torax:     { kv: "120", mas: "150", pitch: "1,0",  espessura: "2,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
+      torax_ar:  { kv: "120", mas: "200", pitch: "1,0",  espessura: "1,0 mm", kernel: "Pulmão (nítido)",  fov: "450 mm", scout: "frontal" },
+      abd_total: { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
+      abd_sup:   { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
+      pelve:     { kv: "120", mas: "250", pitch: "0,9",  espessura: "3,0 mm", kernel: "Partes moles",     fov: "450 mm", scout: "frontal" },
+      col_cerv:  { kv: "120", mas: "250", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
+      col_tor:   { kv: "120", mas: "300", pitch: "0,8",  espessura: "2,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
+      col_lomb:  { kv: "120", mas: "300", pitch: "0,8",  espessura: "2,0 mm", kernel: "Osso (nítido)",    fov: "450 mm", scout: "lateral" },
+      memb_sup:  { kv: "120", mas: "150", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "200 mm", scout: "frontal" },
+      memb_inf:  { kv: "120", mas: "200", pitch: "0,8",  espessura: "1,0 mm", kernel: "Osso (nítido)",    fov: "250 mm", scout: "frontal" }
+    };
+    var COMUNS = { modo: "helicoidal", direcao: "caudocranial",
+                   tilt: "0", rotacao: "0,5", colimacao: "64 × 0,6 mm" };
+    function padroesObs() {
+      return "Valores didáticos de referência para adulto médio. " +
+             "Ajuste conforme o serviço e o porte do paciente. " +
+             "O FOV precisa CONTER o paciente: neste motor o recorte de campo " +
+             "acontece antes da projeção, então um FOV menor trunca de verdade " +
+             "— não é reconstrução dirigida.";
+    }
+
+    function aplicarPadroesSeEmBranco() {
+      protocols.forEach(function (p) {
+        var d = PADROES[p.id];
+        if (!d || !isClinicallyBlank(p)) return;
+        for (var k in COMUNS) { if (COMUNS.hasOwnProperty(k) && !p[k]) p[k] = COMUNS[k]; }
+        for (var j in d) { if (d.hasOwnProperty(j)) p[j] = d[j]; }
+        if (!p.obs) p.obs = padroesObs();
+        persist(p);
+      });
+    }
     function isClinicallyBlank(p) {
       return !(p.kv || p.mas || p.pitch || p.colimacao || p.espessura || p.kernel || p.fov || p.dose);
     }
@@ -149,6 +201,7 @@
         }
       });
       applyCranioDefaultsIfBlank();
+      aplicarPadroesSeEmBranco();
       ensureStructuredFields();
     }
     function cranioSeed() {

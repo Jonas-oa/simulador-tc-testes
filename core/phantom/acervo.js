@@ -74,8 +74,17 @@
   var cache = Object.create(null);
   var emVoo = Object.create(null);
 
+  /**
+   * URL do arquivo do volume, com a revisão de cache.
+   *
+   * Sem ela, `cache: "force-cache"` fazia o navegador servir o manifesto
+   * antigo depois de o volume ser trocado: a tela creditava a coleção errada
+   * enquanto exibia imagens de outra. O gz é grande e deve mesmo ficar em
+   * cache — a revisão é o que permite invalidá-lo quando o dado muda.
+   */
   function urlDe(regiao, arquivo) {
-    return BASE + regiao + "/" + arquivo;
+    var rev = (typeof raiz !== "undefined" && raiz.__SIMTC_REV__) || "";
+    return BASE + regiao + "/" + arquivo + (rev ? "?v=" + rev : "");
   }
 
   function descomprimir(buffer) {

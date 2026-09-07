@@ -100,11 +100,12 @@
     var TOPO_LEN_PADRAO_MM = 300;
 
     function topoLenMm() {
-      var v = SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo());
-      if (v && v.dims && v.spacingMm) {
-        var z = v.dims[2] * v.spacingMm[2];
-        if (isFinite(z) && z > 0) return z;
-      }
+      // Comprimento que o TOPOGRAMA cobre — nao a extensao do volume. E esse o
+      // curso que a mesa percorre na varredura do scout, e e sobre ele que a
+      // caixa de planejamento e uma fracao.
+      var f = SimTC.FonteVolume && SimTC.FonteVolume.comprimentoTopogramaMm &&
+              SimTC.FonteVolume.comprimentoTopogramaMm(regiaoDoProtocolo());
+      if (isFinite(f) && f > 0) return f;
       return TOPO_LEN_PADRAO_MM;
     }
     var TOPO_SPEED_MMS = 100;// velocidade da mesa no scout (tubo estacionário)
@@ -728,6 +729,8 @@
         var res = SimTC.tableDriveApi.start({
           distanceMm: topoLenMm(),
           direction: pp.direcao === "craniocaudal" ? "in" : "out",
+          // Varredura: se faltar curso, o console posiciona a mesa e emenda.
+          posicionarAntes: true,
           speedMmS: TOPO_SPEED_MMS,
           rotTimeS: 0, // scout: tubo estacionário, gantry não gira
           onProgress: function (k) { setTopoClip(k); },
@@ -791,13 +794,17 @@
           // produziam exatamente o mesmo exame: o aluno escolhia diferente e
           // recebia igual. Os limites anatomicos continuam valendo como teto —
           // a faixa padrao e recortada para dentro deles.
-          var Lv = topoLenMm();
+          var reg0 = regiaoDoProtocolo();
           var fp = window.SimTCCore && window.SimTCCore.Acervo &&
-                   window.SimTCCore.Acervo.faixaPadrao(regiaoDoProtocolo());
-          if (fp && Lv > 0) {
-            // mm no volume (0 = corte inferior) -> % do topograma (0 = superior)
-            var p0 = (1 - fp.fimMm / Lv) * 100;
-            var p1 = (1 - fp.inicioMm / Lv) * 100;
+                   window.SimTCCore.Acervo.faixaPadrao(reg0);
+          var paraFracao = SimTC.FonteVolume && SimTC.FonteVolume.mmParaFracaoCC;
+          if (fp && paraFracao) {
+            // mm no VOLUME -> % do TOPOGRAMA. A conversao mora em
+            // FonteVolume porque o topograma cobre so uma faixa do volume:
+            // dividir pelo comprimento do topograma, como se as duas escalas
+            // tivessem a mesma origem, encolhia a faixa de 66% para 15%.
+            var p0 = SimTC.FonteVolume.mmParaFracaoCC(reg0, fp.fimMm) * 100;
+            var p1 = SimTC.FonteVolume.mmParaFracaoCC(reg0, fp.inicioMm) * 100;
             p0 = Math.max(c0, Math.min(100, p0));
             p1 = Math.min(c1, Math.max(0, p1));
             if (p1 - p0 >= MIN_GAP) { c0 = p0; c1 = p1; }
@@ -1060,6 +1067,7 @@
         var res = SimTC.tableDriveApi.start({
           distanceMm: scanLen,
           direction: pp.direcao === "craniocaudal" ? "in" : "out",
+          posicionarAntes: true,
           speedMmS: speed,
           rotTimeS: pp.rotacaoS, // liga o arco de varredura girando no bore
           onProgress: function (k) { paintProg(k); },

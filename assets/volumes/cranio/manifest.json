@@ -39,12 +39,19 @@
     "z": 187.5
   },
   "aquisicao_original": {
-    "fonte": "TotalSegmentator",
+    "fonte": "TotalSegmentator (Zenodo)",
     "sujeito": "s0187",
     "arquivo": "ct.nii.gz",
     "orientacao_origem": "RAS (NIfTI) -> LPS",
     "mesa_removida": true
   },
   "convertido_em": "2026-09-03T19:54:06.302837+00:00",
-  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica."
+  "aviso": "Volume de TC real, anonimizado, para treinamento de operacao. Sem finalidade diagnostica.",
+  "credito": {
+    "rotulo": "Crânio",
+    "fonte": "TotalSegmentator (Zenodo)",
+    "licenca": "CC BY 4.0",
+    "doi": "10.5281/zenodo.10047292",
+    "sujeito": "s0187"
+  }
 }
