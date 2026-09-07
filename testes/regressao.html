@@ -84,9 +84,16 @@
   // Defeitos que AINDA NÃO FORAM CORRIGIDOS. Ao corrigir um na ETAPA 2,
   // remova o id daqui — a suíte acusa se você esquecer.
   // ---------------------------------------------------------------------
+  //   ETAPA 2 (07/09/2026) corrigiu e tirou daqui:
+  //     P1-01 confirmação sem protocolo   P1-02 sinal do tilt
+  //     P1-03 DLP único                   P1-04a cortes do arquivo
+  //     P1-04b DLP do arquivo             P1-06 excluir paciente no exame
+  //     P1-08 teclado nos comandos de mesa
+  //   Os três que restam têm etapa marcada no plano; não são esquecimento.
   var PENDENTES = new Set([
-    "P1-01", "P1-02", "P1-03", "P1-04a", "P1-04b",
-    "P1-05", "P1-06", "P1-07", "P1-08", "P1-09"
+    "P1-05",   // ETAPA 3 — matar o MPR interno de 8 bits
+    "P1-07",   // ETAPA 5 — protocolo tipado de ponta a ponta
+    "P1-09"    // ETAPA 5 — depende do protocolo tipado
   ]);
 
   var PREFIXO = "ZZ-TESTE-REGRESSAO";
@@ -248,22 +255,43 @@
   });
 
   teste("P1-08", "comandos de mesa respondem ao teclado", async function () {
-    var alturaDe = function () {
-      return parseFloat(($("hud-table-height").textContent || "").replace(",", "."));
-    };
-    var antes = alturaDe();
-    var btn = $("btn-table-up");
-    ok(btn, "botão de subir mesa não encontrado");
-    btn.focus();
+    // A altura vem da CENA, não do mostrador.
+    //
+    // Este teste media `#hud-table-height` e acusava o teclado em metade das
+    // execuções. Não era o teclado: `updateReadouts()` roda dentro do
+    // requestAnimationFrame, enquanto a física roda no relógio do núcleo, que
+    // tem uma fonte por Worker para não parar quando ninguém está olhando. Com
+    // o documento oculto — que é o caso de um iframe fora da tela e o caso do
+    // CI headless — a mesa SE MOVE e os mostradores congelam no último valor
+    // pintado. Medido: tableGroup.position.y = 0,88 m com o HUD exibindo
+    // "80,0 cm". Ver a nota sobre isso em docs/PROMPT-CONTINUACAO.md.
+    var sim = W().__ctSimulator;
+    ok(sim && sim.tableGroup, "a cena 3D não expôs a mesa; o teste não é conclusivo");
+    var alturaM = function () { return sim.tableGroup.position.y; };
+
+    ok(W().SimTCCore.relogio.rodando(),
+      "o relógio do núcleo não está rodando; o teste do teclado não é conclusivo");
+
+    var antes = alturaM();
+    // A mesa tem batente em 0,88 m. No topo, o comando de subir não tem para
+    // onde ir — testa descendo.
+    var subindo = antes < 0.87;
+    var btn = $(subindo ? "btn-table-up" : "btn-table-down");
+    ok(btn, "botão de mover mesa não encontrado");
+
     var K = W().KeyboardEvent;
-    btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true }));
-    await dormir(700);
-    btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
-    await dormir(200);
-    var depois = alturaDe();
-    ok(Math.abs(depois - antes) > 0.05,
-      "altura não mudou com Enter (" + antes + " → " + depois +
-      "): setHeld() liga só pointerdown/pointerup");
+    btn.focus();
+    btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    try {
+      await ate(function () { return Math.abs(alturaM() - antes) > 0.002; },
+        "a mesa se mover com Enter pressionado", 8000, 150);
+    } catch (e) {
+      throw new Error("a mesa não se moveu com Enter (" + (antes * 100).toFixed(1) +
+        " cm, " + (subindo ? "subindo" : "descendo") +
+        "): setHeld() liga só pointerdown/pointerup");
+    } finally {
+      btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
+    }
   });
 
   teste("P1-09", "pitch em modo sequencial é acusado pelo caminho REAL", async function () {

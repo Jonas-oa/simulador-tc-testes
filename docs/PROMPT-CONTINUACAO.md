@@ -6,9 +6,9 @@
 > três perguntas: **o que é este projeto**, **onde exatamente paramos** e **o que fazer a
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
-> Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`) e
-> **ETAPA 1 do plano concluída** — a rede de segurança está de pé. A próxima ação é a
-> **ETAPA 2**. Ver o checklist no BLOCO 5.
+> Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
+> **ETAPAS 1 e 2 do plano concluídas** — a rede de segurança está de pé e 7 dos 9 P1 estão
+> corrigidos. A próxima ação é a **ETAPA 3** (matar o MPR interno). Ver o checklist no BLOCO 5.
 
 ---
 
@@ -61,9 +61,20 @@ enquanto a ETAPA 2 não acontecer. O placar tem quatro números:
 | **corrigido(s)** | o defeito foi consertado mas o id continua em `PENDENTES` no topo do script. Tire-o de lá. **Reprova** de propósito, para a lista não mentir. |
 | **executados** | se for menor que o total, a suíte travou no meio. |
 
-Hoje o esperado é: `10/10 executados · 10 esperadas · 0 inesperadas · 0 corrigidos`.
-Cada defeito corrigido na ETAPA 2 move um número da coluna "esperadas" para "corrigidos" —
-e aí você remove o id de `PENDENTES` e ele vira um teste verde permanente.
+Hoje o esperado é: `10/10 executados · 3 esperadas · 0 inesperadas · 0 corrigidos` — as três
+que restam são P1-05 (ETAPA 3), P1-07 e P1-09 (ETAPA 5). Cada defeito corrigido move um
+número da coluna "esperadas" para "corrigidos"; aí você remove o id de `PENDENTES` e ele
+vira um teste verde permanente.
+
+**Uma armadilha que já custou tempo aqui:** não meça o estado da máquina pelos mostradores.
+`updateReadouts()` roda dentro do `requestAnimationFrame`, enquanto a física roda no relógio
+do núcleo, que tem uma fonte por Worker justamente para não parar quando ninguém está
+olhando. Com o documento oculto — iframe fora da tela, CI headless, aba em segundo plano —
+**a mesa se move e os mostradores congelam no último valor pintado**. Medido:
+`tableGroup.position.y = 0,88 m` com o HUD exibindo "80,0 cm". Um teste do teclado que lia o
+HUD acusava defeito onde não havia. Para o usuário real o impacto é pequeno (o mostrador
+ressincroniza no primeiro repaint), mas é uma incoerência de verdade e está anotada para a
+**ETAPA 9**.
 
 O checklist do **BLOCO 5** é a fonte de verdade sobre o progresso. **Mantenha-o atualizado no
 mesmo commit em que fizer o trabalho** — é assim que a próxima IA saberá onde você parou.
@@ -355,18 +366,16 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
 - [x] **ETAPA 1 — Rede de segurança** *(pequena)* — concluída em 07/09/2026
   - [x] CI rodando as três suítes a cada push — `.github/workflows/testes.yml` + `ferramentas/rodar-testes.mjs` (Playwright/Chromium headless, com servidor estático próprio)
   - [x] Um teste de regressão por P1, escrito **antes** da correção — `testes/regressao.html`, 10 testes, **todos falhando hoje pelo motivo certo**, cada um com a medição e o `arquivo:linha` do defeito na mensagem
-- [ ] **ETAPA 2 — Corrigir os P1 sem mexer na estrutura** *(média)*
-      Ao corrigir cada um, o teste correspondente vira verde: **remova o id de `PENDENTES`**
-      no topo de `testes/regressao.html` e marque a caixa aqui, no mesmo commit.
-  - [ ] P1-02 sinal do tilt — `js/aquisicao.js:313`
-  - [ ] P1-03 DLP único, vindo do motor — `js/aquisicao.js:1537-1539`
-  - [ ] P1-04a cortes do arquivo vindos da série — `js/aquisicao.js:1390`
-  - [ ] P1-04b DLP do arquivo vindo do motor — `js/aquisicao.js:1391`
-  - [ ] P1-01 confirmação exige protocolo — `js/aquisicao.js:1594`, usar `pendenciasParaIniciar()`
-  - [ ] P1-08 teclado no dpad da mesa — `js/sala-exame.js:1201`
-  - [ ] P1-06 abortar exame ao excluir o paciente — assinar `EVENTOS.EXAME_ENCERRADO`
-  - [ ] P1-07 protocolo tipado *(fica para a ETAPA 5 — é migração de dados, não correção cirúrgica)*
-  - [ ] P1-09 pitch em sequencial *(fica para a ETAPA 5 — depende do protocolo tipado)*
+- [x] **ETAPA 2 — Corrigir os P1 sem mexer na estrutura** *(média)* — concluída em 07/09/2026
+  - [x] P1-02 sinal do tilt — o parser local foi **removido**; `protocolParams()` virou adaptador sobre `Core.model.normalizarProtocolo`. Um só parser.
+  - [x] P1-03 DLP único — nova `dosePrevista()`, usada pelo cabeçalho da confirmação e pelo validador. O campo `dose` do protocolo deixou de ser insumo de cálculo.
+  - [x] P1-04a cortes do arquivo vindos da série — `totalCortes()` no lugar de `manifest.cortes`
+  - [x] P1-04b DLP do arquivo vindo do motor — nova `doseDoExame()`; o estudo passa a guardar também o `ctdivol`
+  - [x] P1-01 confirmação exige protocolo — nova `pendenciasParaIniciar()` na tela, que **pergunta ao núcleo**. Para isso, `protocolos.js` passou a chamar `Core.sessao.selecionarProtocolo()` e `sala-exame.js` a chamar `Core.sessao.atualizarMesa()`: os dois primeiros fios reais entre interface e núcleo.
+  - [x] P1-08 teclado no dpad — `setHeld()` ganhou `keydown`/`keyup` para Enter e Espaço, ignorando auto-repetição
+  - [x] P1-06 abortar exame ao excluir o paciente — a aquisição assina `EVENTOS.EXAME_ENCERRADO`
+  - [ ] P1-07 protocolo tipado *(ETAPA 5 — é migração de dados, não correção cirúrgica)*
+  - [ ] P1-09 pitch em sequencial *(ETAPA 5 — depende do protocolo tipado)*
 - [ ] **ETAPA 3 — Matar o MPR interno** *(média)* — P1-05: apagar `buildVolume`/`buildReformat` e reformatar do `Int16Array` da série. Fecha o último P1 da lista.
 
 ## Bloco B — estrutura (etapas 4 e 5)
@@ -381,6 +390,9 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
 - [ ] **ETAPA 7 — Camada `ui/` e fim das duplicações** *(grande)*
 - [ ] **ETAPA 8 — Um controlador de layout** *(média)*
 - [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*
+      Acrescentar aos itens da auditoria: os mostradores (HUD, display do console, isocentro)
+      congelam quando o documento fica oculto, porque `updateReadouts()` mora no
+      `requestAnimationFrame` e a física não. Ver o BLOCO 0.
 - [ ] **ETAPA 10 — Limpeza** *(pequena)* — código morto, volumes para fora do git, README
 
 ## Depois do plano: voltar ao roteiro do produto

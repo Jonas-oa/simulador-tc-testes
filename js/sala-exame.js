@@ -887,6 +887,7 @@
         patient.rotation.set(-Math.PI / 2, 0, 0);
         patient.position.set(0, 0.85, 0); // eleva para os pés tocarem o chão
         if (displayPositionEl) displayPositionEl.textContent = "AGUARDANDO";
+        avisarNucleoDaMesa();
       }
 
       function applyPatientPose() {
@@ -940,6 +941,26 @@
       function placePatient() {
         patientPlaced = true;
         applyPatientPose();
+        avisarNucleoDaMesa();
+      }
+
+      /**
+       * Informa o núcleo do estado da mesa.
+       *
+       * A sala mantinha isso só em closure, e o núcleo — que tem o estado de
+       * sessão e a lista de pré-requisitos para irradiar — seguia achando que
+       * o paciente não estava na mesa. Medido: a interface dizia `true` e
+       * Core.sessao.mesa.pacienteNaMesa dizia `false` no mesmo instante.
+       * Duas verdades sobre o mesmo exame.
+       */
+      function avisarNucleoDaMesa() {
+        var C = window.SimTCCore;
+        if (!C || !C.sessao) return;
+        try {
+          C.sessao.atualizarMesa({
+            posM: tableZ, alturaM: tableY, pacienteNaMesa: patientPlaced
+          });
+        } catch (e) { /* núcleo ausente: a sala segue sozinha */ }
       }
 
       // Estado inicial: paciente em pé ao lado do aparelho.
@@ -1206,6 +1227,28 @@
         // solto fora do elemento sem capturar corretamente.
         window.addEventListener("pointerup", off);
         window.addEventListener("blur", off);
+
+        // TECLADO. Estes são <button> de verdade — focáveis pelo Tab e
+        // anunciados como botões pelo leitor de tela —, mas só respondiam a
+        // eventos de ponteiro. Quem navega por teclado ouvia "botão subir
+        // mesa", pressionava Enter e nada acontecia: o comando central do
+        // simulador era inoperável. (WCAG 2.1.1)
+        //
+        // O gesto é "manter pressionado", então o par natural é keydown/keyup
+        // — e não `click`, que só chega quando a tecla já foi solta e moveria
+        // a mesa por um instante imperceptível.
+        function ehAcionamento(e) { return e.key === "Enter" || e.key === " " || e.key === "Spacebar"; }
+        el.addEventListener("keydown", function (e) {
+          if (!ehAcionamento(e)) return;
+          // A repetição automática do teclado dispararia `on` dezenas de vezes
+          // por segundo; o movimento já é contínuo enquanto a tecla estiver
+          // pressionada.
+          if (e.repeat) { e.preventDefault(); return; }
+          on(e);   // `on` já chama preventDefault (evita a rolagem no Espaço)
+        });
+        el.addEventListener("keyup", function (e) { if (ehAcionamento(e)) off(); });
+        // Perder o foco com a tecla pressionada não pode deixar a mesa andando.
+        el.addEventListener("blur", off);
       }
 
       var btnUp = document.getElementById("btn-table-up");

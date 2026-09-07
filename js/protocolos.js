@@ -396,6 +396,14 @@
       SimTC.examProtocol.name = p ? p.nome : "";
       SimTC.examProtocol.data = p || null;
       if (SimTC.examProtocol.refresh) SimTC.examProtocol.refresh();
+      // O núcleo também precisa saber. Sem isto, Core.sessao.protocolo ficava
+      // eternamente null e pendenciasParaIniciar() acusava "Selecionar o
+      // protocolo" mesmo com um escolhido — o que tornava a única checagem
+      // confiável de pré-requisitos do exame inútil para a tela.
+      var Core = window.SimTCCore;
+      if (Core && Core.sessao) {
+        try { Core.sessao.selecionarProtocolo(p || null); } catch (e) { /* protocolo ilegível: o validador dirá */ }
+      }
       atualizarGestor();
     }
 

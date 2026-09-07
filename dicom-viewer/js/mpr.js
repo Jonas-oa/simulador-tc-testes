@@ -22,7 +22,7 @@
  *                  baixo — este é o único caso que precisa inverter.
  */
 
-import * as Medidas from './medidas.js?v=20260906a';
+import * as Medidas from './medidas.js?v=20260907a';
 
 export const PLANOS = {
   axial: {

@@ -306,36 +306,60 @@
 
     // Parâmetros do protocolo selecionado (direção, pitch, colimação) com
     // interpretação tolerante ("1,2", "64 × 0,6 mm", "40 mm"...).
+    /**
+     * Parâmetros do protocolo na forma que ESTA TELA consome.
+     *
+     * A conversão de texto para número é do NÚCLEO, não daqui. Havia um
+     * parser local, e ele divergia do núcleo num ponto que importa: a
+     * expressão não aceitava sinal negativo, então um tilt de gantry de −15°
+     * era lido como +15 e era esse valor que inclinava o gantry 3D, entrava no
+     * relatório e aparecia na confirmação. O aluno via o gantry inclinar para
+     * o lado oposto ao que pediu — num simulador de operação, ensinar a
+     * direção errada é o defeito mais caro que existe.
+     *
+     * Duas respostas para a mesma pergunta é o que produz esse tipo de erro.
+     * Agora há uma só: Core.model.normalizarProtocolo. Esta função vira o
+     * adaptador de forma, e nada mais.
+     */
+    var ppCache = { cru: null, valor: null };
     function protocolParams() {
-      var p = protocoloVigente() || {};
-      function num(s) {
-        if (!s) return NaN;
-        var m = String(s).replace(/,/g, ".").match(/\d+(\.\d+)?/);
-        return m ? parseFloat(m[0]) : NaN;
+      var cru = protocoloVigente() || {};
+      // Memo por identidade: protocolParams() é chamada a cada quadro durante
+      // o arraste das linhas do topograma, e normalizar aloca um objeto.
+      if (ppCache.cru === cru && ppCache.valor) return ppCache.valor;
+
+      var C = window.SimTCCore;
+      var n = null;
+      if (C && C.model && C.model.normalizarProtocolo) {
+        try { n = C.model.normalizarProtocolo(cru); } catch (e) { n = null; }
       }
-      function colimMm(s) {
-        if (!s) return 38.4;
-        var ms = String(s).replace(/,/g, ".").match(/\d+(\.\d+)?/g);
-        if (!ms || !ms.length) return 38.4;
-        if (ms.length >= 2) return parseFloat(ms[0]) * parseFloat(ms[1]); // "64 × 0,6 mm"
-        return parseFloat(ms[0]);                                        // "40 mm"
+      var valor;
+      if (n) {
+        var aq = n.aquisicao;
+        // No sequencial o núcleo devolve pitch null — é o correto: pitch não
+        // se aplica ao step-and-shoot. A tela ainda precisa de um número para
+        // a conta de velocidade da mesa no helicoidal; no sequencial ela nem
+        // usa esse valor (runSequential trabalha com colimação e rotação).
+        valor = {
+          scout: n.scout.orientacao,
+          direcao: aq.direcao,
+          modo: aq.modo,
+          pitch: (aq.pitch != null && aq.pitch > 0) ? aq.pitch : 1.0,
+          colim: aq.colimacao.totalMm,
+          rotacaoS: aq.tempoRotacaoS,
+          tiltDeg: aq.tiltGantryDeg
+        };
+      } else {
+        // Sem núcleo carregado a tela não inventa leitura de protocolo: usa a
+        // configuração neutra e segue, em vez de exibir números derivados de
+        // um parser improvisado.
+        valor = {
+          scout: "lateral", direcao: "caudocranial", modo: "helicoidal",
+          pitch: 1.0, colim: 38.4, rotacaoS: ROT_S, tiltDeg: 0
+        };
       }
-      var pitch = num(p.pitch);
-      if (!(pitch > 0)) pitch = 1.0;
-      var rot = num(p.rotacao);
-      if (!(rot > 0)) rot = ROT_S;
-      var tilt = num(p.tilt);
-      if (isNaN(tilt)) tilt = 0;
-      tilt = Math.max(-30, Math.min(30, tilt));
-      return {
-        scout: p.scout === "frontal" ? "frontal" : "lateral",
-        direcao: p.direcao === "craniocaudal" ? "craniocaudal" : "caudocranial",
-        modo: p.modo === "sequencial" ? "sequencial" : "helicoidal",
-        pitch: pitch,
-        colim: colimMm(p.colimacao),
-        rotacaoS: rot,
-        tiltDeg: tilt
-      };
+      ppCache = { cru: cru, valor: valor };
+      return valor;
     }
 
     // Arquivo do topograma conforme a orientação do scout no protocolo:
@@ -840,12 +864,9 @@
       var pp = (lastAcq && lastAcq.pp) || protocolParams();
       var scanLen = lastAcq ? lastAcq.scanLen : 0;
       var speed = lastAcq ? lastAcq.speed : 0;
-      var dose = NaN;
-      if (prot && prot.dose) {
-        var m = String(prot.dose).replace(/,/g, ".").match(/\d+(\.\d+)?/);
-        if (m) dose = parseFloat(m[0]);
-      }
-      var dlp = (dose > 0 && scanLen > 0) ? dose * (scanLen / 10) : NaN;
+      // A dose deste relatório vem do motor, mais abaixo. O cálculo a partir
+      // do texto digitado no protocolo que existia aqui ficou órfão quando a
+      // Fase 6 passou a calcular a dose, e continuava rodando sem ser lido.
       var iso = topoRef ? topoRef.isoOff : null;
       var isoTxt = (iso == null)
         ? "não avaliado"
@@ -1376,19 +1397,25 @@
       if (SimTC.examSessionApi && SimTC.examSessionApi.arquivar) {
         var protArq = protocoloVigente();
         var ppArq = (lastAcq && lastAcq.pp) || protocolParams();
-        var doseArq = NaN;
-        if (protArq && protArq.dose) {
-          var mArq = String(protArq.dose).replace(/,/g, ".").match(/\d+(\.\d+)?/);
-          if (mArq) doseArq = parseFloat(mArq[0]);
-        }
         var lenArq = lastAcq ? lastAcq.scanLen : 0;
+        // O registro guarda o que o exame REALMENTE produziu:
+        //
+        //   cortes  os da série reconstruída. Guardava manifest.cortes, que é
+        //           a contagem do VOLUME-FONTE — o exame que a tela anunciava
+        //           com 32 cortes ia para o arquivo com 125.
+        //   dlp     o do motor, com a modulação AEC que de fato aconteceu.
+        //           Vinha de `dose_digitada × faixa`, lendo "≈55 mGy (ref.)"
+        //           por expressão regular: 866 no arquivo contra 1370
+        //           calculados. Era a Fase 6 sendo desfeita no último passo.
+        var dzArq = doseDoExame();
         SimTC.examSessionApi.arquivar({
           regiao: protArq ? protArq.regiao : "",
           protocoloNome: protArq ? protArq.nome : "",
           modo: ppArq.modo,
           faixaMm: lenArq,
-          cortes: manifest ? manifest.cortes : null,
-          dlp: (doseArq > 0 && lenArq > 0) ? doseArq * (lenArq / 10) : null,
+          cortes: totalCortes() || null,
+          dlp: (dzArq && dzArq.dlp != null) ? dzArq.dlp : null,
+          ctdivol: (dzArq && dzArq.ctdivol != null) ? dzArq.ctdivol : null,
           isoOffsetCm: topoRef ? topoRef.isoOff : null
         });
       }
@@ -1534,9 +1561,8 @@
       var prot = protocoloVigente();
       var pp = protocolParams();
       var scanLen = Math.max(20, (rangeSpan() / 100) * topoLenMm());
-      var dose = NaN;
-      if (prot && prot.dose) { var m = String(prot.dose).replace(/,/g, ".").match(/\d+(\.\d+)?/); if (m) dose = parseFloat(m[0]); }
-      var dlp = (dose > 0) ? dose * (scanLen / 10) : NaN;
+      // Um só DLP nesta tela, e calculado — ver dosePrevista().
+      var rel = dosePrevista();
       var iso = (SimTC.tableDriveApi && SimTC.tableDriveApi.getIsoOffsetCm) ? SimTC.tableDriveApi.getIsoOffsetCm() : null;
       function chk(ok, txt) { return '<span class="' + (ok ? "is-good" : "is-bad") + '">' + (ok ? "✓" : "⚠") + " " + txt + "</span>"; }
       var modoTxt = pp.modo === "sequencial" ? "axial sequencial" : "helicoidal";
@@ -1546,7 +1572,13 @@
       var fovLbl = pp.scout === "frontal" ? "FOV R-L" : "FOV A-P";
       rows.push("<strong>Protocolo:</strong> " + (prot ? esc(prot.nome) : "—") + " · scout " + scoutTxt + " · " + modoTxt + (pp.tiltDeg ? (", tilt " + pp.tiltDeg.toFixed(0) + "°") : "") + " · " + (pp.direcao === "craniocaudal" ? "crânio-caudal" : "caudo-cranial"));
       rows.push("<strong>Faixa:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + Math.max(0, fovSpan()).toFixed(0) + "%");
-      if (!isNaN(dlp)) rows.push("<strong>Dose estimada:</strong> DLP ≈ " + dlp.toFixed(0) + " mGy·cm");
+      if (rel && rel.ctdivol != null && rel.dlp != null) {
+        rows.push("<strong>Dose prevista:</strong> CTDIvol " + rel.ctdivol.toFixed(1) +
+          " mGy · DLP " + Math.round(rel.dlp) +
+          " mGy·cm <small>(calculado de kV, mAs, pitch e faixa)</small>");
+      } else {
+        rows.push("<strong>Dose prevista:</strong> não calculada — informe kV e mAs no protocolo.");
+      }
       rows.push("<br><strong>Checklist pré-aquisição</strong>");
       rows.push(chk(!!pac, "Paciente cadastrado"));
       rows.push(chk(!SimTC.tableDriveApi || SimTC.tableDriveApi.isPatientOnTable(), "Paciente posicionado na mesa"));
@@ -1587,6 +1619,75 @@
      * Devolve null quando o nucleo nao esta disponivel — a tela nunca inventa
      * regra propria.
      */
+    /**
+     * Dose PREVISTA para o protocolo e a faixa atuais — calculada a partir de
+     * kV, mAs, pitch e comprimento, nunca do texto digitado no campo `dose`.
+     *
+     * Existe como função única porque a mesma tela chegou a mostrar DOIS DLP
+     * para o mesmo exame: o cabeçalho da confirmação calculava
+     * `dose_digitada × faixa` e lia "≈55 mGy (ref.)" por expressão regular,
+     * enquanto o motor de validação, dois centímetros abaixo, mostrava o valor
+     * calculado. Medido no crânio de referência: 866 contra 1370 mGy·cm, lado
+     * a lado. O aluno lia dois números para a mesma grandeza e o registro do
+     * exame guardava o menor.
+     *
+     * O campo `dose` do protocolo passa a ser o que sempre deveria ter sido:
+     * referência histórica exibível, nunca insumo de cálculo.
+     *
+     * @returns {object|null} relatório de dose do núcleo, ou null quando falta
+     *                        kV, mAs ou faixa — nesse caso a tela DIZ que não
+     *                        calculou, em vez de inventar um número.
+     */
+    function dosePrevista() {
+      var Core = window.SimTCCore;
+      var cru = protocoloVigente();
+      if (!Core || !Core.dose || !Core.model || !cru) return null;
+      var pr;
+      try { pr = Core.model.normalizarProtocolo(cru); } catch (e) { return null; }
+      var faixa = faixaEmMm();
+      var comprimento = Math.abs(faixa.fimMm - faixa.inicioMm);
+      if (pr.aquisicao.kv == null || pr.aquisicao.mas == null || !(comprimento > 0)) return null;
+      return Core.dose.relatorio({
+        kv: pr.aquisicao.kv, mas: pr.aquisicao.mas, pitch: pr.aquisicao.pitch,
+        modo: pr.aquisicao.modo, regiao: regiaoDoProtocolo(), comprimentoMm: comprimento
+      });
+    }
+
+    /**
+     * Dose do exame para o REGISTRO: a medida do motor quando o exame já
+     * rodou (inclui o que a modulação AEC de fato fez), e a prevista antes
+     * disso. Nos dois casos, calculada.
+     */
+    function doseDoExame() {
+      var m = SimTC.MotorImagem && SimTC.MotorImagem.dose();
+      return (m && m.dlp != null) ? m : dosePrevista();
+    }
+
+    /**
+     * O que ainda falta para poder irradiar, em texto de operador.
+     *
+     * A resposta é do núcleo (Core.sessao.pendenciasParaIniciar), que já reúne
+     * paciente, protocolo, posicionamento e os parâmetros mínimos de técnica.
+     * A lista local abaixo é só a reserva para quando o núcleo não carregar —
+     * e ela repete, de propósito, as mesmas palavras, para que a mensagem que
+     * o aluno lê não dependa de qual caminho respondeu.
+     */
+    function pendenciasParaIniciar() {
+      var Core = window.SimTCCore;
+      if (Core && Core.sessao && Core.sessao.pendenciasParaIniciar) {
+        try { return Core.sessao.pendenciasParaIniciar(); } catch (e) { /* cai na reserva */ }
+      }
+      var faltas = [];
+      if (SimTC.examSessionApi && !SimTC.examSessionApi.get()) {
+        faltas.push("Selecionar o paciente na lista de trabalho.");
+      }
+      if (!protocoloVigente()) faltas.push("Selecionar o protocolo.");
+      if (SimTC.tableDriveApi && !SimTC.tableDriveApi.isPatientOnTable()) {
+        faltas.push("Posicionar o paciente na mesa.");
+      }
+      return faltas;
+    }
+
     function validarExameAtual() {
       var Core = window.SimTCCore;
       if (!Core || !Core.validacao) return null;
@@ -1598,19 +1699,12 @@
       var lim = vol && SimTC.FonteVolume.limitesAnatomicos(regiaoDoProtocolo(), isFrontal() ? "frontal" : "lateral");
       var larguraPac = (vol && lim) ? (lim.perp[1] - lim.perp[0]) * vol.extentMm()[0] : null;
       var comprimento = Math.abs(faixa.fimMm - faixa.inicioMm);
-      var dlpPrev = null;
-      if (Core.dose && pr.aquisicao.kv != null && pr.aquisicao.mas != null && comprimento > 0) {
-        var rel = Core.dose.relatorio({
-          kv: pr.aquisicao.kv, mas: pr.aquisicao.mas, pitch: pr.aquisicao.pitch,
-          modo: pr.aquisicao.modo, regiao: regiaoDoProtocolo(), comprimentoMm: comprimento
-        });
-        dlpPrev = rel.dlp;
-      }
+      var rel = dosePrevista();
       return Core.validacao.validar(pr, {
         larguraPacienteMm: larguraPac,
         comprimentoFaixaMm: comprimento,
         extensaoVolumeMm: topoLenMm(),
-        dlpEstimado: dlpPrev
+        dlpEstimado: rel ? rel.dlp : null
       });
     }
 
@@ -1644,12 +1738,24 @@
         return;
       }
       if (phase !== "idle") return;
-      if (SimTC.examSessionApi && !SimTC.examSessionApi.get()) {
-        SimTC.showMessage("Cadastre o paciente antes de iniciar o exame.", "warning");
-        return;
-      }
-      if (SimTC.tableDriveApi && !SimTC.tableDriveApi.isPatientOnTable()) {
-        SimTC.showMessage("Posicione o paciente na mesa (botão Decúbito, na sala 3D) antes de iniciar a aquisição.", "warning");
+
+      // Pré-requisitos para irradiar: quem responde é o NÚCLEO.
+      //
+      // A tela tinha a sua própria lista, e ela não incluía o protocolo. Sem
+      // protocolo selecionado o exame começava assim mesmo: caía no fantoma
+      // procedural, rodava com pitch e modo padrão, sem kV e sem mAs, e a
+      // confirmação informada — que existe justamente para mostrar a
+      // consequência antes de irradiar — exibia três vistos verdes e liberava
+      // o botão, porque sem protocolo não há o que validar.
+      //
+      // O núcleo já sabia dizer o que faltava, com o texto certo, e nunca era
+      // perguntado. Agora é. A lista antiga fica como reserva para o caso de o
+      // núcleo não ter carregado.
+      var faltas = pendenciasParaIniciar();
+      if (faltas.length) {
+        SimTC.showMessage(
+          (faltas.length === 1 ? "Antes de iniciar: " : "Antes de iniciar (" + faltas.length + "): ") +
+          faltas.join(" "), "warning");
         return;
       }
       // Resolve a origem das imagens para ESTE exame (região do protocolo).
@@ -1748,6 +1854,31 @@
     startBtn.addEventListener("click", onStart);
     if (stopBtn) stopBtn.addEventListener("click", onStop);
     if (moveBtn) moveBtn.addEventListener("click", onMove);
+
+    // O exame acabou de perder o paciente.
+    //
+    // Excluir um paciente durante a aquisição não parava nada: a tela seguia
+    // na fase em que estava, adquiria, e no fim `arquivar()` encontrava a
+    // seleção vazia e devolvia null EM SILÊNCIO. O aluno terminava o exame e
+    // ele simplesmente não existia em "Exames realizados", sem nenhuma
+    // mensagem. Era um dos testes de caos previstos na Fase 11.
+    //
+    // O núcleo já anunciava isso no barramento; ninguém escutava. Agora a
+    // aquisição escuta. O Stop normal também emite este evento, mas nele
+    // toIdle() já rodou antes e a fase é "idle" — por isso a guarda, que
+    // evita o laço Stop -> evento -> Stop.
+    (function ligarAoBarramento() {
+      var Core = window.SimTCCore;
+      if (!Core || !Core.bus || !Core.EVENTOS) return;
+      Core.bus.on(Core.EVENTOS.EXAME_ENCERRADO, function () {
+        if (phase === "idle") return;
+        if (SimTC.examSessionApi && SimTC.examSessionApi.get()) return; // ainda há paciente
+        toIdle();
+        SimTC.showMessage(
+          "Exame interrompido: o paciente saiu da lista de trabalho durante a aquisição. " +
+          "Nada foi arquivado.", "warning");
+      });
+    })();
     var confirmOk = document.getElementById("ws-confirm-ok");
     var confirmCancel = document.getElementById("ws-confirm-cancel");
     if (confirmOk) confirmOk.addEventListener("click", function () {
