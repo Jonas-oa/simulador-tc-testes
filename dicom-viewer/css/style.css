@@ -207,3 +207,23 @@ body.arrastando::after {
   .painel { position: absolute; z-index: 20; height: 100%; width: 268px; }
   .rodape .atalhos { display: none; }
 }
+
+/* ---- Medidas (Fase 8) -------------------------------------------------- */
+.lista-medidas { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.medida {
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 4px 6px; border-radius: 4px; background: rgba(255,255,255,.04);
+}
+/* A bolinha repete a cor do traco na imagem: e como o item da lista se liga
+   ao desenho, sem precisar numerar nada. */
+.medida__cor { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+.medida__txt { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.medida__txt b { font-size: .82rem; font-variant-numeric: tabular-nums; }
+.medida__txt small { font-size: .66rem; opacity: .65; }
+.medida__det { font-variant-numeric: tabular-nums; }
+.medida__x {
+  background: none; border: 0; color: inherit; opacity: .5; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 2px 4px; flex: 0 0 auto;
+}
+.medida__x:hover { opacity: 1; color: #ff8080; }
+.nota { font-size: .66rem; opacity: .6; margin: 6px 0 0; line-height: 1.4; }

@@ -2,15 +2,16 @@
  * Leitor DICOM — orquestração da interface.
  */
 
-import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js';
-import { Viewport, PALETAS, construirLut } from './mpr.js';
-import { Renderizador3D, TRANSFERENCIAS } from './render3d.js';
-import { instalarPonteSimulador } from './simulator-bridge.js';
+import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js?v=20260906a';
+import { Viewport, PALETAS, construirLut } from './mpr.js?v=20260906a';
+import { Renderizador3D, TRANSFERENCIAS } from './render3d.js?v=20260906a';
+import { instalarPonteSimulador } from './simulator-bridge.js?v=20260906a';
+import { FERRAMENTAS as FERR_MEDIDA } from './medidas.js?v=20260906a';
 import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset,
   carregarManifesto as buscarManifesto, urlsDaSerie, arquivosDoDrop,
   criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
-} from './comum.js';
+} from './comum.js?v=20260906a';
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +25,12 @@ const estado = {
   suavizar: true,
   mostrarCrosshair: true,
   ferramenta: 'cursor',
+  // Slab: espessura da reformatacao em mm (0 = um corte so) e como os cortes
+  // dentro dela sao combinados.
+  slab: { espessuraMm: 0, modo: 'media' },
+  medidas: [],
+  medidaEmCurso: null,
+  aoMedir,
   redesenhar,
   aoMoverCursor,
   aoMudarJanela,
@@ -32,6 +39,15 @@ const estado = {
 };
 
 let viewports = [];
+
+// Ponto de inspecao para verificacao automatizada. O leitor roda dentro de um
+// iframe de mesma origem, e sem isto nao ha como um teste conferir o que uma
+// medida realmente calculou — so o texto formatado na tela, que nao distingue
+// "certo" de "plausivel". Somente leitura de estado; nao ha aqui nenhuma acao.
+window.__leitor = {
+  estado: () => estado,
+  viewports: () => viewports,
+};
 let render3d = null;
 let manifesto = [];
 let anim3d = null;
@@ -133,6 +149,16 @@ function aplicarVolume(volume, meta = null) {
 
   $('blocoControles').hidden = false;
   $('blocoDetalhes').hidden = false;
+  $('blocoSlab').hidden = false;
+  $('blocoMedidas').hidden = false;
+  // Medidas pertencem ao exame anterior: um volume novo comeca sem elas.
+  estado.medidas = [];
+  estado.medidaEmCurso = null;
+  renderMedidas();
+  // Slab volta a zero a cada exame: espessura e escolha para AQUELE volume.
+  estado.slab.espessuraMm = 0;
+  $('ctrlSlab').value = '0';
+  atualizarRotuloSlab();
   $('bloco3d').hidden = !render3d.disponivel;
 
   $('infoSerie').textContent = meta
@@ -277,6 +303,60 @@ function dimensionar() {
 }
 
 // ---------------------------------------------------------------------------
+/** Chamada quando uma medida fecha: atualiza a lista lateral. */
+function aoMedir() { renderMedidas(); }
+
+function renderMedidas() {
+  const lista = $('listaMedidas');
+  const limpar = $('limparMedidas');
+  if (!lista) return;
+  const feitas = estado.medidas.filter((m) => m.resultado);
+  limpar.hidden = feitas.length === 0;
+  if (!feitas.length) { lista.innerHTML = ''; return; }
+  const nomePlano = { axial: 'Axial', coronal: 'Coronal', sagital: 'Sagital' };
+  lista.innerHTML = feitas.map((m, i) => {
+    const f = FERR_MEDIDA[m.tipo];
+    return `<div class="medida" data-id="${m.id}">`
+      + `<span class="medida__cor" style="background:${f.cor}"></span>`
+      + `<span class="medida__txt"><b>${m.resultado.texto}</b>`
+      + `<small>${f.rotulo} · ${nomePlano[m.plano]} corte ${m.fixo + 1}</small>`
+      + (m.resultado.detalhe && m.resultado.detalhe !== m.resultado.texto
+        ? `<small class="medida__det">${m.resultado.detalhe}</small>` : '')
+      + '</span>'
+      + `<button class="medida__x" data-remover="${m.id}" title="Apagar">×</button>`
+      + '</div>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+/**
+ * Rotulo do slab e aviso sobre o que o volume permite.
+ *
+ * O aviso importa: pedir 10 mm de slab num volume de cortes de 5 mm combina
+ * dois cortes e nada mais — o controle daria a impressao de fazer algo que os
+ * dados nao sustentam. Dizer o passo do volume evita essa leitura errada.
+ */
+function atualizarRotuloSlab() {
+  const val = $('valSlab'); const nota = $('notaSlab');
+  const v = estado.volume;
+  const mm = estado.slab.espessuraMm;
+  if (!val) return;
+  if (!(mm > 0)) { val.textContent = 'corte único'; }
+  else { val.textContent = mm.toFixed(0) + ' mm'; }
+  if (!nota || !v) return;
+  const passos = v.espacamento.map((x) => x.toFixed(2)).join(' / ');
+  if (!(mm > 0)) {
+    nota.textContent = `Passo do volume: ${passos} mm (x / y / z).`;
+    return;
+  }
+  // Quantos cortes o slab combina em cada plano — muda por plano, porque o
+  // espacamento pode ser diferente em cada eixo.
+  const n = (eixo) => Math.max(1, Math.round(mm / (v.espacamento[eixo] || 1)));
+  nota.textContent = `Combina ${n(2)} corte(s) no axial, ${n(1)} no coronal e `
+    + `${n(0)} no sagital. Passo do volume: ${passos} mm.`;
+}
+
+// ---------------------------------------------------------------------------
 function ligarControles() {
   $('ctrlCentro').addEventListener('input', (e) => {
     estado.janela.centro = +e.target.value; aoMudarJanela();
@@ -292,6 +372,54 @@ function ligarControles() {
   });
   $('ctrlCrosshair').addEventListener('change', (e) => {
     estado.mostrarCrosshair = e.target.checked; redesenhar();
+  });
+
+  $('ferramentas').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ferramenta]');
+    if (!b) return;
+    // Trocar de ferramenta abandona uma medida pela metade: os pontos ja
+    // marcados nao pertencem a ferramenta nova.
+    if (estado.medidaEmCurso) {
+      estado.medidas = estado.medidas.filter((m) => m !== estado.medidaEmCurso);
+      estado.medidaEmCurso = null;
+    }
+    estado.ferramenta = b.dataset.ferramenta;
+    [...$('ferramentas').children].forEach((c) => c.classList.toggle('ativo', c === b));
+    const dica = $('dicaMedida');
+    const textos = {
+      cursor: 'Clique para mover o cursor; os três planos acompanham.',
+      distancia: 'Clique no primeiro ponto e depois no segundo. O valor sai em mm do paciente.',
+      angulo: 'Três cliques: extremidade, VÉRTICE e a outra extremidade.',
+      roi: 'Clique no centro e depois na borda do círculo. Sai média e desvio-padrão em HU.',
+    };
+    dica.textContent = textos[estado.ferramenta] || '';
+    redesenhar();
+  });
+
+  $('listaMedidas').addEventListener('click', (e) => {
+    const id = e.target.dataset && e.target.dataset.remover;
+    if (!id) return;
+    estado.medidas = estado.medidas.filter((m) => m.id !== id);
+    renderMedidas();
+    redesenhar();
+  });
+
+  $('limparMedidas').addEventListener('click', () => {
+    estado.medidas = [];
+    estado.medidaEmCurso = null;
+    renderMedidas();
+    redesenhar();
+  });
+
+  $('ctrlSlab').addEventListener('input', (e) => {
+    estado.slab.espessuraMm = +e.target.value;
+    atualizarRotuloSlab();
+    redesenhar();
+  });
+  $('ctrlSlabModo').addEventListener('change', (e) => {
+    estado.slab.modo = e.target.value;
+    atualizarRotuloSlab();
+    redesenhar();
   });
 
   $('modos3d').addEventListener('click', (e) => {

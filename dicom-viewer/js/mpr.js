@@ -22,6 +22,8 @@
  *                  baixo — este é o único caso que precisa inverter.
  */
 
+import * as Medidas from './medidas.js?v=20260906a';
+
 export const PLANOS = {
   axial: {
     rotulo: 'Axial',
@@ -155,7 +157,13 @@ export class Viewport {
    */
   get escalaUi() {
     const largura = Math.max(1, this.canvas.clientWidth);
-    const densidade = Math.max(1, this.canvas.width / largura);
+    // `densidade` e a razao de pixels do dispositivo, entre 1 e ~4. Um canvas
+    // ainda oculto tem clientWidth 0, e sem o teto a divisao explodia: com o
+    // painel em display:none a escala chegou a 308, e um marcador de raio
+    // 2,5 x 308 pintava a tela inteira. Sem consequencia visivel, porque o
+    // desenho e refeito ao exibir — mas e um render de lixo que nao precisa
+    // existir.
+    const densidade = Math.min(4, Math.max(1, this.canvas.width / largura));
     // em viewports pequenos (grade 2×2 num celular) a sobreposição encolhe
     // junto, senão o texto toma conta da imagem
     const compacto = Math.min(1, Math.max(0.55, largura / 380));
@@ -249,6 +257,29 @@ export class Viewport {
     this._sobreposicao(fixo);
   }
 
+  /**
+   * Quantos cortes o slab pede neste plano, e a partir de qual.
+   *
+   * Slab é a espessura de reformatação: em vez de mostrar UM corte do volume,
+   * combina os que cabem dentro de N milímetros. É o que torna útil um volume
+   * isotrópico — com cortes de 5 mm não há o que combinar. Devolve
+   * `{ inicio, n }` em índices do eixo fixo deste plano.
+   */
+  _faixaSlab(fixo) {
+    const espMm = (this.estado.slab && this.estado.slab.espessuraMm) || 0;
+    const v = this.volume;
+    const passo = v.espacamento[this.def.eixoFixo] || 1;
+    const nFixo = v.dims[this.def.eixoFixo];
+    if (!(espMm > passo)) return { inicio: fixo, n: 1 };
+    const n = Math.max(1, Math.round(espMm / passo));
+    let inicio = Math.round(fixo - (n - 1) / 2);
+    // Junto da borda o slab encolhe em vez de sair do volume: melhor mostrar
+    // menos material do que material que não existe.
+    if (inicio < 0) inicio = 0;
+    const fim = Math.min(nFixo - 1, inicio + n - 1);
+    return { inicio, n: fim - inicio + 1 };
+  }
+
   _preencher(saida, fixo, gw, gh) {
     const v = this.volume;
     const lut = this.estado.lut;
@@ -264,13 +295,41 @@ export class Viewport {
     const strides = [1, nx, nxy];
     const sCol = strides[this.def.eixoColuna];
     const sLin = strides[this.def.eixoLinha];
-    const base = fixo * strides[this.def.eixoFixo];
+    const sFixo = strides[this.def.eixoFixo];
+
+    const { inicio, n: nSlab } = this._faixaSlab(fixo);
+    const modo = (this.estado.slab && this.estado.slab.modo) || 'media';
+    const base = inicio * sFixo;
 
     let o = 0;
     for (let l = 0; l < gh; l++) {
-      let idx = base + l * sLin;
+      const linha = base + l * sLin;
+      let idx = linha;
       for (let c = 0; c < gw; c++) {
-        const valor = dados[idx];
+        let valor;
+        if (nSlab === 1) {
+          valor = dados[idx];
+        } else if (modo === 'mip') {
+          // MIP: o mais denso ao longo do slab. É o que revela vaso com
+          // contraste e osso, porque a estrutura fina não é diluída pela
+          // média com o tecido em volta.
+          valor = -Infinity;
+          for (let k = 0, j = idx; k < nSlab; k++, j += sFixo) {
+            if (dados[j] > valor) valor = dados[j];
+          }
+        } else if (modo === 'minip') {
+          // MinIP: o menos denso. Serve para via aérea e enfisema.
+          valor = Infinity;
+          for (let k = 0, j = idx; k < nSlab; k++, j += sFixo) {
+            if (dados[j] < valor) valor = dados[j];
+          }
+        } else {
+          // Média: é o que um corte mais espesso de verdade produz — mais
+          // fótons por corte, logo menos ruído, e mais volume parcial.
+          let soma = 0;
+          for (let k = 0, j = idx; k < nSlab; k++, j += sFixo) soma += dados[j];
+          valor = soma / nSlab;
+        }
         let intensidade = Number.isInteger(valor) && valor >= -32768 && valor <= 32767
           ? lut[valor + 32768]
           : Math.max(0, Math.min(255, Math.round((valor - minJanela) * escalaJanela)));
@@ -335,12 +394,25 @@ export class Viewport {
     ctx.fillText(def.rotulo, 8 * u, 16 * u);
     ctx.fillStyle = 'rgba(200,215,230,.8)';
     ctx.font = `${11 * u}px ui-monospace, monospace`;
-    ctx.fillText(`corte ${fixo + 1}/${v.dims[def.eixoFixo]}`, 8 * u, 30 * u);
+    // Com slab ligado, o que esta na tela NAO e um corte: e a combinacao de
+    // varios. O rotulo tem de dizer isso, senao o operador mede espessura num
+    // conjunto que nao sabe que e conjunto.
+    const fx = this._faixaSlab(fixo);
+    const passoFixo = v.espacamento[def.eixoFixo] || 1;
+    if (fx.n > 1) {
+      const nomes = { media: 'média', mip: 'MIP', minip: 'MinIP' };
+      const modo = (this.estado.slab && this.estado.slab.modo) || 'media';
+      ctx.fillText(`slab ${(fx.n * passoFixo).toFixed(1)} mm · ${nomes[modo] || modo}`
+        + ` (${fx.n} cortes)`, 8 * u, 30 * u);
+    } else {
+      ctx.fillText(`corte ${fixo + 1}/${v.dims[def.eixoFixo]}`, 8 * u, 30 * u);
+    }
     const mm = v.paciente(...this.estado.cursor.map((c, i) => (i === def.eixoFixo ? fixo : c)));
     ctx.fillText(`${'xyz'[def.eixoFixo].toUpperCase()} = ${mm[def.eixoFixo].toFixed(1)} mm`,
       8 * u, 43 * u);
     ctx.restore();
 
+    this._desenharMedidas(fixo, u);
     this._barraEscala(u);
   }
 
@@ -373,6 +445,66 @@ export class Viewport {
     ctx.restore();
   }
 
+  // ---- medidas -------------------------------------------------------------
+  /** Corte inteiro deste plano, sob o cursor. */
+  _corteAtual() {
+    return Math.max(0, Math.min(this.volume.dims[this.def.eixoFixo] - 1,
+      Math.round(this.estado.cursor[this.def.eixoFixo])));
+  }
+
+  /**
+   * `p` chega em pixels do CANVAS, como o resto dos manipuladores de ponteiro.
+   * A medida precisa do voxel: sem converter, o ponto tem so dois componentes
+   * e paciente(x, y, undefined) devolve NaN.
+   */
+  _pontoDeMedida(p) {
+    const est = this.estado;
+    const voxel = this.canvasParaVoxel(p[0], p[1]);
+    if (!Array.isArray(est.medidas)) est.medidas = [];
+    let m = est.medidaEmCurso;
+    // Medida em curso de OUTRO plano e abandonada: um traco meio feito no
+    // axial nao continua no coronal, porque os pontos nao sao do mesmo corte.
+    if (m && m.plano !== this.plano) { this._descartarEmCurso(); m = null; }
+    if (!m) {
+      m = Medidas.novaMedida(est.ferramenta, this.plano, this._corteAtual());
+      est.medidaEmCurso = m;
+      est.medidas.push(m);
+    }
+    m.pontos.push(voxel);
+    const necessarios = Medidas.FERRAMENTAS[m.tipo].pontos;
+    if (m.pontos.length >= necessarios) {
+      m.pontos.length = necessarios;
+      m.resultado = Medidas.calcular(m, this.volume, this.def);
+      est.medidaEmCurso = null;
+      if (est.aoMedir) est.aoMedir(m);
+    }
+    est.redesenhar();
+  }
+
+  _arrastarMedida(p) {
+    const m = this.estado.medidaEmCurso;
+    if (!m || m.plano !== this.plano || !m.pontos.length) return;
+    m.pontos[m.pontos.length - 1] = this.canvasParaVoxel(p[0], p[1]);
+    m.resultado = Medidas.calcular(m, this.volume, this.def);
+    this.estado.redesenhar();
+  }
+
+  _descartarEmCurso() {
+    const est = this.estado;
+    const m = est.medidaEmCurso;
+    if (!m) return;
+    est.medidas = (est.medidas || []).filter((x) => x !== m);
+    est.medidaEmCurso = null;
+  }
+
+  _desenharMedidas(fixo, u) {
+    const est = this.estado;
+    if (!est.medidas || !est.medidas.length) return;
+    const faixa = this._faixaSlab(fixo);
+    const lista = Medidas.visiveis(est.medidas, this.plano, fixo, faixa);
+    for (const m of lista) Medidas.desenhar(this.ctx, m, this, u);
+  }
+
   // -------------------------------------------------------------------------
   _instalarEventos() {
     const c = this.canvas;
@@ -388,6 +520,10 @@ export class Viewport {
       ultimo = [e.offsetX, e.offsetY];
       if (e.button === 2 || (e.button === 0 && this.estado.ferramenta === 'janela')) modo = 'janela';
       else if (e.button === 1 || (e.button === 0 && this.estado.ferramenta === 'pan')) modo = 'pan';
+      else if (e.button === 0 && Medidas.ehFerramentaDeMedida(this.estado.ferramenta)) {
+        modo = 'medida';
+        this._pontoDeMedida(p);
+      }
       else if (e.button === 0) { modo = 'cursor'; this._moverCursor(p[0], p[1]); }
     });
 
@@ -403,6 +539,12 @@ export class Viewport {
       this.estado.aoPassarMouse(this, p[0], p[1]);
 
       if (!modo) return;
+      if (modo === 'medida') {
+        // Enquanto a medida nao fecha, o ultimo ponto acompanha o ponteiro:
+        // o usuario ve a distancia antes de confirmar.
+        this._arrastarMedida(p);
+        return;
+      }
       if (modo === 'cursor') this._moverCursor(p[0], p[1]);
       else if (modo === 'pan') {
         this.pan[0] += dx * fx; this.pan[1] += dy * fy; this.estado.redesenhar();

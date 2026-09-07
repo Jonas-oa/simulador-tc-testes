@@ -81,6 +81,39 @@
       </label>
     </section>
 
+    <section class="bloco" id="blocoMedidas" hidden>
+      <h2>Medidas</h2>
+      <div class="chips" id="ferramentas">
+        <button class="chip ativo" data-ferramenta="cursor">Cursor</button>
+        <button class="chip" data-ferramenta="distancia">Distância</button>
+        <button class="chip" data-ferramenta="angulo">Ângulo</button>
+        <button class="chip" data-ferramenta="roi">ROI (HU)</button>
+      </div>
+      <p class="nota" id="dicaMedida">Clique nos pontos sobre a imagem. A medida
+        pertence ao corte em que foi feita.</p>
+      <div id="listaMedidas" class="lista-medidas"></div>
+      <button class="botao secundario" id="limparMedidas" hidden>Apagar todas</button>
+    </section>
+
+    <!-- Slab: espessura da reformatação. Só faz sentido com volume razoavelmente
+         isotrópico — com cortes de 5 mm não há o que combinar. -->
+    <section class="bloco" id="blocoSlab" hidden>
+      <h2>Espessura da reformatação</h2>
+      <label class="campo">
+        <span>Slab <b id="valSlab">corte único</b></span>
+        <input type="range" id="ctrlSlab" min="0" max="50" step="1" value="0">
+      </label>
+      <label class="campo">
+        <span>Combinação</span>
+        <select id="ctrlSlabModo">
+          <option value="media">Média — como um corte espesso real</option>
+          <option value="mip">MIP — o mais denso (vaso, osso)</option>
+          <option value="minip">MinIP — o menos denso (via aérea)</option>
+        </select>
+      </label>
+      <p class="nota" id="notaSlab"></p>
+    </section>
+
     <section class="bloco" id="bloco3d" hidden>
       <h2>Reconstrução 3D</h2>
       <div class="chips" id="modos3d">

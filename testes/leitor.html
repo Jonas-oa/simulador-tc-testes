@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes do leitor — Simulador TC</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 32px 24px 64px; background: #0f1312; color: #e2e7e5;
+  }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -.01em; }
+  p.sub { margin: 0 0 24px; color: #8c9793; max-width: 74ch; }
+  #placar {
+    display: inline-flex; gap: 18px; align-items: baseline;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    padding: 12px 18px; border-radius: 4px; margin-bottom: 22px;
+    border: 1px solid #2a3331; background: #161b1a;
+  }
+  #placar b { font-size: 1.5rem; }
+  .verde { color: #79c193; } .vermelho { color: #e98a83; }
+  ol { list-style: none; margin: 0; padding: 0; max-width: 92ch; }
+  li {
+    display: grid; grid-template-columns: 22px 1fr; gap: 10px;
+    padding: 6px 10px; border-bottom: 1px solid #212927;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+  }
+  li.falhou { background: #34201e; }
+  li .erro { grid-column: 2; color: #e98a83; padding-top: 3px; }
+</style>
+</head>
+<body>
+<h1>Testes do leitor</h1>
+<p class="sub">
+  Os módulos de <code>dicom-viewer/</code> são ES modules e não podem ser
+  carregados pelo Worker da suíte do núcleo, que usa <code>importScripts</code>.
+  Esta página cobre a parte que dá para testar sem tela: a matemática das
+  medidas e a faixa do slab. Sirva a pasta do projeto por HTTP e abra
+  <code>testes/leitor.html</code>.
+</p>
+<div id="placar">carregando…</div>
+<ol id="lista"></ol>
+
+<script type="module">
+import * as Med from '../dicom-viewer/js/medidas.js?v=20260906a';
+import { PLANOS } from '../dicom-viewer/js/mpr.js?v=20260906a';
+
+const resultados = [];
+function teste(nome, fn) {
+  try { fn(); resultados.push({ nome, ok: true }); }
+  catch (e) { resultados.push({ nome, ok: false, erro: e.message }); }
+}
+function ok(cond, msg) { if (!cond) throw new Error(msg || 'condição falsa'); }
+function perto(a, b, tol, msg) {
+  if (!(Math.abs(a - b) <= tol)) {
+    throw new Error(`${msg || 'valor'} — obtido ${a}, esperado ${b} (±${tol})`);
+  }
+}
+
+/**
+ * Volume mínimo com a mesma interface do leitor. Deliberadamente
+ * ANISOTRÓPICO: é onde medir em pixels em vez de milímetros dá errado, e é
+ * justamente o que os testes precisam pegar.
+ */
+function volumeFalso(dims = [64, 64, 32], esp = [2, 1, 4]) {
+  const [nx, ny, nz] = dims;
+  const dados = new Int16Array(nx * ny * nz);
+  return {
+    dims, espacamento: esp, origem: [0, 0, 0], dados,
+    valor(x, y, z) { return this.dados[z * nx * ny + y * nx + x]; },
+    paciente(x, y, z) {
+      return [x * esp[0], y * esp[1], z * esp[2]];
+    },
+  };
+}
+
+const eixoZ = 10;
+const medir = (vol, tipo, pontos, plano = 'axial') => {
+  const m = Med.novaMedida(tipo, plano, eixoZ);
+  m.pontos = pontos;
+  return Med.calcular(m, vol, PLANOS[plano]);
+};
+
+// ---------------------------------------------------------------- distância
+teste('distância usa o espaçamento de CADA eixo, não pixels', () => {
+  const v = volumeFalso();           // 2 mm em x, 1 mm em y
+  const emX = medir(v, 'distancia', [[10, 20, eixoZ], [30, 20, eixoZ]]);
+  const emY = medir(v, 'distancia', [[10, 20, eixoZ], [10, 40, eixoZ]]);
+  perto(parseFloat(emX.detalhe), 40, 0.01, '20 voxels em x a 2 mm');
+  perto(parseFloat(emY.detalhe), 20, 0.01, '20 voxels em y a 1 mm');
+  ok(emX.detalhe !== emY.detalhe,
+     'o MESMO número de pixels em eixos diferentes não pode dar a mesma medida');
+});
+
+teste('distância em 3D combina os três eixos', () => {
+  const v = volumeFalso();           // 2 / 1 / 4 mm
+  const r = medir(v, 'distancia', [[0, 0, 0], [3, 4, 5]]);
+  // (3·2)² + (4·1)² + (5·4)² = 36 + 16 + 400
+  perto(parseFloat(r.detalhe), Math.sqrt(452), 0.05, 'diagonal 3D');
+});
+
+teste('distância acima de 10 mm é mostrada em cm', () => {
+  const v = volumeFalso();
+  const curta = medir(v, 'distancia', [[0, 0, 0], [2, 0, 0]]);   // 4 mm
+  const longa = medir(v, 'distancia', [[0, 0, 0], [50, 0, 0]]);  // 100 mm
+  ok(/mm$/.test(curta.texto), 'curta em mm: ' + curta.texto);
+  ok(/cm$/.test(longa.texto), 'longa em cm: ' + longa.texto);
+});
+
+// ------------------------------------------------------------------- ângulo
+teste('ângulo: reto, 45°, 135° e colinear', () => {
+  // espaçamento isotrópico no plano para que o ângulo da grade seja o real
+  const v = volumeFalso([64, 64, 32], [1, 1, 4]);
+  const a = (p, q, r) => parseFloat(medir(v, 'angulo', [p, q, r]).texto);
+  perto(a([32, 10, eixoZ], [32, 32, eixoZ], [54, 32, eixoZ]), 90, 0.1, 'reto');
+  perto(a([32, 10, eixoZ], [32, 32, eixoZ], [54, 10, eixoZ]), 45, 0.1, '45°');
+  perto(a([32, 10, eixoZ], [32, 32, eixoZ], [10, 54, eixoZ]), 135, 0.1, '135°');
+  perto(a([10, 32, eixoZ], [32, 32, eixoZ], [54, 32, eixoZ]), 180, 0.1, 'colinear');
+});
+
+teste('ângulo é medido no PACIENTE, não na grade', () => {
+  // Em grade anisotrópica (2 mm em x, 1 mm em y), um deslocamento de 10 voxels
+  // em cada eixo NÃO é 45°: são 20 mm por 10 mm, ou seja 26,6°.
+  const v = volumeFalso([64, 64, 32], [2, 1, 4]);
+  const g = parseFloat(medir(v, 'angulo',
+    [[32, 22, eixoZ], [32, 32, eixoZ], [42, 22, eixoZ]]).texto);
+  perto(g, Math.atan2(20, 10) * 180 / Math.PI, 0.2,
+        'ângulo real em milímetros');
+});
+
+// ---------------------------------------------------------------------- ROI
+teste('ROI devolve média e desvio-padrão em HU do dado', () => {
+  const v = volumeFalso([64, 64, 32], [1, 1, 4]);
+  // metade do círculo em 0 HU, metade em 100 HU
+  for (let z = 0; z < 32; z++) {
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        v.dados[z * 64 * 64 + y * 64 + x] = (x < 32) ? 0 : 100;
+      }
+    }
+  }
+  const r = medir(v, 'roi', [[32, 32, eixoZ], [42, 32, eixoZ]]);
+
+  // Referência calculada aqui, pela mesma regra geométrica. Fixar "50" seria
+  // errado: o círculo de raio 10 centrado em x=32 pega 10 colunas de um lado
+  // e 11 do outro, então a média verdadeira não é 50 — e um teste que exigisse
+  // 50 estaria cobrando do código um resultado que os dados não têm.
+  let n = 0; let soma = 0; let soma2 = 0;
+  for (let y = 22; y <= 42; y++) {
+    for (let x = 22; x <= 42; x++) {
+      if ((x - 32) ** 2 + (y - 32) ** 2 > 100) continue;
+      const hu = v.valor(x, y, eixoZ);
+      n += 1; soma += hu; soma2 += hu * hu;
+    }
+  }
+  const mediaRef = soma / n;
+  const dpRef = Math.sqrt(Math.max(0, soma2 / n - mediaRef * mediaRef));
+
+  perto(parseFloat(r.texto), mediaRef, 0.05, 'média bate com o cálculo direto');
+  perto(parseFloat(r.texto.split('±')[1]), dpRef, 0.05, 'DP bate com o cálculo direto');
+  ok(mediaRef > 50 && mediaRef < 56,
+     'a média fica acima de 50 por causa da coluna extra: ' + mediaRef.toFixed(1));
+  ok(/HU/.test(r.texto), 'a unidade aparece: ' + r.texto);
+  ok(/voxels/.test(r.detalhe) && /cm²/.test(r.detalhe),
+     'o detalhe traz contagem e área: ' + r.detalhe);
+});
+
+teste('ROI: área usa o espaçamento dos DOIS eixos do plano', () => {
+  const v = volumeFalso([64, 64, 32], [2, 1, 4]);   // voxel de 2 mm²  no axial
+  const r = medir(v, 'roi', [[32, 32, eixoZ], [42, 32, eixoZ]]);
+  const n = parseInt(/(\d+) voxels/.exec(r.detalhe)[1], 10);
+  const cm2 = parseFloat(/([\d.]+) cm²/.exec(r.detalhe)[1]);
+  perto(cm2, n * 2 / 100, 0.01, 'área = voxels × 2 mm² convertida para cm²');
+});
+
+teste('ROI de raio nulo não devolve NaN', () => {
+  const v = volumeFalso();
+  const r = medir(v, 'roi', [[32, 32, eixoZ], [32, 32, eixoZ]]);
+  ok(r && Number.isFinite(parseFloat(r.texto)),
+     'raio zero ainda mede pelo menos um voxel: ' + (r && r.texto));
+});
+
+// ------------------------------------------------------------ pertencimento
+teste('medida pertence ao corte em que foi feita', () => {
+  const lista = [
+    { plano: 'axial', fixo: 10 }, { plano: 'axial', fixo: 11 },
+    { plano: 'coronal', fixo: 10 },
+  ];
+  ok(Med.visiveis(lista, 'axial', 10, null).length === 1,
+     'sem slab, só o corte exato');
+  ok(Med.visiveis(lista, 'coronal', 10, null).length === 1,
+     'plano diferente não mistura');
+  ok(Med.visiveis(lista, 'axial', 10, { inicio: 10, n: 2 }).length === 2,
+     'com slab, o que está DENTRO da faixa aparece');
+  ok(Med.visiveis(lista, 'axial', 40, null).length === 0,
+     'corte sem medida não mostra nada');
+});
+
+teste('ferramenta de medida é reconhecida, cursor não é', () => {
+  ok(Med.ehFerramentaDeMedida('distancia'));
+  ok(Med.ehFerramentaDeMedida('angulo'));
+  ok(Med.ehFerramentaDeMedida('roi'));
+  ok(!Med.ehFerramentaDeMedida('cursor'), 'cursor não é medida');
+  ok(!Med.ehFerramentaDeMedida('janela'), 'janela não é medida');
+});
+
+teste('medida incompleta não produz resultado', () => {
+  const v = volumeFalso();
+  const m = Med.novaMedida('distancia', 'axial', eixoZ);
+  m.pontos = [[10, 10, eixoZ]];
+  ok(Med.calcular(m, v, PLANOS.axial) === null,
+     'um ponto só não define distância');
+});
+
+// --------------------------------------------------------------------------
+const falhas = resultados.filter((r) => !r.ok).length;
+const placar = document.getElementById('placar');
+placar.innerHTML =
+  `<span><b class="${falhas ? 'vermelho' : 'verde'}">${resultados.length - falhas}/${resultados.length}</b> testes</span>`
+  + `<span class="${falhas ? 'vermelho' : 'verde'}">${falhas ? falhas + ' falha(s)' : 'tudo verde'}</span>`;
+const lista = document.getElementById('lista');
+for (const r of resultados) {
+  const li = document.createElement('li');
+  if (!r.ok) li.className = 'falhou';
+  const m = document.createElement('span');
+  m.className = r.ok ? 'verde' : 'vermelho';
+  m.textContent = r.ok ? '✓' : '✕';
+  const n = document.createElement('span');
+  n.textContent = r.nome;
+  li.append(m, n);
+  if (!r.ok) {
+    const e = document.createElement('span');
+    e.className = 'erro'; e.textContent = r.erro;
+    li.append(e);
+  }
+  lista.append(li);
+}
+window.__RESULTADO_LEITOR__ = { total: resultados.length, falhas, resultados };
+</script>
+</body>
+</html>
