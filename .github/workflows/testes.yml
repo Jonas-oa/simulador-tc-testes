@@ -1,0 +1,45 @@
+# Roda as tres suites do projeto a cada push e a cada pull request.
+#
+# Existe porque, ate aqui, os 114 testes so rodavam se alguem lembrasse de
+# abrir duas paginas no navegador. Um teste que ninguem executa nao e rede de
+# seguranca: e documentacao. A ETAPA 1 do plano de refatoracao comeca por
+# aqui, antes de qualquer correcao, porque as correcoes seguintes precisam de
+# algo que acuse quando elas quebrarem outra coisa.
+#
+# O que reprova o build:
+#   nucleo/leitor   qualquer teste vermelho.
+#   regressao       falha INESPERADA (regressao de verdade) ou defeito
+#                   corrigido sem tirar o id de PENDENTES. As falhas dos P1
+#                   ainda nao corrigidos sao esperadas e NAO reprovam — e por
+#                   isso que a suite consegue existir antes das correcoes.
+name: testes
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --omit=dev deixa de fora electron e electron-builder, que so servem
+      # para empacotar o app desktop e pesam centenas de MB.
+      - name: Instalar Playwright
+        run: npm install --no-save --omit=dev playwright@1.49.1
+
+      - name: Instalar o Chromium
+        run: npx playwright install --with-deps chromium
+
+      # O runner sobe o proprio servidor estatico: as suites precisam de HTTP
+      # (ES modules e Workers nao carregam em file://).
+      - name: Rodar as suites
+        run: node ferramentas/rodar-testes.mjs

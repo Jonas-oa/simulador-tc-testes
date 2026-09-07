@@ -6,8 +6,9 @@
 > três perguntas: **o que é este projeto**, **onde exatamente paramos** e **o que fazer a
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
-> Última atualização: **07/09/2026** · commit base **73083a3** · escrito ao fim da auditoria
-> master, antes de qualquer refatoração começar.
+> Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`) e
+> **ETAPA 1 do plano concluída** — a rede de segurança está de pé. A próxima ação é a
+> **ETAPA 2**. Ver o checklist no BLOCO 5.
 
 ---
 
@@ -28,23 +29,41 @@ git diff --stat
 # 3. O checklist do BLOCO 5 deste arquivo está atualizado?
 grep -n "^- \[" docs/PROMPT-CONTINUACAO.md
 
-# 4. O app ainda está saudável?
-#    Sirva a pasta por HTTP (obrigatório: ES modules e Workers não rodam em file://)
+# 4. O app ainda está saudável? (a forma curta, se você tiver node)
+node ferramentas/rodar-testes.mjs
+
+#    A forma manual: sirva por HTTP (ES modules e Workers não rodam em file://)
 python -m http.server 8777
 #    e abra no navegador:
-#      http://localhost:8777/testes/core.html    -> deve dar 103/103 verde
-#      http://localhost:8777/testes/leitor.html  -> deve dar  11/11 verde
-#      http://localhost:8777/index.html          -> deve carregar sem erro no console
+#      http://localhost:8777/testes/core.html       -> 103/103 verde
+#      http://localhost:8777/testes/leitor.html     ->  11/11  verde
+#      http://localhost:8777/testes/regressao.html  -> ver a leitura abaixo (leva minutos)
+#      http://localhost:8777/index.html             -> carrega sem erro no console
 ```
 
 **Como interpretar:**
 
 | O que você vê | O que significa |
 |---|---|
-| `git status` limpo e último commit = `73083a3` | Ninguém começou a refatoração. Comece pela ETAPA 1 do BLOCO 5. |
-| `git status` limpo e commits novos depois de `73083a3` | Leia as mensagens desses commits — elas dizem o que foi feito e o que foi medido. Marque as etapas correspondentes no BLOCO 5 e siga da próxima. |
+| Checklist do BLOCO 5 com etapas marcadas | Essa é a fonte de verdade. Comece pela primeira etapa não marcada. |
+| `git status` limpo, commits novos que o checklist não reflete | Leia as mensagens desses commits — elas dizem o que foi feito e o que foi medido. Atualize o checklist e siga. |
 | `git status` com arquivos modificados | Alguém parou no meio. **Não descarte nada.** Leia o `git diff` inteiro, entenda a intenção, termine ou reverta de forma consciente. Este projeto documenta o *porquê* nos comentários — o diff provavelmente explica a si mesmo. |
-| Testes falhando | A refatoração quebrou algo. Isso tem prioridade sobre qualquer tarefa nova. |
+| `core` ou `leitor` vermelhos | A refatoração quebrou algo. Tem prioridade sobre qualquer tarefa nova. |
+
+**Lendo a suíte de regressão** (`testes/regressao.html`) — ela é diferente das outras duas:
+ela afirma o comportamento **correto** dos 9 defeitos P1, então **falhar nela é o esperado**
+enquanto a ETAPA 2 não acontecer. O placar tem quatro números:
+
+| Número | Significa |
+|---|---|
+| **falha(s) esperada(s)** | defeitos P1 ainda não corrigidos. Normal. Não reprova o CI. |
+| **inesperada(s)** | regressão de verdade — algo que funcionava quebrou. **Reprova.** |
+| **corrigido(s)** | o defeito foi consertado mas o id continua em `PENDENTES` no topo do script. Tire-o de lá. **Reprova** de propósito, para a lista não mentir. |
+| **executados** | se for menor que o total, a suíte travou no meio. |
+
+Hoje o esperado é: `10/10 executados · 10 esperadas · 0 inesperadas · 0 corrigidos`.
+Cada defeito corrigido na ETAPA 2 move um número da coluna "esperadas" para "corrigidos" —
+e aí você remove o id de `PENDENTES` e ele vira um teste verde permanente.
 
 O checklist do **BLOCO 5** é a fonte de verdade sobre o progresso. **Mantenha-o atualizado no
 mesmo commit em que fizer o trabalho** — é assim que a próxima IA saberá onde você parou.
@@ -94,7 +113,7 @@ Leitura complementar, nesta ordem:
 | 8 — Viewer e MPR | **Quase.** Medidas (distância, ângulo, ROI em HU) e slab (média/MIP/MinIP) prontos no leitor. **Faltam:** reformatação **oblíqua** e ROI **elíptica/poligonal** (a atual é circular). |
 | 9 — Protocol Manager | **Parcial.** Duplicar, travar, comparar, versionar, exportar/importar e o motor de validação existem e funcionam. **Falta o essencial:** o protocolo persistido ainda é **texto livre** (ver P1-07). |
 | 10 — Educacional | **1 de 4.** A confirmação informada existe (e é a melhor parte do app), mas `education/` e `engines/` (perfis de fabricante) **não existem**. |
-| 11 — Testes/perf | **Parcial.** 114 testes verdes, mas sem CI e com a camada `js/` inteira (7.130 linhas) sem nenhum teste. |
+| 11 — Testes/perf | **Parcial.** 114 testes verdes + 10 de regressão (vermelhos de propósito, ver BLOCO 0), rodando em CI desde a ETAPA 1. **Falta:** cobertura medida do `core/`, orçamento de performance verificável e testes de caos além dos dois que a regressão cobre. |
 
 ## 2.2 O diagnóstico da auditoria (leia isto com atenção)
 
@@ -333,17 +352,22 @@ posição da mesa moram em `core/session.js`; a tela lê, despacha comando e esc
 
 Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
 
-- [ ] **ETAPA 1 — Rede de segurança** *(pequena)*
-  - [ ] CI rodando as duas suítes a cada push (navegador headless lendo `window.__RESULTADO_TESTES__`, que já existe em `testes/core.html`)
-  - [ ] Um teste de regressão por P1, escrito **antes** da correção — cada um deve **falhar** hoje
+- [x] **ETAPA 1 — Rede de segurança** *(pequena)* — concluída em 07/09/2026
+  - [x] CI rodando as três suítes a cada push — `.github/workflows/testes.yml` + `ferramentas/rodar-testes.mjs` (Playwright/Chromium headless, com servidor estático próprio)
+  - [x] Um teste de regressão por P1, escrito **antes** da correção — `testes/regressao.html`, 10 testes, **todos falhando hoje pelo motivo certo**, cada um com a medição e o `arquivo:linha` do defeito na mensagem
 - [ ] **ETAPA 2 — Corrigir os P1 sem mexer na estrutura** *(média)*
-  - [ ] P1-02 sinal do tilt
-  - [ ] P1-03 DLP único, vindo do motor
-  - [ ] P1-04 cortes e DLP do arquivo vindos da série
-  - [ ] P1-01 confirmação exige protocolo (usar `pendenciasParaIniciar()`)
-  - [ ] P1-08 teclado no dpad da mesa
-  - [ ] P1-06 abortar exame ao excluir o paciente
-- [ ] **ETAPA 3 — Matar o MPR interno** *(média)* — P1-05: apagar `buildVolume`/`buildReformat` e reformatar do `Int16Array` da série
+      Ao corrigir cada um, o teste correspondente vira verde: **remova o id de `PENDENTES`**
+      no topo de `testes/regressao.html` e marque a caixa aqui, no mesmo commit.
+  - [ ] P1-02 sinal do tilt — `js/aquisicao.js:313`
+  - [ ] P1-03 DLP único, vindo do motor — `js/aquisicao.js:1537-1539`
+  - [ ] P1-04a cortes do arquivo vindos da série — `js/aquisicao.js:1390`
+  - [ ] P1-04b DLP do arquivo vindo do motor — `js/aquisicao.js:1391`
+  - [ ] P1-01 confirmação exige protocolo — `js/aquisicao.js:1594`, usar `pendenciasParaIniciar()`
+  - [ ] P1-08 teclado no dpad da mesa — `js/sala-exame.js:1201`
+  - [ ] P1-06 abortar exame ao excluir o paciente — assinar `EVENTOS.EXAME_ENCERRADO`
+  - [ ] P1-07 protocolo tipado *(fica para a ETAPA 5 — é migração de dados, não correção cirúrgica)*
+  - [ ] P1-09 pitch em sequencial *(fica para a ETAPA 5 — depende do protocolo tipado)*
+- [ ] **ETAPA 3 — Matar o MPR interno** *(média)* — P1-05: apagar `buildVolume`/`buildReformat` e reformatar do `Int16Array` da série. Fecha o último P1 da lista.
 
 ## Bloco B — estrutura (etapas 4 e 5)
 

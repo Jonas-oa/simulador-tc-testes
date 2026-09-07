@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regressão dos P1 — Simulador TC</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 28px 24px 64px; background: #0f1312; color: #e2e7e5;
+  }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; letter-spacing: -.01em; }
+  p.sub { margin: 0 0 20px; color: #8c9793; max-width: 82ch; }
+  p.sub b { color: #e2e7e5; }
+  #placar {
+    display: inline-flex; gap: 18px; align-items: baseline; flex-wrap: wrap;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    padding: 12px 18px; border-radius: 4px; margin-bottom: 8px;
+    border: 1px solid #2a3331; background: #161b1a;
+  }
+  #placar b { font-size: 1.5rem; }
+  #fase { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+          color: #8c9793; margin: 0 0 20px; min-height: 1.4em; }
+  .verde { color: #79c193; } .vermelho { color: #e98a83; }
+  .ambar { color: #d9b264; } .cinza { color: #8c9793; }
+  ol { list-style: none; margin: 0; padding: 0; max-width: 100ch; }
+  li {
+    display: grid; grid-template-columns: 130px 22px 1fr; gap: 10px;
+    padding: 7px 10px; border-bottom: 1px solid #212927;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+  }
+  li.inesperado { background: #34201e; }
+  li.corrigido { background: #1d2c22; }
+  li .erro { grid-column: 3; color: #e98a83; padding-top: 3px; white-space: pre-wrap; }
+  li .p1 { color: #8c9793; }
+  code { background: #212927; padding: 1px 5px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<h1>Regressão dos P1</h1>
+<p class="sub">
+  Um teste por defeito P1 da auditoria de 07/09/2026, escrito <b>antes</b> da correção.
+  Cada teste afirma o comportamento <b>correto</b>, então <b>falhar aqui é o esperado</b>
+  enquanto a ETAPA 2 não acontecer. A lista <code>PENDENTES</code> no topo do script diz
+  quais falhas são esperadas: uma falha fora dela é regressão de verdade, e um teste que
+  passa estando em <code>PENDENTES</code> significa que o defeito foi corrigido e o id
+  precisa sair da lista.
+  <br><br>
+  Sirva a pasta do projeto por HTTP e abra <code>testes/regressao.html</code>. A suíte dirige
+  o app de verdade dentro de um iframe — inclusive um exame completo, que leva alguns minutos.
+</p>
+
+<div id="placar">carregando…</div>
+<p id="fase"></p>
+<ol id="lista"></ol>
+
+<iframe id="app" src="about:blank" style="position:fixed;left:-9999px;top:0;width:1440px;height:900px;border:0"></iframe>
+
+<script>
+/**
+ * testes/regressao.html
+ * Rede de segurança da ETAPA 1 do plano de refatoração.
+ *
+ * Por que esta suíte existe separada das outras duas:
+ *
+ *   testes/core.html    cobre core/ — domínio puro, sem DOM, dentro de um Worker.
+ *   testes/leitor.html  cobre a matemática das medidas do leitor.
+ *   ESTA               cobre js/ — as 7.130 linhas onde estão TODOS os 9 defeitos P1
+ *                      e que hoje não têm um único teste.
+ *
+ * js/ não roda sem DOM, sem Three.js e sem IndexedDB, então não há como testá-la num
+ * Worker. A saída é dirigir o app de verdade dentro de um iframe de mesma origem e
+ * afirmar o comportamento pelo lado de fora — pelas APIs públicas entre módulos
+ * (SimTC.*, SimTCCore.*) e pelo DOM que o operador realmente vê.
+ *
+ * A suíte MEXE no banco do app (mesma origem, mesmo IndexedDB). Ela cria pacientes com
+ * prefixo reconhecível e apaga o que criou ao final. Não apaga nada que já existia.
+ */
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // Defeitos que AINDA NÃO FORAM CORRIGIDOS. Ao corrigir um na ETAPA 2,
+  // remova o id daqui — a suíte acusa se você esquecer.
+  // ---------------------------------------------------------------------
+  var PENDENTES = new Set([
+    "P1-01", "P1-02", "P1-03", "P1-04a", "P1-04b",
+    "P1-05", "P1-06", "P1-07", "P1-08", "P1-09"
+  ]);
+
+  var PREFIXO = "ZZ-TESTE-REGRESSAO";
+
+  var testes = [];
+  var resultados = [];
+  var faseEl = document.getElementById("fase");
+
+  function teste(p1, nome, fn) { testes.push({ p1: p1, nome: nome, fn: fn }); }
+  function ok(cond, msg) { if (!cond) throw new Error(msg || "condição falsa"); }
+  function anuncia(txt) { faseEl.textContent = txt; }
+
+  function dormir(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /** Espera `cond()` virar verdadeira. Falha com mensagem própria no estouro. */
+  async function ate(cond, msg, msMax, passo) {
+    var limite = Date.now() + (msMax || 30000);
+    while (Date.now() < limite) {
+      var v;
+      try { v = cond(); } catch (e) { v = false; }
+      if (v) return v;
+      await dormir(passo || 120);
+    }
+    throw new Error("tempo esgotado esperando: " + msg);
+  }
+
+  // ---------------------------------------------------------------------
+  // Controle do app dentro do iframe
+  // ---------------------------------------------------------------------
+  var frame = document.getElementById("app");
+  function W() { return frame.contentWindow; }
+  function D() { return frame.contentDocument; }
+  function $(id) { return D().getElementById(id); }
+
+  /** Recarrega o app e espera o bootstrap terminar. */
+  async function recarregarApp() {
+    anuncia("carregando o app…");
+    var pronto = new Promise(function (res) { frame.onload = res; });
+    frame.src = "../index.html?regressao=" + Date.now();
+    await pronto;
+    await ate(function () {
+      var w = W();
+      return w && w.SimTC && w.SimTC.tableDriveApi && w.SimTCCore && w.SimTCCore.sessao;
+    }, "o app inicializar (SimTC.tableDriveApi e SimTCCore)", 40000);
+    // O relógio do núcleo só começa a andar depois do primeiro quadro.
+    await dormir(600);
+  }
+
+  /** Cadastra e seleciona um paciente de teste. Devolve o id. */
+  function pacienteDeTeste(sufixo) {
+    var wl = W().SimTCCore.sessao.worklist;
+    var p = wl.adicionar({ nome: PREFIXO + " " + sufixo, sexo: "F", regiao: "Crânio" });
+    wl.selecionar(p.id);
+    return p.id;
+  }
+
+  /** Põe o paciente na mesa clicando na opção de decúbito, como o operador faz. */
+  async function porNaMesa() {
+    var grid = $("pose-decubito-grid");
+    ok(grid && grid.children.length, "grade de decúbito não renderizou");
+    grid.children[0].click();
+    await ate(function () { return W().SimTC.tableDriveApi.isPatientOnTable(); },
+      "o paciente ser posicionado na mesa", 8000);
+  }
+
+  /** Seleciona o protocolo do catálogo pelo id, pela lista da tela. */
+  async function selecionarProtocolo(idProto) {
+    // A tela de protocolos precisa estar montada; o clique no mapa corporal
+    // é o caminho do operador.
+    // `new W().MouseEvent(...)` NAO funciona: o `new` se aplica a W(), nao ao
+    // construtor. O construtor precisa vir do iframe (o do documento de fora
+    // produz um evento que o app nao reconhece como confiavel do mesmo realm).
+    var M = W().MouseEvent;
+    var zona = D().querySelector('.bodymap__zone[data-region="Crânio"]');
+    ok(zona, "mapa corporal não encontrado");
+    zona.dispatchEvent(new M("click", { bubbles: true }));
+    await dormir(400);
+    var itens = Array.prototype.slice.call(D().querySelectorAll("#proto-list li"));
+    var alvo = itens.filter(function (li) { return li.textContent.trim() === idProto; })[0];
+    ok(alvo, 'protocolo "' + idProto + '" não está na lista da região Crânio');
+    alvo.dispatchEvent(new M("click", { bubbles: true }));
+    await ate(function () { return W().SimTC.examProtocol && W().SimTC.examProtocol.data; },
+      "o protocolo ser selecionado", 8000);
+  }
+
+  /** Adquire o topograma e leva a mesa ao início da faixa. */
+  async function ateOPlanejamento() {
+    $("ws-exam-start").click();                       // topograma
+    await ate(function () {
+      var t = $("ws-topo-readout");
+      return t && !t.hidden && /Faixa/.test(t.textContent);
+    }, "o topograma ser adquirido", 90000);
+    $("ws-exam-move").click();                        // posiciona a mesa
+    await ate(function () {
+      return !W().SimTC.tableDriveApi.isBusy() &&
+             /Mesa em posição/.test(($("ws-topo-readout") || {}).textContent || "");
+    }, "a mesa chegar ao início da faixa", 90000);
+  }
+
+  /** Abre a confirmação pré-aquisição. */
+  async function ateAConfirmacao() {
+    $("ws-exam-start").click();
+    await ate(function () { var c = $("ws-confirm"); return c && !c.hidden; },
+      "a confirmação pré-aquisição abrir", 15000);
+  }
+
+  /** Encerra o exame e volta ao repouso. */
+  async function pararExame() {
+    var cancel = $("ws-confirm-cancel");
+    if (cancel && !$("ws-confirm").hidden) cancel.click();
+    var stop = $("ws-exam-stop");
+    if (stop && !stop.disabled) stop.click();
+    await dormir(1200);
+  }
+
+  /** Remove do banco tudo o que esta suíte criou. */
+  async function limparResiduo() {
+    var w = W();
+    if (!w || !w.SimTC || !w.SimTC.dbStoreAll) return;
+    try {
+      var pacs = await w.SimTC.dbStoreAll("pacientes");
+      for (var i = 0; i < pacs.length; i++) {
+        if (String(pacs[i].nome || "").indexOf(PREFIXO) === 0) {
+          await w.SimTC.dbStoreDel("pacientes", pacs[i].id);
+        }
+      }
+      var ests = await w.SimTC.dbStoreAll("estudos");
+      for (var j = 0; j < ests.length; j++) {
+        if (String(ests[j].pacienteNome || "").indexOf(PREFIXO) === 0) {
+          await w.SimTC.dbStoreDel("estudos", ests[j].studyUID);
+        }
+      }
+    } catch (e) { /* banco indisponível: nada a limpar */ }
+  }
+
+  /** Números seguidos de mGy·cm num texto. */
+  function dlpsNoTexto(txt) {
+    var achados = [], re = /([\d.,]+)\s*mGy·cm/g, m;
+    while ((m = re.exec(txt)) !== null) {
+      achados.push(parseFloat(m[1].replace(/\./g, "").replace(",", ".")));
+    }
+    return achados;
+  }
+
+  // =====================================================================
+  // FASE A — sem volume e sem exame (rápida)
+  // =====================================================================
+
+  teste("P1-07", "protocolo persistido é numérico, não texto livre", async function () {
+    var protos = await W().SimTC.dbStoreAll("protocolos");
+    var p = protos.filter(function (x) { return x.id === "cranio"; })[0];
+    ok(p, "protocolo de referência 'cranio' não está no banco");
+    // Critério de aceite da Fase 9: nenhum campo numérico aceita texto livre.
+    ok(typeof p.kv === "number" || (p.aquisicao && typeof p.aquisicao.kv === "number"),
+      "kV gravado como " + JSON.stringify(p.kv) + " — deveria ser número");
+    var dose = p.dose == null ? "" : String(p.dose);
+    ok(!/≈|ref\.|mGy/i.test(dose),
+      'dose gravada como ' + JSON.stringify(dose) + ' — a Fase 9 exige que deixe de ser texto');
+  });
+
+  teste("P1-08", "comandos de mesa respondem ao teclado", async function () {
+    var alturaDe = function () {
+      return parseFloat(($("hud-table-height").textContent || "").replace(",", "."));
+    };
+    var antes = alturaDe();
+    var btn = $("btn-table-up");
+    ok(btn, "botão de subir mesa não encontrado");
+    btn.focus();
+    var K = W().KeyboardEvent;
+    btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true }));
+    await dormir(700);
+    btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
+    await dormir(200);
+    var depois = alturaDe();
+    ok(Math.abs(depois - antes) > 0.05,
+      "altura não mudou com Enter (" + antes + " → " + depois +
+      "): setHeld() liga só pointerdown/pointerup");
+  });
+
+  teste("P1-09", "pitch em modo sequencial é acusado pelo caminho REAL", async function () {
+    var C = W().SimTCCore;
+    // O caminho real: protocolo cru da tela -> normalizarProtocolo -> validar.
+    var cru = {
+      nome: "teste", regiao: "Crânio", modo: "sequencial", pitch: "0,8",
+      kv: "120", mas: "200", colimacao: "64 × 0,6 mm", rotacao: "0,5",
+      espessura: "5,0 mm", kernel: "Partes moles", fov: "250 mm"
+    };
+    var p = C.model.normalizarProtocolo(cru);
+    var r = C.validacao.validar(p);
+    ok(r.erros.some(function (e) { return e.codigo === "PITCH_EM_SEQUENCIAL"; }),
+      "a normalização zera o pitch antes da validação, então a regra nunca dispara " +
+      "pelo caminho que a tela usa (core/model/protocol.js:147)");
+  });
+
+  teste("P1-01", "iniciar sem protocolo é bloqueado", async function () {
+    pacienteDeTeste("sem-protocolo");
+    await porNaMesa();
+    // Nenhum protocolo selecionado — SimTC.examProtocol.data segue nulo.
+    ok(!(W().SimTC.examProtocol && W().SimTC.examProtocol.data),
+      "pré-condição do teste falhou: havia protocolo selecionado");
+    D().querySelector('[data-step="acq"]').click();
+    await dormir(400);
+
+    // Duas correcoes sao aceitaveis, e o teste nao deve ditar qual: recusar
+    // logo no Iniciar (preferivel — nem adquire topograma) ou deixar chegar a
+    // confirmacao com o botao travado. Qualquer uma passa; o que nao pode e
+    // irradiar.
+    $("ws-exam-start").click();
+    await dormir(2500);
+
+    var pendencias = JSON.stringify(W().SimTCCore.sessao.pendenciasParaIniciar());
+    if ($("ws-topo").hidden) {
+      ok(/protocolo/i.test($("message-text").textContent),
+        "recusou iniciar sem protocolo, mas sem dizer que o que falta é o protocolo: \"" +
+        $("message-text").textContent.slice(0, 70) + '"');
+      return;
+    }
+
+    await ate(function () {
+      var t = $("ws-topo-readout");
+      return t && !t.hidden && /Faixa/.test(t.textContent);
+    }, "o topograma ser adquirido", 90000);
+    $("ws-exam-move").click();
+    await ate(function () { return !W().SimTC.tableDriveApi.isBusy(); },
+      "a mesa parar", 90000);
+    await ateAConfirmacao();
+
+    ok($("ws-confirm-ok").disabled,
+      "a confirmação liberou irradiar sem protocolo — o núcleo já sabe o que falta: " +
+      pendencias);
+  });
+
+  // =====================================================================
+  // FASE B — com protocolo, sem exame completo
+  // =====================================================================
+
+  teste("P1-02", "tilt negativo chega negativo ao gantry", async function () {
+    pacienteDeTeste("tilt");
+    await porNaMesa();
+    await selecionarProtocolo("Crânio");
+    // Protocolo do exame com tilt negativo, pelo mesmo contrato que a tela usa.
+    W().SimTC.examProtocol.data.tilt = "-15";
+
+    // Espiona o valor que a aquisição REALMENTE manda para o gantry.
+    var recebido = null;
+    var api = W().SimTC.tableDriveApi;
+    var original = api.setGantryTilt;
+    api.setGantryTilt = function (deg) { recebido = deg; return original.call(api, deg); };
+    try {
+      D().querySelector('[data-step="acq"]').click();
+      await dormir(400);
+      await ateOPlanejamento();
+      ok(recebido !== null, "a aquisição não chamou setGantryTilt");
+      ok(recebido === -15,
+        "tilt -15° chegou ao gantry como " + recebido +
+        "° — o parser local de js/aquisicao.js:313 não aceita sinal negativo");
+    } finally {
+      api.setGantryTilt = original;
+    }
+  });
+
+  teste("P1-06", "excluir o paciente durante o exame aborta com aviso", async function () {
+    var id = pacienteDeTeste("excluir");
+    await porNaMesa();
+    await selecionarProtocolo("Crânio");
+    D().querySelector('[data-step="acq"]').click();
+    await dormir(400);
+    await ateOPlanejamento();
+
+    W().SimTCCore.sessao.worklist.remover(id);
+    await dormir(1500);
+
+    // Voltar ao repouso tem marcas inequivocas em toIdle(): o topograma some,
+    // o Stop desabilita e o espaco reservado reaparece. Nao basta olhar o
+    // texto do botao Iniciar — ele ja e "Iniciar" durante o planejamento, e um
+    // teste que se contentasse com isso passaria sem o exame ter abortado.
+    var abortou = $("ws-topo").hidden && $("ws-exam-stop").disabled &&
+                  !$("ws-viewer-placeholder").hidden;
+    var msg = $("message-text").textContent;
+    var avisou = /paciente/i.test(msg);
+    ok(abortou && avisou,
+      "o exame seguiu sem o paciente" +
+      " · topograma oculto=" + $("ws-topo").hidden +
+      " · stop desabilitado=" + $("ws-exam-stop").disabled +
+      ' · mensagem="' + msg.slice(0, 70) + '"');
+  });
+
+  // =====================================================================
+  // FASE C — exame completo (lenta: carrega volume e reconstrói)
+  // =====================================================================
+
+  teste("P1-03", "a confirmação mostra UM só DLP", async function () {
+    pacienteDeTeste("exame");
+    await porNaMesa();
+    await selecionarProtocolo("Crânio");
+    D().querySelector('[data-step="acq"]').click();
+    await dormir(400);
+    await ateOPlanejamento();
+    await ateAConfirmacao();
+
+    var dlps = dlpsNoTexto($("ws-confirm-body").innerText);
+    ok(dlps.length > 0, "a confirmação não mostrou nenhum DLP");
+    var distintos = Array.from(new Set(dlps.map(function (d) { return Math.round(d); })));
+    ok(distintos.length === 1,
+      "a mesma tela mostra " + distintos.length + " valores de DLP: " + distintos.join(" e ") +
+      " — o cabeçalho usa a dose DIGITADA (js/aquisicao.js:1537) e o validador a CALCULADA");
+  });
+
+  teste("P1-04a", "o exame arquivado guarda os cortes da SÉRIE", async function () {
+    // Depende do exame iniciado no teste anterior: confirma e espera terminar.
+    var botao = $("ws-confirm-ok");
+    ok(botao && !$("ws-confirm").hidden, "a confirmação não estava aberta");
+    ok(!botao.disabled, "a confirmação bloqueou o exame: " + botao.textContent);
+    botao.click();
+
+    anuncia("irradiando e reconstruindo — isto leva alguns minutos…");
+    await ate(function () {
+      return /Exame adquirido/.test($("ws-exam-start").textContent);
+    }, "a aquisição e a reconstrução terminarem", 420000, 1000);
+    anuncia("");
+
+    var serie = W().SimTC.MotorImagem.serieAtual();
+    var estudos = await W().SimTC.dbStoreAll("estudos");
+    var meu = estudos.filter(function (e) {
+      return String(e.pacienteNome || "").indexOf(PREFIXO) === 0;
+    }).pop();
+    ok(meu, "o exame não foi arquivado");
+    ok(meu.cortes === serie.cortes,
+      "arquivado com " + meu.cortes + " cortes, mas a série tem " + serie.cortes +
+      " — js/aquisicao.js:1390 grava manifest.cortes, que é do volume-fonte");
+  });
+
+  teste("P1-04b", "o exame arquivado guarda o DLP CALCULADO", async function () {
+    var dose = W().SimTC.MotorImagem.dose();
+    ok(dose && dose.dlp != null, "o motor não produziu relatório de dose");
+    var estudos = await W().SimTC.dbStoreAll("estudos");
+    var meu = estudos.filter(function (e) {
+      return String(e.pacienteNome || "").indexOf(PREFIXO) === 0;
+    }).pop();
+    ok(meu, "o exame não foi arquivado");
+    ok(meu.dlp != null, "o estudo foi arquivado sem DLP");
+    var erro = Math.abs(meu.dlp - dose.dlp) / dose.dlp;
+    ok(erro < 0.02,
+      "arquivado DLP " + Math.round(meu.dlp) + ", motor calculou " + Math.round(dose.dlp) +
+      " — js/aquisicao.js:1391 usa a dose digitada no protocolo");
+  });
+
+  teste("P1-05", "o coronal concorda entre os três consumidores", async function () {
+    var serie = W().SimTC.MotorImagem.serieAtual();
+    var api = W().SimTC.mprApi;
+    ok(api && api.hasVolume(), "não há volume para reformatar");
+
+    var botao = D().querySelector('.ws-plane__btn[data-plane="coronal"]');
+    ok(botao && !$("ws-plane").hidden, "o seletor de plano não está disponível");
+    botao.click();
+    await dormir(2500);
+
+    var naTela = parseInt($("ws-slice-slider").max, 10) + 1;
+    var naApi = api.count("coronal");
+    ok(naApi === naTela && naTela === serie.matriz,
+      "coronal tem " + naTela + " cortes na tela, " + naApi + " na mprApi e a série é " +
+      serie.matriz + "² — js/aquisicao.js:1185 monta o volume do MPR com manifest.cortes " +
+      "(volume-fonte) em vez da série reconstruída");
+  });
+
+  // =====================================================================
+  // Execução
+  // =====================================================================
+  var FASES = {
+    "P1-07": "A", "P1-08": "A", "P1-09": "A", "P1-01": "A",
+    "P1-02": "B", "P1-06": "B",
+    "P1-03": "C", "P1-04a": "C", "P1-04b": "C", "P1-05": "C"
+  };
+
+  async function rodar() {
+    var faseAtual = null;
+    for (var i = 0; i < testes.length; i++) {
+      var t = testes[i];
+      var fase = FASES[t.p1];
+      // Cada fase começa com o app limpo: os testes anteriores deixam o exame
+      // e a lista de trabalho em estados que contaminariam o seguinte.
+      if (fase !== faseAtual) {
+        await limparResiduo();
+        await recarregarApp();
+        faseAtual = fase;
+      }
+      anuncia("fase " + fase + " · " + t.p1 + " · " + t.nome);
+      var r = { p1: t.p1, nome: t.nome, ok: false, erro: "" };
+      try {
+        await t.fn();
+        r.ok = true;
+      } catch (e) {
+        r.erro = (e && e.message) || String(e);
+      }
+      // Os testes da fase C encadeiam (um exame só); os demais são isolados.
+      if (fase !== "C") { try { await pararExame(); } catch (e) { /* ignora */ } }
+      resultados.push(r);
+      render();
+    }
+    await limparResiduo();
+    anuncia("");
+    render(true);
+  }
+
+  function render(fim) {
+    var lista = document.getElementById("lista");
+    var placar = document.getElementById("placar");
+    lista.innerHTML = "";
+
+    var inesperados = 0, corrigidos = 0, esperados = 0, verdes = 0;
+
+    resultados.forEach(function (r) {
+      var pendente = PENDENTES.has(r.p1);
+      var estado, classe, marca, cor;
+      if (!r.ok && pendente)      { estado = "esperado";   classe = "";            marca = "✕"; cor = "ambar";    esperados++; }
+      else if (!r.ok)             { estado = "INESPERADO"; classe = "inesperado";  marca = "✕"; cor = "vermelho"; inesperados++; }
+      else if (pendente)          { estado = "CORRIGIDO";  classe = "corrigido";   marca = "✓"; cor = "verde";    corrigidos++; }
+      else                        { estado = "";           classe = "";            marca = "✓"; cor = "verde";    verdes++; }
+
+      var li = document.createElement("li");
+      li.className = classe;
+      var a = document.createElement("span");
+      a.className = "p1";
+      a.textContent = r.p1 + (estado ? " " + estado : "");
+      var b = document.createElement("span");
+      b.className = cor; b.textContent = marca;
+      var c = document.createElement("span");
+      c.textContent = r.nome;
+      li.appendChild(a); li.appendChild(b); li.appendChild(c);
+      if (!r.ok) {
+        var e = document.createElement("span");
+        e.className = "erro"; e.textContent = r.erro;
+        li.appendChild(e);
+      }
+      if (r.ok && pendente) {
+        var g = document.createElement("span");
+        g.className = "erro verde";
+        g.textContent = "defeito corrigido — remova \"" + r.p1 + "\" de PENDENTES no topo do script";
+        li.appendChild(g);
+      }
+      lista.appendChild(li);
+    });
+
+    var falhaCI = inesperados + corrigidos;
+    placar.innerHTML =
+      '<span><b class="' + (falhaCI ? "vermelho" : "verde") + '">' +
+        resultados.length + "/" + testes.length + "</b> executados</span>" +
+      '<span class="ambar">' + esperados + " falha(s) esperada(s)</span>" +
+      '<span class="' + (inesperados ? "vermelho" : "cinza") + '">' + inesperados + " inesperada(s)</span>" +
+      '<span class="' + (corrigidos ? "verde" : "cinza") + '">' + corrigidos + " corrigido(s)</span>" +
+      (fim ? '<span class="' + (falhaCI ? "vermelho" : "verde") + '">' +
+        (falhaCI ? "AÇÃO NECESSÁRIA" : "como esperado") + "</span>" : "");
+
+    // Contrato com ferramentas/rodar-testes.mjs:
+    //   falhas > 0  => o CI reprova.
+    // Falha ESPERADA (defeito ainda não corrigido) não reprova; falha inesperada
+    // e defeito corrigido sem atualizar PENDENTES reprovam.
+    window.__RESULTADO_REGRESSAO__ = {
+      total: testes.length,
+      executados: resultados.length,
+      falhas: fim ? falhaCI : 0,
+      esperadas: esperados,
+      inesperadas: inesperados,
+      corrigidas: corrigidos,
+      completo: !!fim,
+      resultados: resultados.map(function (r) {
+        var pendente = PENDENTES.has(r.p1);
+        return {
+          nome: r.p1 + " · " + r.nome,
+          ok: r.ok ? !pendente : pendente,   // "ok" para o CI = estado esperado
+          erro: r.ok
+            ? (pendente ? "CORRIGIDO — remova " + r.p1 + " de PENDENTES" : "")
+            : (pendente ? "" : r.erro)
+        };
+      })
+    };
+  }
+
+  render();
+  rodar().catch(function (e) {
+    anuncia("");
+    document.getElementById("placar").innerHTML =
+      '<span class="vermelho">a suíte não terminou: ' + ((e && e.message) || e) + "</span>";
+    window.__RESULTADO_REGRESSAO__ = {
+      total: testes.length, executados: resultados.length,
+      falhas: 1, completo: false, erroSuite: (e && e.message) || String(e)
+    };
+  });
+})();
+</script>
+</body>
+</html>
