@@ -120,42 +120,117 @@
     apply();
   }
 
-  function initMobileMode() {
+  // =================================================================
+  // MODO DE LAYOUT — um controlador só
+  //
+  // Havia DOIS, ligados aos mesmos botões: `initMobileMode` aqui e
+  // js/mobile-tabs.js. Cada clique em "Sala" ou "Exame" disparava os dois,
+  // com lógicas diferentes — um persistia a escolha, o outro não; um marcava
+  // `is-active` em dois dos quatro botões, o outro nos quatro. O resultado
+  // dependia da ordem das tags <script>, e o segundo controlador chegava a
+  // chamar `mobileToggle.click()` por código para entrar no modo celular:
+  // acoplamento por clique sintético.
+  //
+  // E havia um estado morto. Abaixo de 901 px o CSS escondia a barra de
+  // etapas, e nada ligava o modo celular ao redimensionar — ele só era
+  // decidido na CARGA. Quem estreitava a janela, ou girava o tablet, caía num
+  // app com quatro painéis empilhados e NENHUMA navegação. Medido na
+  // auditoria: `body.className` vazio, console-steps oculto, mobile-switch
+  // oculto.
+  //
+  // A regra agora é uma só, e é invariante:
+  //
+  //     o app nunca fica sem navegação.
+  //
+  // Em tela estreita, o modo celular entra sozinho — a menos que o operador
+  // tenha saído dele de propósito nesta sessão, e nesse caso a barra de
+  // etapas fica no lugar. As duas navegações se revezam; nunca somem juntas.
+  // =================================================================
+  var VIEWS = ["3d", "aq", "pacproto", "mpr"];
+  var CLASSES_VIEW = ["mob-3d", "mob-aq", "mob-pacproto", "mob-mpr"];
+  var CHAVE_VIEW = "simuladorTC.mobileView";
+  var CHAVE_SAIU = "simuladorTC.mobileExit";
+  var ESTREITO = 900;
+
+  function initModoDeLayout() {
+    var body = document.body;
     var btn = document.getElementById("mobile-toggle");
     var sw = document.getElementById("mobile-switch");
-    var bPos = document.getElementById("mob-view-pos");
-    var bCmd = document.getElementById("mob-view-cmd");
     var bExit = document.getElementById("mob-exit");
-    var body = document.body;
-    if (!btn || !sw) return;
+    var botoes = Array.prototype.slice.call(document.querySelectorAll("[data-mobile-view]"));
+    if (!btn || !sw || botoes.length !== VIEWS.length) return;
 
     function pokeResize() { window.dispatchEvent(new Event("resize")); }
-
-    function setView(v) {
-      // Só é chamada para "3d"/"aq" (botões Sala/Exame); as telas Pac/Prot e
-      // MPR são geridas pelo controlador de abas (mobile-tabs.js). Limpa todas
-      // as classes de view para não deixar resíduo ao trocar de aba.
-      var is3d = v !== "aq";
-      body.classList.remove("mob-pacproto", "mob-mpr", "mob-proto", "mob-pac");
-      body.classList.toggle("mob-3d", is3d);
-      body.classList.toggle("mob-aq", !is3d);
-      if (bPos) bPos.classList.toggle("is-active", is3d);
-      if (bCmd) bCmd.classList.toggle("is-active", !is3d);
-      pokeResize();
+    function estreito() { return window.innerWidth <= ESTREITO; }
+    function saiuDeProposito() {
+      try { return sessionStorage.getItem(CHAVE_SAIU) === "1"; } catch (e) { return false; }
     }
-    function enable(on) {
-      body.classList.toggle("is-mobile", on);
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      sw.hidden = !on;
-      if (on) { setView("3d"); }
-      else { body.classList.remove("mob-3d", "mob-aq", "mob-proto", "mob-pac"); }
-      pokeResize();
+    function marcarSaida(saiu) {
+      try {
+        if (saiu) sessionStorage.setItem(CHAVE_SAIU, "1");
+        else sessionStorage.removeItem(CHAVE_SAIU);
+      } catch (e) { /* sem persistência: vale só para esta janela */ }
+    }
+    function normalizar(v) {
+      // Migração: as telas "pac" e "proto" foram fundidas em "pacproto".
+      if (v === "pac" || v === "proto") v = "pacproto";
+      return VIEWS.indexOf(v) >= 0 ? v : "3d";
+    }
+    function viewGuardada() {
+      try { return normalizar(localStorage.getItem(CHAVE_VIEW)); } catch (e) { return "3d"; }
     }
 
-    btn.addEventListener("click", function () { enable(!body.classList.contains("is-mobile")); });
-    if (bPos) bPos.addEventListener("click", function () { setView("3d"); });
-    if (bCmd) bCmd.addEventListener("click", function () { setView("aq"); });
-    if (bExit) bExit.addEventListener("click", function () { enable(false); });
+    function setView(v, guardar) {
+      v = normalizar(v);
+      CLASSES_VIEW.forEach(function (c) { body.classList.remove(c); });
+      body.classList.add("mob-" + v);
+      botoes.forEach(function (b) {
+        var ativo = b.getAttribute("data-mobile-view") === v;
+        b.classList.toggle("is-active", ativo);
+        if (ativo) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
+      });
+      if (guardar !== false) {
+        try { localStorage.setItem(CHAVE_VIEW, v); } catch (e) { /* sem persistência */ }
+      }
+      window.requestAnimationFrame(function () {
+        pokeResize();
+        var painel = body.querySelector(".dash-pane:not([style*='display: none'])");
+        if (painel) painel.scrollTop = 0;
+      });
+    }
+
+    function ligarCelular(ligado) {
+      body.classList.toggle("is-mobile", ligado);
+      btn.setAttribute("aria-pressed", ligado ? "true" : "false");
+      sw.hidden = !ligado;
+      if (ligado) setView(viewGuardada(), false);
+      else CLASSES_VIEW.forEach(function (c) { body.classList.remove(c); });
+      pokeResize();
+    }
+
+    btn.addEventListener("click", function () {
+      var ligando = !body.classList.contains("is-mobile");
+      marcarSaida(!ligando);
+      ligarCelular(ligando);
+    });
+    botoes.forEach(function (b) {
+      b.addEventListener("click", function () { setView(b.getAttribute("data-mobile-view")); });
+    });
+    if (bExit) bExit.addEventListener("click", function () {
+      marcarSaida(true);
+      ligarCelular(false);
+    });
+
+    // Reavalia a CADA redimensionamento, e não só na carga: girar o tablet ou
+    // estreitar a janela é exatamente quando o app ficava sem navegação.
+    function reavaliar() {
+      var celular = body.classList.contains("is-mobile");
+      if (estreito() && !celular && !saiuDeProposito()) ligarCelular(true);
+    }
+    window.addEventListener("resize", reavaliar);
+    reavaliar();
+    if (body.classList.contains("is-mobile")) setView(viewGuardada(), false);
   }
 
   function initMobilePanel() {
@@ -314,8 +389,17 @@
 
     // Console guiado é exclusivo de telas largas; em telefones o controle
     // é o seletor fixo inferior do modo celular.
-    function isDesktop() {
-      return !body.classList.contains("is-mobile") && window.innerWidth >= 901;
+    /**
+     * O console guiado depende do modo celular, e nao mais da LARGURA.
+     *
+     * Exigir 901 px fazia sentido enquanto o CSS escondia a barra de etapas em
+     * tela estreita — mas era exatamente isso que produzia o estado sem
+     * navegacao: quem saisse do modo celular numa janela estreita ficava com o
+     * console desligado E a barra oculta. A barra agora rola na horizontal
+     * quando nao cabe, entao ela funciona em qualquer largura.
+     */
+    function podeUsarConsole() {
+      return !body.classList.contains("is-mobile");
     }
 
     function setDot(step, show) {
@@ -351,7 +435,7 @@
     // Aplica classes/visibilidade SEM disparar resize (usada também no
     // handler de resize — evita loop com o pokeResize).
     function applyClasses() {
-      var active = state.on && isDesktop();
+      var active = state.on && podeUsarConsole();
       body.classList.toggle("console-mode", active);
       STEPS.forEach(function (st) {
         body.classList.toggle("cstep-" + st, active && st === state.step);
@@ -395,7 +479,7 @@
     }, 1200);
 
     SimTC.contratos.declarar("consoleUiApi", {
-      isConsole: function () { return state.on && isDesktop(); },
+      isConsole: function () { return state.on && podeUsarConsole(); },
       getStep: function () { return state.step; },
       setStep: function (st) {
         if (STEPS.indexOf(st) < 0) return;
@@ -406,6 +490,59 @@
     apply();
   }
 
+  // -----------------------------------------------------------------
+  // EMPRESTAR UM ELEMENTO A OUTRO LUGAR DA TELA
+  //
+  // Dois pedacos do app mudam de pai conforme a etapa: o viewport 3D (vai do
+  // quadrante da Sala para o slot do Exame) e a barra de comandos da sequencia
+  // (vai para o topo, no modo celular). A manobra era escrita duas vezes, igual
+  // nas duas, e nas duas o endereco de casa era guardado como REFERENCIA AO
+  // IRMAO SEGUINTE:
+  //
+  //     var homeNext = el.nextSibling;
+  //     ...
+  //     home.insertBefore(el, homeNext);
+  //
+  // Isso so funciona enquanto ninguem mexer no container de origem. No dia em
+  // que aquele irmao sair do DOM, `insertBefore` lanca NotFoundError e o
+  // elemento fica orfao no meio da tela — um defeito que aparece longe daqui.
+  //
+  // Uma ancora de comentario nao tem esse problema: ela e nossa, ninguem a
+  // remove, e ela marca o lugar exato. Invisivel, e nao conta em :nth-child.
+  // -----------------------------------------------------------------
+  function emprestar(el, nome) {
+    var ancora = document.createComment(" " + nome + " mora aqui ");
+    el.parentNode.insertBefore(ancora, el);
+    return {
+      /** Devolve o elemento ao lugar de origem. Devolve true se mudou de pai. */
+      paraCasa: function () {
+        if (el.parentNode === ancora.parentNode) return false;
+        ancora.parentNode.insertBefore(el, ancora.nextSibling);
+        return true;
+      },
+      /** Move para o destino. Devolve true se mudou de pai. */
+      para: function (destino) {
+        if (el.parentNode === destino) return false;
+        destino.appendChild(el);
+        return true;
+      }
+    };
+  }
+
+  // A auditoria (item E-06) sugeria PARAR de reparentar o canvas WebGL e, em
+  // vez disso, deixa-lo num unico lugar, posicionado por CSS sobre o slot da
+  // vez. Foi medido antes de decidir: seis idas e voltas entre a Sala e o
+  // Exame, no Chromium, com o contexto sob observacao —
+  //
+  //     sala -> sala-view    1439x738   canvas 1769x907
+  //     exame -> acq3d-body   322x310   canvas  396x381
+  //     ... (6 ciclos)        webglcontextlost: 0   isContextLost(): false
+  //
+  // O contexto sobrevive, o ResizeObserver reajusta o buffer, e a cena
+  // continua desenhando. Trocar isso por um canvas fixo rastreando o retangulo
+  // de um slot custaria sincronizar posicao, rolagem e empilhamento a mao — mais
+  // superficie de erro do que a que existe hoje, para consertar algo que nao
+  // esta quebrado. FICA COMO ESTA, e a medida fica escrita para quem revisitar.
   function initAcqPip() {
     var pip = document.getElementById("pip-3d");
     var pipBody = document.getElementById("pip-body");
@@ -417,14 +554,13 @@
     var vp = document.querySelector("#pane-sim .viewport");
     if (!pip || !pipBody || !viewer || !vp) return;
 
-    var home = vp.parentNode;
-    var homeNext = vp.nextSibling;
+    var emprestimo = emprestar(vp, "viewport 3D");
     var curPhase = "idle";
     var userHidden = false;
 
     // Devolve o viewport 3D ao quadrante da Sala.
     function toHome() {
-      if (vp.parentNode !== home) home.insertBefore(vp, homeNext);
+      emprestimo.paraCasa();
       pip.hidden = true;
       if (acq3d) acq3d.hidden = true;
     }
@@ -442,11 +578,11 @@
       // (slot #acq3d-body), no desktop e no celular. O PiP flutuante fica
       // como fallback caso o slot não exista.
       if (acq3dBody) {
-        if (vp.parentNode !== acq3dBody) acq3dBody.appendChild(vp);
+        emprestimo.para(acq3dBody);
         if (acq3d) acq3d.hidden = false;
         pip.hidden = true;
       } else {
-        if (vp.parentNode !== pipBody) pipBody.appendChild(vp);
+        emprestimo.para(pipBody);
         pip.hidden = false;
         if (acq3d) acq3d.hidden = true;
       }
@@ -498,16 +634,15 @@
     var foot = document.querySelector(".acq-seq__foot");
     var host = document.getElementById("acq-topo-cmds");
     if (!foot || !host) return;
-    var home = foot.parentNode;
-    var homeNext = foot.nextSibling;
+    var emprestimo = emprestar(foot, "comandos da sequencia");
     function update() {
       var b = document.body;
       var want = b.classList.contains("is-mobile") && b.classList.contains("mob-aq");
       if (want) {
-        if (foot.parentNode !== host) host.appendChild(foot);
+        emprestimo.para(host);
         host.hidden = false;
       } else {
-        if (foot.parentNode !== home) home.insertBefore(foot, homeNext);
+        emprestimo.paraCasa();
         host.hidden = true;
       }
     }
@@ -521,7 +656,7 @@
   SimTC.Layout = {
     init: function () {
       initDashboardSplit();
-      initMobileMode();
+      initModoDeLayout();
       initMobilePanel();
       initConsoleMode();
       initAcqPip();

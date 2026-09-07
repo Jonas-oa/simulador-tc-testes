@@ -3,6 +3,14 @@
    Organização: 1) Tokens  2) Reset  3) Layout  4) Componentes  5) Estados
    ===================================================================== */
 
+/* ---- [hidden] vence sempre --------------------------------------------
+   Um elemento com `display` vindo de classe ignorava o atributo `hidden`, e
+   a correção vinha sendo repetida componente a componente — seis vezes, em
+   quatro trechos diferentes do arquivo. Uma regra basta, e vale para o que
+   vier depois. */
+[hidden] { display: none !important; }
+
+
 /* ---------------------------------------------------------------------
    1) DESIGN TOKENS
    Paleta inspirada em consoles reais de TC: corpo grafite/preto,
@@ -767,7 +775,6 @@ body {
 .ws-plane__btn { border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.72rem; padding: 3px 12px; border-radius: 999px; cursor: pointer; }
 .ws-plane__btn:hover { color: var(--text-primary); }
 .ws-plane__btn.is-active { background: var(--accent-cyan); color: #04222b; font-weight: 600; }
-.ws-plane[hidden] { display: none !important; }
 /* No celular, o seletor de plano sai do quadrante de Volumes (evita
    sobreposição); coronal/sagital passam a viver na aba MPR dedicada. */
 body.is-mobile .ws-plane { display: none !important; }
@@ -1242,15 +1249,10 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
 .proto-editor--full { border-top: 0; padding-top: 0; margin-top: 0; flex: 1 1 auto; min-height: 0; overflow: auto; }
 .proto-editor__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
-/* Correção: classes com display definido venciam o atributo [hidden]
-   (ex.: o topograma "vazava" no quadrante antes do exame começar).
-   Esta guarda garante que [hidden] sempre oculte esses elementos. */
-.ws-viewer__img[hidden],
-.ws-topo[hidden],
-.ws-viewer-ctrl[hidden],
-.ws-topo-readout[hidden],
-.ws-actions[hidden],
-.proto2__editor[hidden] { display: none !important; }
+/* A guarda de [hidden] agora é UMA, no topo do arquivo. Esta lista existia
+   porque cada componente que ganhava `display` de classe vencia o atributo
+   `hidden` — o topograma "vazava" no quadrante antes do exame começar —, e a
+   correção foi sendo repetida componente a componente. */
 
 /* =====================================================================
    CONSOLE GUIADO (desktop) — como nos consoles reais (Somaris/IACI):
@@ -1363,7 +1365,6 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
 .ws-quiz__list label.q-ok { color: #37d67a; }
 .ws-quiz__list label.q-bad { color: var(--accent-red); }
 .ws-quiz__result { font-size: 0.8rem; align-self: center; color: var(--text-secondary); }
-.ws-report[hidden] { display: none !important; }
 
 /* Correções mobile/tela estreita (console guiado):
    1) [hidden] sempre vence display de classe (PiP aparecia vazio);
@@ -1371,10 +1372,14 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
       telefones o controle é o seletor fixo inferior do modo celular;
    3) em tela estreita o modo console não esconde quadrantes: vale o
       empilhamento normal. */
-.pip[hidden], .console-steps[hidden] { display: none !important; }
 @media (max-width: 900px) {
-  .console-steps { display: none !important; }
-  body.console-mode:not(.is-mobile) .dash-pane { display: flex !important; }
+  /* A barra de etapas CONTINUA visível em tela estreita — só rola na
+     horizontal quando não cabe. Escondê-la era o que deixava o app sem
+     navegação nenhuma quando o operador estreitava a janela e o modo celular
+     não estava ligado: quatro painéis empilhados e nada para navegar entre
+     eles. Ver o controlador único em js/ui-layout.js. */
+  .console-steps { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .console-banner { display: none; }
 }
 
 /* PiP no modo celular (aba Exame): a sala 3D fica sempre visível no topo
@@ -1417,7 +1422,6 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
   background: rgba(0,0,0,0.4); padding: 2px 7px; border-radius: 6px;
   pointer-events: none;
 }
-.acq3d[hidden] { display: none !important; }
 
 /* Contador em destaque durante a aquisição do volume */
 .ws-viewer-ctrl.is-acquiring .ws-slice-counter {

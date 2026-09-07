@@ -240,13 +240,13 @@ que está certo** — nenhum dos defeitos abaixo produz exceção no console.
 Resumo do que está classificado abaixo de P1. Não são urgentes, mas saber que existem evita
 "descobrir" de novo:
 
-- **P2:** duas arquiteturas paralelas · dois controladores de modo celular ligados aos mesmos
-  botões (`js/ui-layout.js:123` e `js/mobile-tabs.js`) · a trava do protocolo de referência
+- **P2:** duas arquiteturas paralelas · ~~dois controladores de modo celular ligados aos mesmos
+  botões (`js/ui-layout.js:123` e `js/mobile-tabs.js`)~~ *(ETAPA 8)* · a trava do protocolo de referência
   nunca é aplicada (`js/protocolos.js:150`, dentro de um `if` que nunca é verdadeiro) · medidas
   duplicadas (`js/medidas.js` e `dicom-viewer/js/medidas.js`) · dois shells do leitor
   (`app.js` e `app-celular.js`, 12 funções homônimas; o do celular não tem medidas nem slab) ·
   dois monólitos (`aquisicao.js` com 1.766 linhas em uma função; `sala-exame.js` com 1.818) ·
-  sem navegação nenhuma abaixo de 900 px após redimensionar · 35 scripts clássicos bloqueantes ·
+  ~~sem navegação nenhuma abaixo de 900 px após redimensionar~~ *(ETAPA 8)* · 35 scripts clássicos bloqueantes ·
   testes nunca rodam automaticamente · `.git` com 81 MB de volumes.
 - **P3:** string de debug na mensagem de boas-vindas (`js/sala-exame.js:1828`, mostra a largura
   da janela ao usuário) · `openAppDB()` abre conexão nova por operação e nunca fecha
@@ -433,11 +433,44 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
   - [ ] `js/ui/campo.js` e `js/ui/lista.js` — a camada de componente propriamente dita. Campo, lista e item ainda são HTML string montado em cada módulo.
   - [ ] **Shell do leitor** — `app.js` (581) e `app-celular.js` (533) têm 12 funções homônimas, e o do celular não recebeu medidas nem slab. É trabalho DENTRO da pasta vendorizada: `comum.js` já existe para o que é compartilhado, e é para lá que essas funções devem ir.
   - [ ] `window.prompt` em `js/protocolos.js` (nomear cópia, nomear protocolo novo) — precisa de um modal de ENTRADA, que o `confirmar.js` não cobre.
-- [ ] **ETAPA 8 — Um controlador de layout** *(média)*
+- [x] **ETAPA 8 — Um controlador de layout** *(média — FEITA)*
+  - [x] **Um controlador só.** Havia DOIS ligados aos mesmos quatro botões — `initMobileMode`
+        em `js/ui-layout.js` e `js/mobile-tabs.js` —, com lógicas diferentes: um persistia a
+        escolha, o outro não; um marcava `is-active` em dois botões, o outro nos quatro; e o
+        segundo chegava a chamar `mobileToggle.click()` por código. O resultado dependia da
+        ordem das tags `<script>`. Agora é `initModoDeLayout()`, e `js/mobile-tabs.js` deixou
+        de existir.
+  - [x] **O app nunca fica sem navegação** — a invariante da etapa. Abaixo de 901 px o CSS
+        escondia a barra de etapas, e nada ligava o modo celular ao redimensionar: ele só era
+        decidido na CARGA. Quem estreitava a janela ou girava o tablet caía num app com
+        painéis empilhados e NENHUMA navegação (defeito U-02 da auditoria). Hoje o modo se
+        reavalia a cada `resize`, a barra de etapas continua visível em tela estreita (rola na
+        horizontal), e `isDesktop()` virou `podeUsarConsole()` — deixou de exigir 901 px, que
+        era o que deixava o operador sem saída ao sair do modo celular numa tela estreita.
+  - [x] **Uma guarda `[hidden]` só.** `[hidden] { display: none !important; }` no topo do
+        `css/style.css`, no lugar de seis repetições componente a componente, em quatro
+        trechos diferentes do arquivo.
+  - [x] **Uma manobra de empréstimo só.** Dois pedaços mudam de pai conforme a etapa (o
+        viewport 3D e a barra de comandos da sequência), e a manobra estava escrita duas
+        vezes, guardando o endereço de casa como REFERÊNCIA AO IRMÃO SEGUINTE — o que quebra
+        com `NotFoundError` no dia em que alguém mexer no container de origem. Agora é
+        `emprestar(el, nome)`, com âncora de comentário: invisível, nossa, e não conta em
+        `:nth-child`.
+  - [x] **E-06 (parar de reparentar o canvas WebGL): medido e MANTIDO como está.** Seis idas e
+        voltas entre Sala e Exame, no Chromium: `webglcontextlost: 0`, `isContextLost(): false`,
+        canvas reajustado a cada troca (1769×907 ↔ 396×381), cena desenhando. Trocar por um
+        canvas fixo rastreando o retângulo de um slot custaria sincronizar posição, rolagem e
+        empilhamento à mão — mais superfície de erro do que a de hoje, para consertar algo que
+        não está quebrado. A medida está escrita em `js/ui-layout.js`, junto do código.
 - [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*
       Acrescentar aos itens da auditoria: os mostradores (HUD, display do console, isocentro)
       congelam quando o documento fica oculto, porque `updateReadouts()` mora no
       `requestAnimationFrame` e a física não. Ver o BLOCO 0.
+      Achados da ETAPA 8, que são de UX e não de layout: (a) `#viewport-loading` continua no
+      DOM depois que a cena carrega — some por `opacity: 0`, não por `hidden` —, de modo que
+      um leitor de tela segue anunciando "Inicializando cena 3D…" para sempre; (b) os valores
+      iniciais do HUD no `index.html` ainda são "000.0" e "80.0", com PONTO, e só passam a
+      respeitar a convenção de `js/ui/formatar.js` no primeiro repaint.
 - [ ] **ETAPA 10 — Limpeza** *(pequena)* — código morto, volumes para fora do git, README
 
 ## Depois do plano: voltar ao roteiro do produto
