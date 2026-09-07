@@ -991,6 +991,32 @@
       var displayHeightEl = document.getElementById("display-height");
       var displayStatusEl = document.getElementById("display-status");
 
+      // Escreve no DOM so quando o texto MUDA. Como updateReadouts passou a
+      // rodar no passo da fisica (e nao mais no desenho), ela e chamada mesmo
+      // com a pagina oculta; sem esta guarda seriam seis escritas por passo
+      // com a mesa parada, que e o estado normal.
+      var ultimoEscrito = {};
+      function escrever(el, chave, texto, comHtml) {
+        if (!el || ultimoEscrito[chave] === texto) return;
+        ultimoEscrito[chave] = texto;
+        if (comHtml) el.innerHTML = texto; else el.textContent = texto;
+      }
+
+      /**
+       * Os mostradores MORAVAM no requestAnimationFrame, e a fisica nao.
+       *
+       * O relogio do nucleo tem uma fonte por Worker justamente para nao parar
+       * quando ninguem esta pintando — de modo que, com o documento oculto, a
+       * mesa andava e os mostradores congelavam no ultimo valor desenhado.
+       * Medido durante a auditoria: `tableGroup.position.y = 0,88 m` com o HUD
+       * exibindo "80,0 cm". Para o operador humano o efeito e pequeno (o valor
+       * ressincroniza no primeiro repaint), mas o DOM deixava de dizer a
+       * verdade sobre a maquina — e um teste que o lesse acusava defeito onde
+       * nao havia.
+       *
+       * Agora ela e chamada pelo passo da fisica. O desenho ficou so com o
+       * desenho.
+       */
       function updateReadouts(currentSpeedMmS) {
         // Posição longitudinal em mm. Se o operador zerou a mesa (botão
         // Zerar), a leitura é relativa a esse ponto (pode ser negativa);
@@ -998,15 +1024,15 @@
         var refZ = (tableZeroRef !== null) ? tableZeroRef : TABLE_Z_MAX;
         var posMm = (refZ - tableZ) * 1000;
         var posText = (posMm >= 0 ? "" : "-") + SimTC.fmt.n(Math.abs(posMm), 1).padStart(5, "0");
-        if (hudPositionEl) hudPositionEl.innerHTML = posText + " <small>mm</small>";
-        if (displayTableEl) displayTableEl.textContent = posText + " mm";
-        if (hudSpeedEl) hudSpeedEl.innerHTML = SimTC.fmt.n(currentSpeedMmS, 1) + " <small>mm/s</small>";
+        escrever(hudPositionEl, "hudPos", posText + " <small>mm</small>", true);
+        escrever(displayTableEl, "dispTable", posText + " mm", false);
+        escrever(hudSpeedEl, "hudSpeed", SimTC.fmt.n(currentSpeedMmS, 1) + " <small>mm/s</small>", true);
 
         // Altura da mesa em cm (útil para calibrar/verificar os limites).
         var heightCm = tableY * 100;
         var heightText = SimTC.fmt.n(heightCm, 1);
-        if (hudHeightEl) hudHeightEl.innerHTML = heightText + " <small>cm</small>";
-        if (displayHeightEl) displayHeightEl.textContent = heightText + " cm";
+        escrever(hudHeightEl, "hudHeight", heightText + " <small>cm</small>", true);
+        escrever(displayHeightEl, "dispHeight", heightText + " cm", false);
 
         // Alinhamento no isocentro: o centro do corpo do paciente fica
         // ~12 cm (metade da espessura) acima do topo do tampo. O tampo
@@ -1016,13 +1042,9 @@
         var patientCenterY = tableY + 0.02 + PATIENT_HALF_THICKNESS;
         var isoDelta = Math.abs(patientCenterY - ISO_Y);
         if (displayStatusEl && simulationRunning) {
-          if (isoDelta <= 0.01) {
-            displayStatusEl.textContent = "ISOCENTRO OK";
-          } else if (patientCenterY > ISO_Y) {
-            displayStatusEl.textContent = "DESCER MESA";
-          } else {
-            displayStatusEl.textContent = "SUBIR MESA";
-          }
+          var estado = (isoDelta <= 0.01) ? "ISOCENTRO OK"
+                     : (patientCenterY > ISO_Y) ? "DESCER MESA" : "SUBIR MESA";
+          escrever(displayStatusEl, "dispStatus", estado, false);
         }
       }
 
@@ -1314,10 +1336,10 @@
         else if (moveIn || moveOut) speedMmS = SPEED_Z * 1000;
         else if (moveUp || moveDown) speedMmS = SPEED_Y * 1000;
         ultimaVelocidadeMmS = speedMmS;
+        updateReadouts(speedMmS);
       }
 
       function desenhar(now) {
-        updateReadouts(ultimaVelocidadeMmS);
 
         if (laserOn) {
           var pulse = 0.8 + Math.sin(now * 0.006) * 0.2;
@@ -1355,12 +1377,24 @@
       };
 
       requestAnimationFrame(function () {
-        if (loadingOverlay) loadingOverlay.setAttribute("data-hidden", "true");
+        if (!loadingOverlay) return;
+        loadingOverlay.setAttribute("data-hidden", "true");
+        // O aviso some por `opacity: 0`, e um elemento transparente continua na
+        // arvore de acessibilidade: o leitor de tela seguia anunciando
+        // "Inicializando cena 3D..." depois de a cena ja estar na tela. Some de
+        // verdade quando a transicao termina — antes disso ele ainda esta sendo
+        // visto, e retira-lo na hora cortaria o fade.
+        window.setTimeout(function () {
+          loadingOverlay.hidden = true;
+          loadingOverlay.removeAttribute("role");
+        }, 400);
       });
       requestAnimationFrame(desenhar);
 
+      // A largura da janela em pixels vinha escrita AQUI, na primeira mensagem
+      // que o aluno le. Era sonda de depuracao virada para o usuario.
       SimTC.showMessage(
-        "Simulador carregado (largura da janela: " + window.innerWidth + "px). Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.",
+        "Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.",
         "info"
       );
     } catch (error) {

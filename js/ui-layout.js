@@ -292,13 +292,19 @@
       try { localStorage.setItem(KEY_SCALE, String(scale)); } catch (e) { /* sem persistência */ }
     }
 
+    /** Aplica a escala e ANUNCIA o valor: a alça de canto é um `role="slider"`. */
+    function aplicarEscala(v) {
+      scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, v));
+      panel.style.setProperty("--panel-scale", scale);
+      var pct = Math.round(scale * 100);
+      resize.setAttribute("aria-valuenow", String(pct));
+      resize.setAttribute("aria-valuetext", pct + "%");
+    }
+
     function loadState() {
       try {
         var s = parseFloat(localStorage.getItem(KEY_SCALE));
-        if (!isNaN(s)) {
-          scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, s));
-          panel.style.setProperty("--panel-scale", scale);
-        }
+        if (!isNaN(s)) aplicarEscala(s);
       } catch (e) { /* sem persistência */ }
       try {
         var p = JSON.parse(localStorage.getItem(KEY_POS) || "null");
@@ -341,8 +347,7 @@
       var baseW = panel.getBoundingClientRect().width / startScale || 1;
       function move(ev) {
         var d = ((ev.clientX - startX) + (ev.clientY - startY)) / 2;
-        scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, startScale + d / baseW));
-        panel.style.setProperty("--panel-scale", scale);
+        aplicarEscala(startScale + d / baseW);
         reclampCurrent();
       }
       function up() {
@@ -357,7 +362,60 @@
       resize.addEventListener("pointercancel", up);
     });
 
+    // ---- E PELO TECLADO ----
+    //
+    // As duas alças diziam `role="button"` e traziam `tabindex="-1"`: eram
+    // anunciadas ao leitor de tela como botões e não podiam ser alcançadas por
+    // ninguém. Uma promessa que o app não cumpria.
+    //
+    // Cumpri-la é mais honesto do que retirá-la. Mover e redimensionar o painel
+    // de comandos é conveniência — mas quem opera só por teclado é justamente
+    // quem mais precisa tirar o painel da frente da imagem.
+    //
+    // A alça de mover é `role="application"` porque captura as setas (não há
+    // papel padrão para arrastar em duas dimensões). A de canto é
+    // `role="slider"`, que É o papel certo: tem valor, mínimo e máximo, e o
+    // leitor de tela já anuncia que se opera com as setas.
+    var PASSO = 12, PASSO_FINO = 2;        // px por tecla
+    var DEGRAU = 0.05, DEGRAU_FINO = 0.01; // escala por tecla
+
+    function mover(dx, dy) {
+      ensurePositioned();
+      var left = parseFloat(panel.style.getPropertyValue("--panel-left")) || 0;
+      var top = parseFloat(panel.style.getPropertyValue("--panel-top")) || 0;
+      var c = clampPos(left + dx, top + dy);
+      panel.style.setProperty("--panel-left", c.left + "px");
+      panel.style.setProperty("--panel-top", c.top + "px");
+      persistPos();
+    }
+
+    var SETAS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+    grip.addEventListener("keydown", function (e) {
+      var d = SETAS[e.key];
+      if (!d) return;
+      e.preventDefault();
+      var p = e.shiftKey ? PASSO_FINO : PASSO;
+      mover(d[0] * p, d[1] * p);
+    });
+
+    resize.addEventListener("keydown", function (e) {
+      var passo = e.shiftKey ? DEGRAU_FINO : DEGRAU;
+      var d = 0;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") d = passo;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowDown") d = -passo;
+      else if (e.key === "Home") { ensurePositioned(); aplicarEscala(SCALE_MIN); reclampCurrent(); persistScale(); e.preventDefault(); return; }
+      else if (e.key === "End") { ensurePositioned(); aplicarEscala(SCALE_MAX); reclampCurrent(); persistScale(); e.preventDefault(); return; }
+      else return;
+      e.preventDefault();
+      ensurePositioned();
+      aplicarEscala(scale + d);
+      reclampCurrent();
+      persistScale();
+    });
+
     loadState();
+    aplicarEscala(scale); // o slider nasce anunciando o valor que tem
   }
 
   function initConsoleMode() {

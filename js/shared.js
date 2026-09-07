@@ -19,28 +19,75 @@
   // =================================================================
   // 1) TEMA CLARO/ESCURO
   // =================================================================
+  //
+  // O tema era decidido do zero a cada carga: `currentTheme = "dark"`, e o
+  // clique no botao valia ate o F5. Quem opera numa sala clara trocava para o
+  // tema claro toda vez que abria o app — inclusive ao voltar do leitor DICOM,
+  // que e outra pagina.
+  //
+  // Agora ha uma ordem de decisao, e ela e explicita:
+  //   1. o que o operador escolheu antes, se escolheu;
+  //   2. senao, a preferencia do sistema (prefers-color-scheme);
+  //   3. senao, escuro — que e o padrao de console de TC.
+  //
+  // Enquanto o operador nao escolher, o app SEGUE o sistema: quem muda o tema
+  // do sistema ao anoitecer ve o app acompanhar. Depois da primeira escolha,
+  // manda a escolha.
+  //
   var THEMES = ["dark", "light"];
+  var CHAVE_TEMA = "simuladorTC.tema";
   var currentTheme = "dark";
+  var escolhido = false;
+
+  function temaDoSistema() {
+    try {
+      return (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches)
+        ? "light" : "dark";
+    } catch (e) { return "dark"; }
+  }
 
   function applyTheme(theme) {
-    document.documentElement.setAttribute("data-theme", theme);
-    document.body.setAttribute("data-theme", theme);
+    currentTheme = (THEMES.indexOf(theme) >= 0) ? theme : "dark";
+    document.documentElement.setAttribute("data-theme", currentTheme);
+    document.body.setAttribute("data-theme", currentTheme);
     var metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute("content", theme === "dark" ? "#0a0e14" : "#e9edf2");
+      metaThemeColor.setAttribute("content", currentTheme === "dark" ? "#0a0e14" : "#e9edf2");
+    }
+    var botao = document.getElementById("theme-toggle");
+    if (botao) {
+      // O botao alterna um estado: quem usa leitor de tela precisa saber QUAL.
+      botao.setAttribute("aria-pressed", currentTheme === "light" ? "true" : "false");
+      botao.setAttribute("title", currentTheme === "dark"
+        ? "Mudar para o tema claro" : "Mudar para o tema escuro");
     }
   }
 
   function initTheme() {
+    try {
+      var salvo = localStorage.getItem(CHAVE_TEMA);
+      if (THEMES.indexOf(salvo) >= 0) { escolhido = true; currentTheme = salvo; }
+    } catch (e) { /* sem persistência: vale só para esta janela */ }
+    if (!escolhido) currentTheme = temaDoSistema();
     applyTheme(currentTheme);
+
     var toggleButton = document.getElementById("theme-toggle");
     if (toggleButton) {
       toggleButton.addEventListener("click", function () {
         var idx = THEMES.indexOf(currentTheme);
-        currentTheme = THEMES[(idx + 1) % THEMES.length];
-        applyTheme(currentTheme);
+        escolhido = true;
+        applyTheme(THEMES[(idx + 1) % THEMES.length]);
+        try { localStorage.setItem(CHAVE_TEMA, currentTheme); } catch (e) { /* sem persistência */ }
       });
     }
+
+    // Sem escolha registrada, acompanhamos o sistema em tempo real.
+    try {
+      var mq = window.matchMedia("(prefers-color-scheme: light)");
+      var ouvir = function () { if (!escolhido) applyTheme(temaDoSistema()); };
+      if (mq.addEventListener) mq.addEventListener("change", ouvir);
+      else if (mq.addListener) mq.addListener(ouvir);
+    } catch (e) { /* navegador sem matchMedia: fica no que já está */ }
   }
 
   // =================================================================

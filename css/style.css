@@ -28,7 +28,11 @@
 
   --text-primary: #e8edf2;
   --text-secondary: #9aa7b8;
-  --text-muted: #5f6c7d;
+  /* #5f6c7d dava 3,24:1 sobre o painel — reprovado no AA (4,5:1) em 17
+     trechos, entre eles o aviso de uso nao-clinico e a atribuicao CC BY.
+     #808d9e da 4,63:1 sobre o fundo mais claro do tema escuro (#1c2430) e
+     5,12:1 sobre o painel (#151b24), e continua abaixo do secundario. */
+  --text-muted: #808d9e;
 
   --accent-cyan: #35c5e0;
   --accent-cyan-dim: #1c6b7a;
@@ -36,12 +40,58 @@
   --accent-red: #ff4444;
   --accent-green: #3ddc84;
 
+  /* ---- O ACENTO COMO TINTA DE TEXTO --------------------------------------
+     Os acentos servem a dois papeis: PINTAR (fundo de chip, borda de foco,
+     linha de laser) e ESCREVER (o rotulo "axial", o botao Stop, o aviso). No
+     tema escuro os dois podem ser a mesma cor. No claro, nao: ciano #35c5e0
+     sobre painel branco da 1,91:1 — o rotulo de serie e o icone da mensagem
+     ficavam quase invisiveis, e o botao Stop, que interrompe uma irradiacao,
+     ficava em 2,90:1.
+
+     Separar os papeis permite escurecer a TINTA sem escurecer o chip que usa
+     o mesmo acento como FUNDO (e que precisa continuar claro para o texto
+     escuro em cima dele funcionar). No tema escuro as duas coincidem. */
+  --accent-cyan-ink: #35c5e0;
+  --accent-amber-ink: #ffb020;
+  --accent-red-ink: #ff4444;
+  --accent-green-ink: #3ddc84;
+
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 14px;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  /* ---- ESCALA TIPOGRAFICA: o piso e 11 px --------------------------------
+     Havia 51 declaracoes de font-size abaixo de 0,7rem, em VINTE valores
+     distintos entre 0,5rem (8 px) e 0,68rem (10,9 px) — escolhidos um a um,
+     numa faixa de 3 px onde a diferenca entre 0,62 e 0,64rem e de 0,32 px:
+     nao e hierarquia, e ruido. E o resultado era um app onde o estado de cada
+     passo da sequencia ("aguardando") era escrito em 9,6 px.
+
+     Sao dois tamanhos agora, e o menor e 11 px. Abaixo disso a leitura de
+     numero tecnico deixa de ser confiavel — e este app existe para o aluno LER
+     numero: colimacao, pitch, CTDIvol, posicao da mesa. */
+  --fs-micro: 0.6875rem;   /* 11 px — rotulo, unidade, estado, numeracao */
+  --fs-mini: 0.75rem;      /* 12 px — meta, legenda, nota, texto corrido curto */
+
+  /* ---- TEXTO SOBRE SUPERFICIE QUE E ESCURA NOS DOIS TEMAS ----------------
+     O visor de imagem, o HUD sobre a cena 3D e o fundo do topograma sao
+     PRETOS tambem no tema claro — e certo que sejam: e assim que se olha
+     imagem de TC, e trocar o fundo por branco falsearia a janela.
+
+     Mas eles vinham pintados com os tokens do TEMA, e no tema claro isso
+     colocava texto escuro sobre fundo escuro. Medido: o HUD da mesa em
+     `--text-primary` claro (#1a222c) sobre `rgba(10,14,20,.55)` dava
+     1,21:1 — os numeros de posicao, velocidade e altura da mesa ficavam
+     ilegiveis para quem usa o tema claro.
+
+     Estes tres NAO sao redefinidos pelo tema claro. E esse o ponto. */
+  --on-dark-primary: #e8edf2;
+  --on-dark-secondary: #9aa7b8;
+  --on-dark-muted: #98a5b6;
+  --on-dark-accent: #35c5e0;
 
   --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.45);
   --transition-fast: 120ms ease;
@@ -60,9 +110,19 @@ body[data-theme="light"] {
 
   --text-primary: #1a222c;
   --text-secondary: #4d5a6a;
-  --text-muted: #8792a0;
+  /* No tema claro o problema era pior: #8792a0 dava 3,16:1 sobre branco e
+     2,69:1 sobre o fundo da pagina. #5e6773 da 5,73:1 e 4,88:1. */
+  --text-muted: #5e6773;
 
   --accent-cyan-dim: #cfeef5;
+
+  /* Medidas sobre o fundo da pagina (#e9edf2), que e o pior caso do tema:
+     ciano 5,22:1 · vermelho 4,92:1 · ambar 5,04:1 · verde 4,58:1. */
+  --accent-cyan-ink: #0b6b7f;
+  --accent-amber-ink: #8a5a00;
+  --accent-red-ink: #c62020;
+  --accent-green-ink: #147a45;
+
   --shadow-panel: 0 6px 18px rgba(30, 40, 55, 0.12);
 }
 
@@ -84,8 +144,17 @@ button { font-family: inherit; }
 h1, h2, h3, p { margin: 0; }
 svg { display: block; }
 
-/* Foco visível para acessibilidade de teclado */
-button:focus-visible {
+/* Foco visivel para acessibilidade de teclado.
+   Valia so para <button>. Campo, seletor, link e qualquer coisa com tabindex
+   ficavam com o anel padrao do navegador — que sobre fundo grafite quase nao
+   aparece, e some de vez quando a regra do componente redefine a borda. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--accent-cyan);
   outline-offset: 2px;
 }
@@ -146,7 +215,7 @@ body {
   min-width: 0;
 }
 .status-bar__logo {
-  color: var(--accent-cyan);
+  color: var(--accent-cyan-ink);
   font-size: 1.2rem;
 }
 .status-bar__title {
@@ -175,7 +244,7 @@ body {
 @media (max-width: 420px) {
   .status-bar { padding: 8px 10px; gap: 8px; }
   .status-bar__title { font-size: 0.8rem; }
-  .indicator__label { font-size: 0.6rem; }
+  .indicator__label { font-size: var(--fs-micro); }
 }
 
 .indicator {
@@ -209,7 +278,7 @@ body {
   50% { opacity: 0.4; }
 }
 .indicator__label {
-  font-size: 0.68rem;
+  font-size: var(--fs-mini);
   letter-spacing: 0.05em;
   color: var(--text-secondary);
 }
@@ -226,7 +295,7 @@ body {
   cursor: pointer;
   transition: var(--transition-fast);
 }
-.icon-btn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan-dim); }
+.icon-btn:hover { color: var(--accent-cyan-ink); border-color: var(--accent-cyan-dim); }
 .icon-btn__icon { width: 18px; height: 18px; fill: currentColor; }
 
 /* ---------------------------------------------------------------------
@@ -280,16 +349,19 @@ body {
   gap: 10px;
 }
 .hud__label {
-  font-size: 0.55rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.07em;
-  color: var(--accent-cyan);
+  /* Tinta de superficie escura, e nao a do tema: o HUD flutua sobre a cena 3D,
+     que e escura tambem no tema claro. Com a tinta clara (#0b6b7f) o rotulo
+     caia para 3,15:1. */
+  color: var(--on-dark-accent);
 }
 .hud__value {
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--text-primary);
+  color: var(--on-dark-primary);
 }
-.hud__value small { font-size: 0.58rem; color: var(--text-muted); }
+.hud__value small { font-size: var(--fs-micro); color: var(--on-dark-muted); }
 
 .viewport__loading {
   position: absolute;
@@ -354,7 +426,7 @@ body {
   gap: 4px;
 }
 .display--compact .display__label {
-  font-size: 0.52rem;
+  font-size: var(--fs-micro);
 }
 .display--compact .display__value {
   font-size: 0.72rem;
@@ -366,14 +438,14 @@ body {
   gap: 8px;
 }
 .display__label {
-  font-size: 0.58rem;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   color: var(--accent-cyan-dim);
 }
 .display__value {
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--accent-cyan);
+  color: var(--accent-cyan-ink);
   text-shadow: 0 0 8px rgba(53, 197, 224, 0.5);
 }
 .display__value--mono { letter-spacing: 0.03em; }
@@ -419,10 +491,10 @@ body {
   -webkit-user-select: none;
   touch-action: manipulation;
 }
-.pad-btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.pad-btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan-ink); }
 .pad-btn:active { transform: translateY(1px) scale(0.98); }
 .pad-btn__icon { font-size: 0.95rem; line-height: 1; }
-.pad-btn__label { font-size: 0.66rem; }
+.pad-btn__label { font-size: var(--fs-mini); }
 .pad-btn__icon svg { width: 24px; height: 16px; }
 
 .pad-btn--toggle[aria-pressed="true"] {
@@ -431,8 +503,11 @@ body {
   color: var(--text-primary);
 }
 .pad-btn--stop {
-  background: linear-gradient(180deg, var(--accent-red), #c62828);
-  border-color: #c62828;
+  /* Branco sobre o topo do gradiente antigo (#ff4444) dava 3,41:1 — reprovado,
+     e neste botao em particular: e ele que interrompe uma irradiacao. Escurecido
+     ate branco passar nas DUAS pontas: 4,78:1 no topo, 7,46:1 na base. */
+  background: linear-gradient(180deg, #d92f2f, #a51f1f);
+  border-color: #a51f1f;
   color: #fff;
   font-weight: 800;
 }
@@ -461,7 +536,7 @@ body {
   -webkit-user-select: none;
   touch-action: none;
 }
-.dpad__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.dpad__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan-ink); }
 .dpad__btn:active,
 .dpad__btn.is-active {
   background: var(--accent-cyan-dim);
@@ -472,7 +547,7 @@ body {
    curso, o botão que resolve o impasse pulsa por alguns segundos. */
 .dpad__btn.is-hint {
   border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  color: var(--accent-cyan-ink);
   animation: dpad-hint 0.9s ease-in-out infinite;
 }
 @keyframes dpad-hint {
@@ -555,7 +630,7 @@ body {
 .pose-panel[hidden] { display: none; }
 
 .pose-panel__section-title {
-  font-size: 0.65rem;
+  font-size: var(--fs-mini);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-cyan-dim);
@@ -597,7 +672,7 @@ body {
 }
 .pose-option__icon svg { width: auto; height: 100%; }
 .pose-option__label {
-  font-size: 0.68rem;
+  font-size: var(--fs-mini);
   letter-spacing: 0.03em;
   text-align: center;
 }
@@ -613,7 +688,7 @@ body {
   color: var(--text-secondary);
 }
 .message-panel__icon {
-  color: var(--accent-cyan);
+  color: var(--accent-cyan-ink);
   flex-shrink: 0;
 }
 
@@ -655,7 +730,7 @@ body {
 .env-switch__btn + .env-switch__btn { border-left: 1px solid var(--border-strong); }
 .env-switch__btn--active { background: var(--accent-cyan-dim); color: var(--text-primary); }
 @media (max-width: 420px) {
-  .env-switch__btn { padding: 5px 8px; font-size: 0.68rem; }
+  .env-switch__btn { padding: 5px 8px; font-size: var(--fs-mini); }
 }
 
 /* Container da workstation (rola verticalmente dentro da área central) */
@@ -713,12 +788,12 @@ body {
 }
 .ws-list__item--active { border-color: var(--accent-cyan-dim); background: var(--bg-panel-raised); }
 .ws-list__name { font-size: 0.82rem; }
-.ws-list__meta { font-size: 0.68rem; color: var(--text-muted); }
+.ws-list__meta { font-size: var(--fs-mini); color: var(--text-muted); }
 
 .ws-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .ws-field { display: flex; flex-direction: column; gap: 3px; }
 .ws-field--full { grid-column: 1 / -1; }
-.ws-field__label { font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase; }
+.ws-field__label { font-size: var(--fs-mini); letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase; }
 .ws-input {
   background: var(--bg-display);
   border: 1px solid var(--border-subtle);
@@ -757,12 +832,12 @@ body {
   align-items: center;
   justify-content: center;
 }
-.ws-viewer__placeholder { color: var(--text-muted); font-size: 0.78rem; }
+.ws-viewer__placeholder { color: var(--on-dark-muted); font-size: 0.78rem; }
 
-.ws-note { font-size: 0.68rem; color: var(--text-muted); line-height: 1.35; }
+.ws-note { font-size: var(--fs-mini); color: var(--text-muted); line-height: 1.35; }
 
 /* Botão de ação destrutiva (excluir protocolo) — herda de .ws-btn */
-.ws-btn--danger { color: var(--accent-red); border-color: var(--accent-red); background: transparent; }
+.ws-btn--danger { color: var(--accent-red-ink); border-color: var(--accent-red); background: transparent; }
 
 /* Viewer de cortes reais (workstation) */
 .ws-viewer { position: relative; overflow: hidden; }
@@ -795,13 +870,13 @@ body.is-mobile .ws-plane { display: none !important; }
   max-width: 58%;
   overflow: hidden;
   color: var(--text-muted);
-  font: 0.68rem/1.2 var(--font-mono);
+  font: var(--fs-mini)/1.2 var(--font-mono);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mpr-workstation__status.is-ready { color: #37d67a; }
-.mpr-workstation__status.is-warning { color: var(--accent-amber); }
+.mpr-workstation__status.is-ready { color: var(--accent-green-ink); }
+.mpr-workstation__status.is-warning { color: var(--accent-amber-ink); }
 .mpr-body--workstation {
   flex: 1 1 auto;
   min-height: 0;
@@ -909,7 +984,7 @@ body.is-mobile .ws-plane { display: none !important; }
   margin: 18px 0 2px; font-size: 0.7rem; font-weight: 700;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted);
 }
-.pac-hint { margin: 0; font-size: 0.68rem; color: var(--text-muted); }
+.pac-hint { margin: 0; font-size: var(--fs-mini); color: var(--text-muted); }
 
 /* Seleção explícita: o paciente EM EXAME é escolhido, nunca inferido pelo
    último cadastro. O item inteiro é o alvo de clique. */
@@ -920,25 +995,25 @@ body.is-mobile .ws-plane { display: none !important; }
   background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
 }
 .pac-list__tag {
-  flex: 0 0 auto; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em;
+  flex: 0 0 auto; font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; padding: 2px 6px; border-radius: var(--radius-sm);
-  border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+  border: 1px solid var(--accent-cyan); color: var(--accent-cyan-ink);
 }
 .pac-list__acao {
   flex: 0 0 auto; appearance: none; -webkit-appearance: none;
   border: 1px solid var(--border-strong); background: transparent;
   color: var(--text-secondary); border-radius: var(--radius-sm);
-  padding: 3px 8px; font-size: 0.66rem; cursor: pointer; line-height: 1.4;
+  padding: 3px 8px; font-size: var(--fs-mini); cursor: pointer; line-height: 1.4;
 }
-.pac-list__acao:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.pac-list__acao:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan-ink); }
 
 /* Exames realizados — arquivo, não fila de trabalho */
 .pac-list--estudos .pac-list__item { border-style: dashed; }
-.pac-list__quando { font-size: 0.64rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pac-list__quando { font-size: var(--fs-mini); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .pac-list__info { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .pac-list__name { font-size: 0.82rem; }
-.pac-list__meta { font-size: 0.68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
-.pac-list__del { flex: 0 0 auto; appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: transparent; color: var(--accent-red); border-radius: var(--radius-sm); width: 26px; height: 26px; cursor: pointer; line-height: 1; }
+.pac-list__meta { font-size: var(--fs-mini); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+.pac-list__del { flex: 0 0 auto; appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: transparent; color: var(--accent-red-ink); border-radius: var(--radius-sm); width: 26px; height: 26px; cursor: pointer; line-height: 1; }
 
 /* Modelo do corpo + lista de protocolos por região (quadrante inf. direito) */
 .proto2 { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
@@ -949,7 +1024,7 @@ body.is-mobile .ws-plane { display: none !important; }
 .bodymap__zone:hover { fill: var(--accent-cyan-dim); }
 .bodymap__zone.is-active { fill: var(--accent-cyan); stroke: var(--accent-cyan); }
 .bodymap__chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
-.bodymap__chip { appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: var(--bg-panel-raised); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 3px 8px; font-size: 0.68rem; cursor: pointer; }
+.bodymap__chip { appearance: none; -webkit-appearance: none; border: 1px solid var(--border-strong); background: var(--bg-panel-raised); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 3px 8px; font-size: var(--fs-mini); cursor: pointer; }
 .bodymap__chip:hover { color: var(--text-primary); }
 .bodymap__chip.is-active { background: var(--accent-cyan); color: var(--text-primary); border-color: var(--accent-cyan); }
 .proto2__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%; }
@@ -973,13 +1048,17 @@ body.is-mobile .ws-plane { display: none !important; }
   background: rgba(6, 12, 20, 0.62); border: 1px solid var(--border-strong);
   border-radius: 999px; padding: 3px; backdrop-filter: blur(5px);
 }
+/* A barra flutua sobre a cena e tem fundo proprio, ESCURO nos dois temas —
+   por isso a tinta e a de superficie escura, e nao a do tema. Com a do tema,
+   no claro, a aba inativa ficava em 2,79:1 e o botao de sair em 1,22:1: um
+   X quase invisivel, que e a unica saida do modo celular. */
 .mobile-switch__btn {
   appearance: none; -webkit-appearance: none; border: 0; background: transparent;
-  color: var(--text-secondary); font-size: 0.72rem; font-weight: 600;
+  color: var(--on-dark-secondary); font-size: 0.72rem; font-weight: 600;
   padding: 5px 14px; border-radius: 999px; cursor: pointer;
 }
 .mobile-switch__btn.is-active { background: var(--accent-cyan); color: #00131c; }
-.mobile-switch__exit { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 4px 10px; font-size: 0.8rem; }
+.mobile-switch__exit { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: var(--on-dark-muted); cursor: pointer; padding: 4px 10px; font-size: 0.8rem; }
 
 /* Dica de girar (só no modo celular em retrato) */
 .mobile-rotate { display: none; }
@@ -1066,11 +1145,11 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
 .ws-topo__line { position: absolute; touch-action: none; z-index: 2; }
 .ws-topo__line--h {
   left: var(--edge-left); right: calc(100% - var(--edge-right));
-  height: 16px; margin-top: -8px; cursor: ns-resize; color: var(--accent-amber);
+  height: 16px; margin-top: -8px; cursor: ns-resize; color: var(--accent-amber-ink);
 }
 .ws-topo__line--v {
   top: var(--edge-top); bottom: calc(100% - var(--edge-bottom));
-  width: 16px; margin-left: -8px; cursor: ew-resize; color: var(--accent-cyan);
+  width: 16px; margin-left: -8px; cursor: ew-resize; color: var(--accent-cyan-ink);
 }
 .ws-topo__line::before { content: ""; position: absolute; opacity: 0.95; }
 .ws-topo__line--h::before { left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; }
@@ -1094,13 +1173,13 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
   background: rgba(6, 14, 22, 0.78); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 .ws-topo__axis--range {          /* largura da caixa = faixa/range (CC) */
-  color: var(--accent-cyan);
+  color: var(--accent-cyan-ink);
   left: calc((var(--edge-left) + var(--edge-right)) / 2);
   top: var(--edge-top);
   transform: translate(-50%, -50%);
 }
 .ws-topo__axis--fov {            /* altura da caixa = FOV (A-P) */
-  color: var(--accent-amber);
+  color: var(--accent-amber-ink);
   top: calc((var(--edge-top) + var(--edge-bottom)) / 2);
   left: var(--edge-left);
   transform: translate(-50%, -50%) rotate(-90deg);
@@ -1124,8 +1203,8 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
    cores das bordas e reposiciona os rótulos de eixo. */
 .ws-topo__box.is-frontal .ws-topo__line--h::before { background: var(--accent-cyan); }
 .ws-topo__box.is-frontal .ws-topo__line--v::before { background: var(--accent-amber); }
-.ws-topo__box.is-frontal .ws-topo__line--h { color: var(--accent-cyan); }
-.ws-topo__box.is-frontal .ws-topo__line--v { color: var(--accent-amber); }
+.ws-topo__box.is-frontal .ws-topo__line--h { color: var(--accent-cyan-ink); }
+.ws-topo__box.is-frontal .ws-topo__line--v { color: var(--accent-amber-ink); }
 .ws-topo__box.is-frontal .ws-topo__axis--range {
   left: var(--edge-left);
   top: calc((var(--edge-top) + var(--edge-bottom)) / 2);
@@ -1152,7 +1231,7 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
 .ws-orient__lbl--r { right: 4px; top: 50%; transform: translateY(-50%); }
 .ws-orient__dir {
   position: absolute; font-size: 10px; font-weight: 700; white-space: nowrap;
-  color: var(--accent-cyan); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  color: var(--accent-cyan-ink); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
   background: rgba(6, 14, 22, 0.6); padding: 1px 5px; border-radius: 3px;
 }
 .ws-orient__dir.is-h { bottom: 15px; left: 50%; transform: translateX(-50%); }
@@ -1162,7 +1241,7 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
   margin: 6px 0 0; font-size: 0.78rem; line-height: 1.35;
   color: var(--text-secondary, #9aa6b2);
 }
-.ws-topo-readout .is-bad { color: var(--accent-red); }
+.ws-topo-readout .is-bad { color: var(--accent-red-ink); }
 
 /* =====================================================================
    LAYOUT PC — 4 ajustes (aditivos):
@@ -1242,7 +1321,8 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
 .ws-actions--center { justify-content: center; margin-top: 0; }
 .ws-note--overlay { color: rgba(255, 255, 255, 0.55); text-align: center; margin: 0; }
 .ws-viewer--full .ws-topo-readout { margin: 0; color: rgba(255, 255, 255, 0.82); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
-.ws-viewer--full .ws-viewer__placeholder { color: rgba(255, 255, 255, 0.4); }
+/* 0,4 de branco sobre preto dava 3,66:1 — reprovado. */
+.ws-viewer--full .ws-viewer__placeholder { color: var(--on-dark-muted); }
 
 /* --- 4) Protocolos: editor ocupa o quadrante inteiro --- */
 #pane-proto.is-editing .proto2 { display: none; }
@@ -1280,7 +1360,7 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
 .cstep__num {
   display: inline-flex; width: 18px; height: 18px; border-radius: 50%;
   border: 1px solid currentColor; align-items: center; justify-content: center;
-  font-size: 0.68rem;
+  font-size: var(--fs-mini);
 }
 .cstep__dot {
   position: absolute; top: 3px; right: 5px; width: 8px; height: 8px;
@@ -1356,14 +1436,14 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
 .ws-report__title { margin: 0 0 10px; font-size: 0.95rem; }
 .ws-report__body { font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
 .ws-report__body strong { color: var(--text-primary); }
-.ws-report__body .is-bad { color: var(--accent-red); }
-.ws-report__body .is-good { color: #37d67a; }
+.ws-report__body .is-bad { color: var(--accent-red-ink); }
+.ws-report__body .is-good { color: var(--accent-green-ink); }
 .ws-quiz { margin-top: 12px; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
 .ws-quiz__title { margin: 0 0 8px; font-size: 0.8rem; color: var(--text-secondary); }
 .ws-quiz__list { margin: 0; padding-left: 18px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 10px; color: var(--text-primary); }
 .ws-quiz__list label { display: block; margin-top: 4px; cursor: pointer; color: var(--text-secondary); }
-.ws-quiz__list label.q-ok { color: #37d67a; }
-.ws-quiz__list label.q-bad { color: var(--accent-red); }
+.ws-quiz__list label.q-ok { color: var(--accent-green-ink); }
+.ws-quiz__list label.q-bad { color: var(--accent-red-ink); }
 .ws-quiz__result { font-size: 0.8rem; align-self: center; color: var(--text-secondary); }
 
 /* Correções mobile/tela estreita (console guiado):
@@ -1425,7 +1505,7 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 
 /* Contador em destaque durante a aquisição do volume */
 .ws-viewer-ctrl.is-acquiring .ws-slice-counter {
-  font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan);
+  font-size: 0.95rem; font-weight: 700; color: var(--accent-cyan-ink);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
   animation: acq-pulse 1s ease-in-out infinite;
 }
@@ -1464,16 +1544,16 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
   flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
   height: 26px; padding: 0 10px;
   background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--text-secondary);
 }
-.acq-quad__tag { margin-left: auto; font-weight: 600; letter-spacing: 0; color: var(--accent-cyan); text-transform: none; }
+.acq-quad__tag { margin-left: auto; font-weight: 600; letter-spacing: 0; color: var(--accent-cyan-ink); text-transform: none; }
 .acq-quad__body { flex: 1; position: relative; min-height: 0; min-width: 0; }
 
 /* Q1 · Topograma */
 .acq-quad--topo .acq-quad__body { display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
 .acq-quad--topo .ws-topo { position: relative; margin: 0; max-width: 100%; max-height: 100%; }
-.acq-quad__ph { color: var(--text-muted); font-size: 0.78rem; }
+.acq-quad__ph { color: var(--on-dark-muted); font-size: 0.78rem; }
 #acq-topo-body > .ws-topo:not([hidden]) ~ .acq-quad__ph { display: none; }
 .acq-quad--topo .ws-topo-readout { position: absolute; left: 8px; bottom: 8px; margin: 0; z-index: 3; }
 
@@ -1487,25 +1567,25 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-step { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-panel); }
 .acq-step.is-active { border-color: var(--accent-cyan); background: var(--bg-panel-raised); }
 .acq-step.is-done { opacity: 0.62; }
-.acq-step__num { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.66rem; background: var(--bg-panel-raised); color: var(--text-secondary); }
+.acq-step__num { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-mini); background: var(--bg-panel-raised); color: var(--text-secondary); }
 .acq-step.is-active .acq-step__num { background: var(--accent-cyan); color: #00131c; }
 .acq-step.is-done .acq-step__num { background: var(--accent-cyan-dim); color: #eafaff; }
 .acq-step__body { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .acq-step__name { font-size: 0.8rem; color: var(--text-primary); }
-.acq-step__sub { font-size: 0.62rem; color: var(--text-muted); }
-.acq-step__state { flex: 0 0 auto; font-size: 0.6rem; color: var(--text-muted); }
-.acq-step.is-active .acq-step__state { color: var(--accent-cyan); }
+.acq-step__sub { font-size: var(--fs-micro); color: var(--text-muted); }
+.acq-step__state { flex: 0 0 auto; font-size: var(--fs-micro); color: var(--text-muted); }
+.acq-step.is-active .acq-step__state { color: var(--accent-cyan-ink); }
 .acq-seq__foot { flex: 0 0 auto; margin: 0; }
-.acq-seq-wrap .ws-note { flex: 0 0 auto; margin: 0; font-size: 0.62rem; }
+.acq-seq-wrap .ws-note { flex: 0 0 auto; margin: 0; font-size: var(--fs-micro); }
 
 /* Q4 · Ajuste do protocolo + Sala 3D */
 .acq-adj { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2px; background: var(--border-subtle); }
 .acq-adj__params, .acq-adj__3d { background: var(--bg-void); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
-.acq-adj__subhead { flex: 0 0 auto; height: 18px; padding: 0 8px; display: flex; align-items: center; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); }
+.acq-adj__subhead { flex: 0 0 auto; height: 18px; padding: 0 8px; display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); }
 .acq-params { flex: 1; overflow-y: auto; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-content: start; }
 .acq-param { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .acq-param--full { grid-column: 1 / -1; }
-.acq-param__k { font-size: 0.56rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.acq-param__k { font-size: var(--fs-micro); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .acq-param__v { font-size: 0.78rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acq-params__empty { color: var(--text-muted); font-size: 0.72rem; padding: 8px; grid-column: 1 / -1; }
 .acq-adj__3d { position: relative; }
@@ -1547,7 +1627,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   padding: 6px 8px; border-top: 1px solid var(--border-subtle);
 }
 .ws-series__rot {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.09em;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.09em;
   text-transform: uppercase; color: var(--text-muted); margin-right: 2px;
 }
 .ws-series__btn {
@@ -1558,13 +1638,13 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   color: var(--text-secondary); font-size: 0.72rem; line-height: 1.25;
   text-align: left;
 }
-.ws-series__btn small { font-size: 0.6rem; color: var(--text-muted); }
-.ws-series__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.ws-series__btn small { font-size: var(--fs-micro); color: var(--text-muted); }
+.ws-series__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan-ink); }
 .ws-series__btn.is-active {
-  border-color: var(--accent-cyan); color: var(--accent-cyan);
+  border-color: var(--accent-cyan); color: var(--accent-cyan-ink);
   background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
 }
-.ws-series__btn.is-active small { color: var(--accent-cyan); }
+.ws-series__btn.is-active small { color: var(--accent-cyan-ink); }
 
 /* ---- Ferramentas de medida -------------------------------------------
    A auditoria registrou a ausência: o visualizador tinha janelamento e 3D,
@@ -1574,7 +1654,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   padding: 6px 8px; border-top: 1px solid var(--border-subtle);
 }
 .ws-med__rot {
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.09em;
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.09em;
   text-transform: uppercase; color: var(--text-muted); margin-right: 2px;
 }
 .ws-med__btn {
@@ -1583,13 +1663,13 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   border: 1px solid var(--border-strong); background: transparent;
   color: var(--text-secondary); font-size: 0.7rem; line-height: 1.3;
 }
-.ws-med__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.ws-med__btn:hover { border-color: var(--accent-cyan-dim); color: var(--accent-cyan-ink); }
 .ws-med__btn.is-active {
-  border-color: var(--accent-cyan); color: var(--accent-cyan);
+  border-color: var(--accent-cyan); color: var(--accent-cyan-ink);
   background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
 }
 .ws-med__btn--limpar { margin-left: auto; color: var(--text-muted); }
-.ws-med__btn--limpar:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.ws-med__btn--limpar:hover { border-color: var(--accent-red); color: var(--accent-red-ink); }
 
 /* Camada de desenho sobre a imagem. Fica inerte enquanto nenhuma ferramenta
    estiver ativa, para não roubar o scroll de cortes. */
@@ -1602,7 +1682,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
 }
 .ws-med__item { display: flex; align-items: baseline; gap: 8px; }
 .ws-med__tipo {
-  flex: 0 0 62px; font-size: 0.62rem; text-transform: uppercase;
+  flex: 0 0 62px; font-size: var(--fs-micro); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-muted);
 }
 .ws-med__val { flex: 1 1 auto; font-family: ui-monospace, Menlo, Consolas, monospace; }
@@ -1611,11 +1691,11 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   flex: 0 0 auto; appearance: none; -webkit-appearance: none; cursor: pointer;
   border: 0; background: transparent; color: var(--text-muted); padding: 0 4px;
 }
-.ws-med__x:hover { color: var(--accent-red); }
+.ws-med__x:hover { color: var(--accent-red-ink); }
 
 /* Achados do motor de validação no diálogo de confirmação.
    AVISO tem cor própria: não é erro (não bloqueia) nem informação neutra. */
-.is-warn { color: var(--accent-amber, #e0a04b); }
+.is-warn { color: var(--accent-amber-ink); }
 
 /* ---- Gestor de protocolos (Fase 9) ------------------------------------ */
 /* Favorito e trava aparecem na PROPRIA lista: o estado tem de ser legivel
@@ -1625,9 +1705,9 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
 .proto-list__item.is-travado::after { content: ""; }
 
 .proto-gestor { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.proto-gestor .ws-btn { font-size: 0.68rem; padding: 4px 8px; }
+.proto-gestor .ws-btn { font-size: var(--fs-mini); padding: 4px 8px; }
 .proto-gestor .ws-btn[aria-pressed="true"] {
-  border-color: var(--accent-amber); color: var(--accent-amber);
+  border-color: var(--accent-amber); color: var(--accent-amber-ink);
 }
 
 .proto-cmp {
@@ -1635,7 +1715,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   border-radius: var(--radius-md); background: var(--bg-panel-raised);
 }
 .proto-cmp__head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.proto-cmp__rot { font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+.proto-cmp__rot { font-size: var(--fs-mini); color: var(--text-muted); white-space: nowrap; }
 .proto-cmp__sel {
   flex: 1 1 auto; min-width: 0; font-size: 0.72rem; padding: 3px 6px;
   background: var(--bg-panel); color: var(--text-primary);
@@ -1656,7 +1736,7 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
 .proto-cmp__tab td { color: var(--text-primary); }
 /* So a coluna do SEGUNDO protocolo e realcada: o olho procura o que mudou,
    nao o que ficou igual. */
-.proto-cmp__tab td.is-dif { color: var(--accent-cyan); font-weight: 600; }
+.proto-cmp__tab td.is-dif { color: var(--accent-cyan-ink); font-weight: 600; }
 
 /* ---- Confirmação de ação irreversível (js/ui/confirmar.js) --------------
    Substitui o window.confirm do navegador nas duas ações que não se desfazem:

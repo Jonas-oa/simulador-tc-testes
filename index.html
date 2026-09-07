@@ -10,15 +10,15 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907x" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907x" />
+  <link rel="stylesheet" href="css/style.css?v=20260907ah" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907ah" />
 </head>
 <body data-theme="dark">
 
   <header id="status-bar" class="status-bar" role="banner">
     <div class="status-bar__brand">
       <span class="status-bar__logo" aria-hidden="true">⌬</span>
-      <span class="status-bar__title">SIMULADOR TC</span>
+      <h1 class="status-bar__title">SIMULADOR TC</h1>
       <span class="status-bar__subtitle">Uso educacional — não clínico</span>
     </div>
 
@@ -84,12 +84,12 @@
           <canvas id="scene-canvas" aria-hidden="true"></canvas>
           <div class="viewport__overlay">
             <div class="viewport__hud viewport__hud--unified">
-              <div class="hud__row"><span class="hud__label">MESA</span><span class="hud__value" id="hud-table-position">000.0 <small>mm</small></span></div>
-              <div class="hud__row"><span class="hud__label">VELOC.</span><span class="hud__value" id="hud-table-speed">0.0 <small>mm/s</small></span></div>
-              <div class="hud__row"><span class="hud__label">ALTURA</span><span class="hud__value" id="hud-table-height">80.0 <small>cm</small></span></div>
+              <div class="hud__row"><span class="hud__label">MESA</span><span class="hud__value" id="hud-table-position">000,0 <small>mm</small></span></div>
+              <div class="hud__row"><span class="hud__label">VELOC.</span><span class="hud__value" id="hud-table-speed">0,0 <small>mm/s</small></span></div>
+              <div class="hud__row"><span class="hud__label">ALTURA</span><span class="hud__value" id="hud-table-height">80,0 <small>cm</small></span></div>
             </div>
           </div>
-          <div class="viewport__loading" id="viewport-loading"><span class="spinner" aria-hidden="true"></span><span>Inicializando cena 3D…</span></div>
+          <div class="viewport__loading" id="viewport-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Inicializando cena 3D…</span></div>
         </section>
 
         <aside class="console" aria-label="Painel de operação do equipamento">
@@ -101,8 +101,13 @@
           </div>
 
           <div class="panel" id="sala-panel">
-            <div class="panel__grip" id="sala-panel-grip" role="button" tabindex="-1" aria-label="Mover painel de comandos" title="Arraste para mover"><span></span></div>
-            <div class="panel__resize" id="sala-panel-resize" role="button" tabindex="-1" aria-label="Redimensionar painel de comandos" title="Arraste para redimensionar"></div>
+            <div class="panel__grip" id="sala-panel-grip" role="application" tabindex="0"
+                 aria-label="Mover painel de comandos: setas movem, Shift+setas movem devagar"
+                 title="Arraste para mover — ou use as setas do teclado"><span></span></div>
+            <div class="panel__resize" id="sala-panel-resize" role="slider" tabindex="0"
+                 aria-label="Tamanho do painel de comandos"
+                 aria-valuemin="75" aria-valuemax="150" aria-valuenow="100" aria-valuetext="100%"
+                 title="Arraste para redimensionar — ou use as setas do teclado"></div>
             <div class="panel__row panel__row--top">
               <button class="pad-btn pad-btn--toggle" id="btn-laser" type="button" data-action="laser-toggle" aria-pressed="false"><span class="pad-btn__icon">✛</span><span class="pad-btn__label">Laser</span></button>
               <button class="pad-btn pad-btn--stop" id="btn-stop" type="button" data-action="stop"><span class="pad-btn__icon">■</span><span class="pad-btn__label">Stop</span></button>
@@ -425,7 +430,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907x"
+          src="dicom-viewer/index.html?embedded=1&v=20260907ah"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -439,65 +444,65 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907x";</script>
+  <script>window.__SIMTC_REV__ = "20260907ah";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907x"></script>
+  <script src="js/phantoms.js?v=20260907ah"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907x"></script>
-  <script src="core/clock.js?v=20260907x"></script>
-  <script src="core/model/patient.js?v=20260907x"></script>
-  <script src="core/model/protocol.js?v=20260907x"></script>
-  <script src="core/model/exam.js?v=20260907x"></script>
-  <script src="core/state.js?v=20260907x"></script>
-  <script src="core/phantom/volume.js?v=20260907x"></script>
-  <script src="core/phantom/acervo.js?v=20260907x"></script>
-  <script src="core/acquisition/fisica.js?v=20260907x"></script>
-  <script src="core/acquisition/noise.js?v=20260907x"></script>
-  <script src="core/acquisition/projector.js?v=20260907x"></script>
-  <script src="core/acquisition/scan.js?v=20260907x"></script>
-  <script src="core/dose/ctdi.js?v=20260907x"></script>
-  <script src="core/dose/aec.js?v=20260907x"></script>
-  <script src="core/protocol/validacao.js?v=20260907x"></script>
-  <script src="core/protocol/gestor.js?v=20260907x"></script>
-  <script src="core/dicom/writer.js?v=20260907x"></script>
-  <script src="core/recon/serie.js?v=20260907x"></script>
+  <script src="core/bus.js?v=20260907ah"></script>
+  <script src="core/clock.js?v=20260907ah"></script>
+  <script src="core/model/patient.js?v=20260907ah"></script>
+  <script src="core/model/protocol.js?v=20260907ah"></script>
+  <script src="core/model/exam.js?v=20260907ah"></script>
+  <script src="core/state.js?v=20260907ah"></script>
+  <script src="core/phantom/volume.js?v=20260907ah"></script>
+  <script src="core/phantom/acervo.js?v=20260907ah"></script>
+  <script src="core/acquisition/fisica.js?v=20260907ah"></script>
+  <script src="core/acquisition/noise.js?v=20260907ah"></script>
+  <script src="core/acquisition/projector.js?v=20260907ah"></script>
+  <script src="core/acquisition/scan.js?v=20260907ah"></script>
+  <script src="core/dose/ctdi.js?v=20260907ah"></script>
+  <script src="core/dose/aec.js?v=20260907ah"></script>
+  <script src="core/protocol/validacao.js?v=20260907ah"></script>
+  <script src="core/protocol/gestor.js?v=20260907ah"></script>
+  <script src="core/dicom/writer.js?v=20260907ah"></script>
+  <script src="core/recon/serie.js?v=20260907ah"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907x"></script>
+  <script src="js/shared.js?v=20260907ah"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907x"></script>
+  <script src="app/contratos.js?v=20260907ah"></script>
 
   <!-- Camada ui/: como o app escreve numero, num lugar so (ETAPA 7) -->
-  <script src="js/ui/formatar.js?v=20260907x"></script>
-  <script src="js/ui/confirmar.js?v=20260907x"></script>
+  <script src="js/ui/formatar.js?v=20260907ah"></script>
+  <script src="js/ui/confirmar.js?v=20260907ah"></script>
 
   <!-- Módulos de telas -->
   <!-- Peças que sairam do monolito da sala (ETAPA 6) -->
-  <script src="js/sala/cenario.js?v=20260907x"></script>
-  <script src="js/sala/paciente.js?v=20260907x"></script>
-  <script src="js/sala/gantry.js?v=20260907x"></script>
-  <script src="js/sala-exame.js?v=20260907x"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907x"></script>
-  <script src="js/protocolos.js?v=20260907x"></script>
+  <script src="js/sala/cenario.js?v=20260907ah"></script>
+  <script src="js/sala/paciente.js?v=20260907ah"></script>
+  <script src="js/sala/gantry.js?v=20260907ah"></script>
+  <script src="js/sala-exame.js?v=20260907ah"></script>
+  <script src="js/cadastro-pacientes.js?v=20260907ah"></script>
+  <script src="js/protocolos.js?v=20260907ah"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907x"></script>
-  <script src="js/motor-imagem.js?v=20260907x"></script>
-  <script src="js/exportar-dicom.js?v=20260907x"></script>
-  <script src="js/medidas.js?v=20260907x"></script>
+  <script src="js/fonte-volume.js?v=20260907ah"></script>
+  <script src="js/motor-imagem.js?v=20260907ah"></script>
+  <script src="js/exportar-dicom.js?v=20260907ah"></script>
+  <script src="js/medidas.js?v=20260907ah"></script>
   <!-- Peças que sairam do monolito da aquisicao (ETAPA 6) -->
-  <script src="js/aquisicao/som.js?v=20260907x"></script>
-  <script src="js/aquisicao/painel.js?v=20260907x"></script>
-  <script src="js/aquisicao.js?v=20260907x"></script>
-  <script src="js/mpr.js?v=20260907x"></script>
-  <script src="js/ui-layout.js?v=20260907x"></script>
+  <script src="js/aquisicao/som.js?v=20260907ah"></script>
+  <script src="js/aquisicao/painel.js?v=20260907ah"></script>
+  <script src="js/aquisicao.js?v=20260907ah"></script>
+  <script src="js/mpr.js?v=20260907ah"></script>
+  <script src="js/ui-layout.js?v=20260907ah"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907x"></script>
+  <script src="script.js?v=20260907ah"></script>
 </body>
 </html>

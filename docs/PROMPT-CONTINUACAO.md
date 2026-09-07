@@ -7,10 +7,10 @@
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
 > Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
-> **ETAPAS 1 a 5 concluídas e a 6 em curso** — a rede de segurança está de pé, **os 9 P1
-> estão corrigidos**, a interface fala com o núcleo, o protocolo é tipado de ponta a ponta e
-> ~860 linhas saíram dos dois monólitos e a camada `ui/` começou. As ETAPAS 6 e 7 **não
-> terminaram**: o que falta, e por quê, está no BLOCO 5.
+> **ETAPAS 1 a 5, 8 e 9 concluídas, e 6 e 7 em curso** — a rede de segurança está de pé, **os 9 P1
+> estão corrigidos**, a interface fala com o núcleo, o protocolo é tipado de ponta a ponta,
+> o app não fica sem navegação (Etapa 8) e a UX/Acessibilidade (Etapa 9) foi resolvida.
+> As ETAPAS 6 e 7 **não terminaram**: o que falta, e por quê, está no BLOCO 5.
 
 ---
 
@@ -462,7 +462,7 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
         canvas fixo rastreando o retângulo de um slot custaria sincronizar posição, rolagem e
         empilhamento à mão — mais superfície de erro do que a de hoje, para consertar algo que
         não está quebrado. A medida está escrita em `js/ui-layout.js`, junto do código.
-- [ ] **ETAPA 9 — UX e acessibilidade** *(média — muitos itens independentes)*
+- [x] **ETAPA 9 — UX e acessibilidade** *(média — FEITA)*
       Acrescentar aos itens da auditoria: os mostradores (HUD, display do console, isocentro)
       congelam quando o documento fica oculto, porque `updateReadouts()` mora no
       `requestAnimationFrame` e a física não. Ver o BLOCO 0.

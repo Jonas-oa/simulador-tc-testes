@@ -36,7 +36,7 @@ body.is-mobile .mobile-switch__btn {
   min-height: 50px;
   padding: 6px 3px;
   border-radius: 11px;
-  font-size: 0.63rem;
+  font-size: var(--fs-mini);
   line-height: 1.05;
   white-space: nowrap;
 }
@@ -60,7 +60,7 @@ body.is-mobile .mobile-switch__exit {
   border: 1px solid var(--border-strong);
   border-radius: 50%;
   background: rgba(6, 12, 20, 0.78);
-  color: var(--text-primary);
+  color: var(--on-dark-primary);
   backdrop-filter: blur(8px);
 }
 
@@ -141,7 +141,7 @@ body.is-mobile.mob-mpr .mpr-workstation__head {
 }
 body.is-mobile.mob-mpr .mpr-workstation__status {
   max-width: 54%;
-  font-size: 0.58rem;
+  font-size: var(--fs-micro);
 }
 
 body.is-mobile.mob-aq .ws-card {
@@ -229,7 +229,7 @@ body.is-mobile .mobile-rotate {
 
 @media (max-width: 380px) {
   body.is-mobile .mobile-switch__btn {
-    font-size: 0.56rem;
+    font-size: var(--fs-micro);
   }
   .mobile-switch__icon {
     font-size: 0.94rem;
@@ -353,10 +353,10 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
     height: var(--banner-h);
     z-index: 90;
     padding: 0 12px;
-    font-size: 0.66rem;
+    font-size: var(--fs-mini);
     font-weight: 600;
     letter-spacing: 0.01em;
-    color: var(--text-secondary);
+    color: var(--on-dark-secondary);
     background: rgba(6, 12, 20, 0.9);
     border-bottom: 1px solid var(--border-strong);
     white-space: nowrap;
@@ -381,7 +381,7 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile .mobile-switch__btn {
     min-height: 0;
     padding: 4px 2px;
-    font-size: 0.55rem;
+    font-size: var(--fs-micro);
     border-radius: 9px;
   }
   .mobile-switch__icon { font-size: 0.95rem; margin-bottom: 1px; }
@@ -461,32 +461,32 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile.mob-aq .acq4 { gap: 1px; }
 
   /* Cabeçalhos e placeholders dos quadrantes mais enxutos */
-  body.is-mobile.mob-aq .acq-quad__head { height: 20px; padding: 0 8px; font-size: 0.52rem; }
-  body.is-mobile.mob-aq .acq-quad__ph { font-size: 0.64rem; }
+  body.is-mobile.mob-aq .acq-quad__head { height: 20px; padding: 0 8px; font-size: var(--fs-micro); }
+  body.is-mobile.mob-aq .acq-quad__ph { font-size: var(--fs-mini); }
 
   /* Q3 · Sequência dos protocolos */
   body.is-mobile.mob-aq .acq-seq-wrap { padding: 6px; gap: 5px; }
   body.is-mobile.mob-aq .acq-step { padding: 4px 7px; gap: 6px; }
-  body.is-mobile.mob-aq .acq-step__num { width: 16px; height: 16px; font-size: 0.56rem; }
-  body.is-mobile.mob-aq .acq-step__name { font-size: 0.66rem; }
+  body.is-mobile.mob-aq .acq-step__num { width: 16px; height: 16px; font-size: var(--fs-micro); }
+  body.is-mobile.mob-aq .acq-step__name { font-size: var(--fs-mini); }
   body.is-mobile.mob-aq .acq-step__sub,
-  body.is-mobile.mob-aq .acq-step__state { font-size: 0.52rem; }
-  body.is-mobile.mob-aq .acq-seq-wrap .ws-note { font-size: 0.52rem; }
+  body.is-mobile.mob-aq .acq-step__state { font-size: var(--fs-micro); }
+  body.is-mobile.mob-aq .acq-seq-wrap .ws-note { font-size: var(--fs-micro); }
   body.is-mobile.mob-aq .acq-seq__foot .ws-btn { min-height: 0; padding: 6px 12px; font-size: 0.74rem; }
 
   /* Q4 · Ajuste do protocolo */
-  body.is-mobile.mob-aq .acq-adj__subhead { height: 16px; font-size: 0.5rem; }
+  body.is-mobile.mob-aq .acq-adj__subhead { height: 16px; font-size: var(--fs-micro); }
   body.is-mobile.mob-aq .acq-params { padding: 6px; gap: 4px 8px; }
-  body.is-mobile.mob-aq .acq-param__k { font-size: 0.5rem; }
-  body.is-mobile.mob-aq .acq-param__v { font-size: 0.64rem; }
-  body.is-mobile.mob-aq .acq-params__empty { font-size: 0.62rem; padding: 6px; }
+  body.is-mobile.mob-aq .acq-param__k { font-size: var(--fs-micro); }
+  body.is-mobile.mob-aq .acq-param__v { font-size: var(--fs-mini); }
+  body.is-mobile.mob-aq .acq-params__empty { font-size: var(--fs-micro); padding: 6px; }
 
   /* Q2 · Volumes: overlay do paciente/placeholder/controles compactos */
-  body.is-mobile.mob-aq .ws-viewer__placeholder { font-size: 0.68rem; }
+  body.is-mobile.mob-aq .ws-viewer__placeholder { font-size: var(--fs-mini); }
   body.is-mobile.mob-aq .ws-list--overlay .ws-list__name { font-size: 0.7rem; }
-  body.is-mobile.mob-aq .ws-list--overlay .ws-list__meta { font-size: 0.56rem; }
-  body.is-mobile.mob-aq .ws-slice-counter { font-size: 0.62rem; min-width: 0; }
-  body.is-mobile.mob-aq .ws-plane__btn { padding: 2px 9px; font-size: 0.62rem; }
+  body.is-mobile.mob-aq .ws-list--overlay .ws-list__meta { font-size: var(--fs-micro); }
+  body.is-mobile.mob-aq .ws-slice-counter { font-size: var(--fs-micro); min-width: 0; }
+  body.is-mobile.mob-aq .ws-plane__btn { padding: 2px 9px; font-size: var(--fs-micro); }
 
   /* Sala 3D (dentro do quadrante Ajuste): remove as informações suspensas
      que sobrepõem a imagem — HUD (MESA/VELOC/ALTURA) e etiqueta de estado.

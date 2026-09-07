@@ -328,6 +328,73 @@
     }
   });
 
+  teste("R-02", "o mostrador diz o que a mesa faz, mesmo sem repintar", async function () {
+    // `updateReadouts()` morava no requestAnimationFrame e a fisica nao. O
+    // relogio do nucleo tem uma fonte por Worker justamente para nao parar
+    // quando o navegador para de pintar — de modo que a mesa andava e os
+    // mostradores congelavam no ultimo valor desenhado. Medido na auditoria:
+    // `tableGroup.position.y = 0,88 m` com o HUD exibindo "80,0 cm".
+    //
+    // O DOM deixava de dizer a verdade sobre a maquina, e quem o lesse — um
+    // teste, um leitor de tela, um aluno que voltou para a aba — via um numero
+    // que nao era o numero.
+    //
+    // ESTE TESTE CRIA A CONDICAO. A primeira versao dele so esperava que o
+    // iframe fora da tela parasse de pintar, e neste Chromium ele NAO para:
+    // passava com o defeito no lugar, provando nada. Agora o rAF do app e
+    // desligado de proposito — que e exatamente o que a aba oculta faz — e o
+    // relogio segue pela fonte de Worker. Se `updateReadouts` voltar para o
+    // desenho, o HUD congela e este teste acusa.
+    var sim = W().__ctSimulator;
+    ok(sim && sim.tableGroup, "a cena 3D nao expos a mesa; o teste nao e conclusivo");
+    ok(W().SimTCCore.relogio.rodando(), "o relogio do nucleo nao esta rodando");
+
+    var alturaCm = function () { return sim.tableGroup.position.y * 100; };
+    var lido = function () {
+      var m = ($("hud-table-height").textContent || "").replace(",", ".").match(/-?\d+(\.\d+)?/);
+      return m ? parseFloat(m[0]) : NaN;
+    };
+
+    var antes = alturaCm();
+    var subindo = antes < 87;
+    var btn = $(subindo ? "btn-table-up" : "btn-table-down");
+    ok(btn, "botao de mover mesa nao encontrado");
+
+    var rafOriginal = W().requestAnimationFrame;
+    var pedidos = 0;
+    var K = W().KeyboardEvent;
+    try {
+      // A partir daqui o app nao pinta mais: o laco de desenho pede o proximo
+      // quadro ao rAF global a cada volta, e o rAF global deixou de agendar.
+      W().requestAnimationFrame = function () { pedidos++; return 0; };
+      await new Promise(function (r) { setTimeout(r, 250); });
+
+      btn.focus();
+      btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      try {
+        await ate(function () { return Math.abs(alturaCm() - antes) > 0.5; },
+          "a mesa se mover sem o navegador pintar (relogio pela fonte de Worker)", 8000, 120);
+      } finally {
+        btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
+      }
+
+      ok(pedidos > 0, "o app nem pediu quadro: o laco de desenho nao esta no rAF global, " +
+        "e este teste nao esta medindo o que pensa medir");
+
+      // A pergunta e esta: o que esta ESCRITO na tela concorda com a maquina?
+      var naCena = alturaCm();
+      var noHud = lido();
+      ok(isFinite(noHud), "o HUD de altura nao trouxe numero: \"" + $("hud-table-height").textContent + "\"");
+      ok(Math.abs(noHud - naCena) <= 0.2,
+        "o mostrador congelou: a mesa esta em " + naCena.toFixed(1) +
+        " cm e o HUD exibe " + noHud.toFixed(1) + " cm — updateReadouts voltou para o rAF");
+    } finally {
+      W().requestAnimationFrame = rafOriginal;
+      // O laco de desenho morreu com o rAF neutralizado; religa-o.
+      rafOriginal.call(W(), function () {});
+    }
+  });
+
   teste("P1-09", "pitch em modo sequencial é acusado pelo caminho REAL", async function () {
     var C = W().SimTCCore;
     // O caminho real: protocolo cru da tela -> normalizarProtocolo -> validar.
@@ -585,7 +652,7 @@
   // Execução
   // =====================================================================
   var FASES = {
-    "P1-07": "A", "P1-08": "A", "P1-09": "A", "R-01": "A", "P1-01": "A",
+    "P1-07": "A", "P1-08": "A", "R-02": "A", "P1-09": "A", "R-01": "A", "P1-01": "A",
     "P1-02": "B", "P1-06": "B",
     "P1-03": "C", "P1-04a": "C", "P1-04b": "C", "P1-05": "C"
   };
