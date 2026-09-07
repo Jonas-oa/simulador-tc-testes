@@ -1,4 +1,4 @@
-﻿/**
+/**
  * js/aquisicao.js
  * Simulador Educacional de TC — Tela de Aquisicao de Imagens.
  *
@@ -73,10 +73,7 @@
     }
     var janelaAtual = null;   // {wl, ww} — null usa a janela padrao do volume
     var loaded = false;
-    // idle → topoAcq (varredura) → plan (linhas) → volAcq (mesa+cortes) → review
-    var phase = "idle";
-    var topoAnim = null;   // requestAnimationFrame da varredura do topograma
-    var volTimer = null;   // intervalo da aquisição corte a corte
+    var MaquinaFases = window.SimTC.MaquinaFases;
     var TOPO_MS = 4000;    // fallback (sem cena 3D): duração da varredura
     var VOL_MS = 6500;     // fallback (sem cena 3D): duração do volume
     // Física didática da aquisição (mesa REAL comanda a imagem):
@@ -113,22 +110,12 @@
     //     (bordas sup/inf); FOV R-L = eixo HORIZONTAL (bordas esq/dir).
     // Zonas-alvo didáticas — validação clínica do usuário. As do frontal são
     // aproximadas (imagem AP ilustrativa) e podem ser recalibradas.
-    var BOX_PRESET = {
-      lateral: {
-        def: { top: 42, bottom: 94, left: 7, right: 66 },
-        target: { top: [30, 54], bottom: [84, 100], left: [2, 18], right: [56, 76] }
-      },
-      frontal: {
-        def: { top: 10, bottom: 74, left: 24, right: 76 },
-        target: { top: [2, 22], bottom: [64, 88], left: [14, 36], right: [64, 86] }
-      }
-    };
-    function isFrontal() { return protocolParams().scout === "frontal"; }
-    function preset() { return BOX_PRESET[isFrontal() ? "frontal" : "lateral"]; }
-    // Extensões (% da imagem) da FAIXA (range CC) e do FOV, conforme a orientação.
-    function rangeSpan() { return isFrontal() ? (boxState.bottom - boxState.top) : (boxState.right - boxState.left); }
-    function fovSpan() { return isFrontal() ? (boxState.right - boxState.left) : (boxState.bottom - boxState.top); }
-    var boxState = { top: 42, bottom: 94, left: 7, right: 66 };
+    var boxPlanejamento = window.SimTC.BoxPlanejamento;
+    var boxState = boxPlanejamento.state;
+    function isFrontal() { return boxPlanejamento.isFrontal(protocolParams); }
+    function preset() { return boxPlanejamento.BOX_PRESET[isFrontal() ? "frontal" : "lateral"]; }
+    function rangeSpan() { return boxPlanejamento.rangeSpan(protocolParams); }
+    function fovSpan() { return boxPlanejamento.fovSpan(protocolParams); }
     var MIN_GAP = 6; // % mínimo entre linhas opostas
     var lastSlice = 0; // último corte pintado na aquisição (p/ review)
     var lastAcq = null; // parâmetros da última aquisição (p/ relatório)
@@ -194,23 +181,7 @@
     // cranio-caudal do volume. E o que o motor consome: sem isto a faixa
     // continuaria sendo "% da imagem", que nao e grandeza.
     function faixaEmMm() {
-      var fr = isFrontal();
-      var a = fr ? boxState.top : boxState.left;
-      var b = fr ? boxState.bottom : boxState.right;
-      // A caixa e fracao do TOPOGRAMA, que exibe o superior primeiro (vertice
-      // a esquerda no lateral, cranio em cima no frontal). O volume indexa ao
-      // contrario: o corte 0 e o INFERIOR. Sem esta inversao a faixa desenhada
-      // sobre o torax adquiria a pelve.
-      var reg = regiaoDoProtocolo();
-      var conv = SimTC.FonteVolume && SimTC.FonteVolume.fracaoCCparaMm;
-      var L = topoLenMm();
-      function paraMm(pct) {
-        var f = pct / 100;
-        var mm = conv ? SimTC.FonteVolume.fracaoCCparaMm(reg, f) : null;
-        return mm == null ? (1 - f) * L : mm;   // fantoma procedural: mesma regra
-      }
-      var mmA = paraMm(a), mmB = paraMm(b);
-      return { inicioMm: Math.min(mmA, mmB), fimMm: Math.max(mmA, mmB) };
+      return boxPlanejamento.faixaEmMm(protocolParams, topoLenMm, regiaoDoProtocolo);
     }
 
     // Total de cortes exibiveis: da serie reconstruida quando ela existe,
@@ -241,30 +212,7 @@
       return manifest ? manifest.cortes : 0;
     }
 
-    // ---- FASE DO EXAME ---------------------------------------------------
-    // Quem guarda a fase é o NÚCLEO. `phase` continua aqui porque é a máquina
-    // de estados desta tela e é lida em caminho quente, mas toda mudança passa
-    // por definirFase() e chega ao ScanRun da sessão — que é o que outros
-    // módulos consultam e o que o barramento anuncia.
-    //
-    // Antes, a fase existia só nesta closure e era anunciada por um
-    // CustomEvent no `document`, em paralelo ao barramento: dois canais para o
-    // mesmo fato, e o estado da sessão nunca sabia em que pé estava o exame.
-    var FASE_NO_NUCLEO = {
-      idle: "ocioso", topoAcq: "scout", plan: "planejando",
-      volAcq: "adquirindo", recon: "reconstruindo", review: "revisao"
-    };
-    /** Anuncia ao núcleo um estado do EQUIPAMENTO, sem mexer na fase da tela. */
-    function estadoNoNucleo(estado) {
-      var C = window.SimTCCore;
-      if (!C || !C.sessao || !estado) return;
-      try { C.sessao.mudarFase(estado); } catch (e) { /* estado desconhecido: a tela segue */ }
-    }
-    /** Muda a fase da tela e leva a mudança ao núcleo. */
-    function definirFase(nome) {
-      phase = nome;
-      estadoNoNucleo(FASE_NO_NUCLEO[nome]);
-    }
+
 
     /**
      * Leva a faixa planejada ao nucleo.
@@ -523,68 +471,8 @@
     }
     function inZone(v, z) { return v >= z[0] && v <= z[1]; }
 
-    /**
-     * Validação da faixa planejada (corrige B-21).
-     *
-     * As zonas-alvo eram CONSTANTES calibradas para o crânio: num exame de
-     * tórax o sistema recusava faixas perfeitamente válidas dizendo "leve o
-     * limite inferior até a base do crânio". Agora os limites vêm do próprio
-     * volume — onde o paciente de fato está —, então valem para qualquer
-     * região do acervo.
-     *
-     * As regras são físicas, não anatômicas:
-     *   • faixa invertida ou estreita demais não é varredura;
-     *   • faixa fora do paciente irradia ar;
-     *   • FOV que não cobre o paciente trunca a imagem.
-     */
     function problems() {
-      var p = [];
-      var fr = isFrontal();
-      // Eixo crânio-caudal e eixo perpendicular, conforme a orientação.
-      var ccA = fr ? boxState.top : boxState.left;
-      var ccB = fr ? boxState.bottom : boxState.right;
-      var pA = fr ? boxState.left : boxState.top;
-      var pB = fr ? boxState.right : boxState.bottom;
-      var faixa = Math.abs(ccB - ccA);
-      var fov = Math.abs(pB - pA);
-
-      if (!isFinite(ccA) || !isFinite(ccB) || !isFinite(pA) || !isFinite(pB)) {
-        p.push("Planejamento inválido — refaça a faixa. (Um dos limites perdeu a referência de posição.)");
-        return p;
-      }
-      if (ccB - ccA < MIN_GAP) {
-        p.push("A faixa de varredura está invertida ou curta demais — arraste as linhas para cobrir a região de interesse.");
-        return p;
-      }
-      if (pB - pA < MIN_GAP) {
-        p.push("O FOV está invertido ou estreito demais.");
-        return p;
-      }
-
-      var lim = (SimTC.FonteVolume && SimTC.FonteVolume.limitesAnatomicos(
-        regiaoDoProtocolo(), fr ? "frontal" : "lateral"));
-      if (!lim) return p;   // sem volume não há como validar; não inventa regra
-
-      var ccMin = lim.cc[0] * 100, ccMax = lim.cc[1] * 100;
-      var pMin = lim.perp[0] * 100, pMax = lim.perp[1] * 100;
-
-      // Sobreposição da faixa com a anatomia disponível.
-      var sobrepoe = Math.max(0, Math.min(ccB, ccMax) - Math.max(ccA, ccMin));
-      if (sobrepoe <= 0) {
-        p.push("A faixa está fora do paciente — não há anatomia nesse trecho do topograma.");
-        return p;
-      }
-      var forcaAr = 1 - sobrepoe / faixa;
-      if (forcaAr > 0.25) {
-        p.push("Cerca de " + Math.round(forcaAr * 100) +
-          "% da faixa está fora do paciente: seria irradiação sem imagem útil. Aproxime as linhas da anatomia.");
-      }
-
-      // O FOV precisa conter o paciente, senão a borda trunca.
-      if (pA > pMin + 2 || pB < pMax - 2) {
-        p.push("O FOV não cobre toda a largura do paciente — a borda seria truncada. Afaste as linhas do FOV.");
-      }
-      return p;
+      return boxPlanejamento.validar(protocolParams, regiaoDoProtocolo);
     }
 
     function renderReadout() {
@@ -660,13 +548,10 @@
         line.addEventListener("pointermove", move);
         line.addEventListener("pointerup", up);
         line.addEventListener("pointercancel", up);
-      });
-    });
-
     // ---- fases e animações ----
     function stopAnimations() {
-      if (topoAnim) { cancelAnimationFrame(topoAnim); topoAnim = null; }
-      if (volTimer) { clearInterval(volTimer); volTimer = null; }
+      MaquinaFases.clearTopoAnim();
+      MaquinaFases.clearVolTimer();
       soundStop();
       // Para a mesa se a aquisição estiver em curso. Os handlers onAbort
       // checam a fase — como ela já foi trocada, viram no-op (sem eco).
@@ -676,7 +561,7 @@
       if (SimTC.tableDriveApi && SimTC.tableDriveApi.setScan) SimTC.tableDriveApi.setScan(0);
     }
     function toIdle() {
-      definirFase("idle"); loaded = false; lastSlice = 0; lastAcq = null;
+      MaquinaFases.definirFase("idle"); loaded = false; lastSlice = 0; lastAcq = null;
       if (ctrl) ctrl.classList.remove("is-acquiring");
       topoRef = null; atStart = false; isMoving = false;
       protoExame = null;   // libera o protocolo ao encerrar
@@ -728,7 +613,7 @@
       }
     }
     function toTopoAcq() {
-      definirFase("topoAcq");
+      MaquinaFases.definirFase("topoAcq");
       placeholder.hidden = true;
       img.hidden = true; ctrl.hidden = true;
       if (topo) topo.hidden = false;
@@ -736,7 +621,7 @@
       if (topoBox) topoBox.hidden = true;   // linhas só após completar
       if (readout) readout.hidden = true;
       startBtn.disabled = true; startBtn.textContent = "Adquirindo topograma…";
-      if (stopBtn) stopBtn.disabled = false;
+      if (stopBtn) stopBtn.hidden = false;
       setTopoClip(0);
       fitTopo();
       soundStart("topo", 0);
@@ -752,7 +637,7 @@
           onProgress: function (k) { setTopoClip(k); progressoNoNucleo(k); },
           onDone: function () { soundStop(); toPlan(); },
           onAbort: function (motivo) {
-            if (phase !== "topoAcq") return;
+            if (MaquinaFases.atual() !== "topoAcq") return;
             soundStop(); toIdle();
             SimTC.showMessage("Topograma abortado: " + motivo, "warning");
           }
@@ -779,14 +664,14 @@
       function frame(now) {
         var k = Math.min(1, (now - t0) / TOPO_MS);
         setTopoClip(k);
-        if (k < 1) { topoAnim = requestAnimationFrame(frame); }
-        else { topoAnim = null; soundStop(); toPlan(); }
+        if (k < 1) { MaquinaFases.setTopoAnim(requestAnimationFrame(frame)); }
+        else { soundStop(); toPlan(); }
       }
-      topoAnim = requestAnimationFrame(frame);
+      MaquinaFases.setTopoAnim(requestAnimationFrame(frame));
     }
 
     function toPlan(keepBox) {
-      definirFase("plan");
+      MaquinaFases.definirFase("plan");
       if (ctrl) ctrl.classList.remove("is-acquiring");
       topoImg.style.clipPath = "";
       if (topoBox) topoBox.hidden = false;
@@ -827,12 +712,16 @@
 
           var pA = Math.max(0, lm.perp[0] * 100 - 4);   // margem de 4% no FOV
           var pB = Math.min(100, lm.perp[1] * 100 + 4);
-          boxState = fr0
+          var fr0 = isFrontal();
+          var s = fr0
             ? { top: c0, bottom: c1, left: pA, right: pB }
             : { top: pA, bottom: pB, left: c0, right: c1 };
+          boxState.top = s.top;
+          boxState.bottom = s.bottom;
+          boxState.left = s.left;
+          boxState.right = s.right;
         } else {
-          var d = preset().def;
-          boxState = { top: d.top, bottom: d.bottom, left: d.left, right: d.right };
+          boxPlanejamento.applyPreset(isFrontal() ? "frontal" : "lateral");
         }
       }
       startBtn.disabled = false; startBtn.textContent = "Iniciar";
@@ -927,7 +816,7 @@
     // (como o comando de posicionamento do equipamento real). Só então o
     // Iniciar libera o volume; mexer nas linhas exige mover de novo.
     function onMove() {
-      if (phase !== "plan" || !SimTC.tableDriveApi || isMoving) return;
+      if (MaquinaFases.atual() !== "plan" || !SimTC.tableDriveApi || isMoving) return;
       if (problems().length) { renderReadout(); return; }
       var zs = volumeStartZ();
       if (zs == null) return;
@@ -960,7 +849,7 @@
             : "A faixa foi alterada durante o movimento — use MOVER novamente.", atStart ? "success" : "warning");
         },
         onAbort: function (motivo) {
-          if (phase !== "plan") return;
+          if (MaquinaFases.atual() !== "plan") return;
           soundStop(); isMoving = false; atStart = false;
           estadoNoNucleo("planejando");
           renderReadout();
@@ -982,7 +871,7 @@
     // Premissa didática: axial_000 = corte mais INFERIOR (base) — a ordem
     // inverte no crânio-caudal. Validação clínica do usuário.
     function toVolAcq() {
-      definirFase("volAcq"); loaded = false;
+      MaquinaFases.definirFase("volAcq"); loaded = false;
       definirPlanoNoNucleo();   // a faixa que sera irradiada, registrada no exame
       hideConfirm();
       if (topo) topo.hidden = true;
@@ -994,7 +883,7 @@
       if (moveBtn) moveBtn.hidden = true;
       if (reportBtn) reportBtn.hidden = true;
       if (reportEl) reportEl.hidden = true;
-      if (stopBtn) stopBtn.disabled = false;
+      if (stopBtn) stopBtn.hidden = false;
       var total = manifest.cortes;
       var pp = protocolParams();
       // Comprimento da varredura = faixa CC planejada no topograma (mm)
@@ -1046,7 +935,8 @@
             )
           },
           aoProgresso: function (m) {
-            if (phase !== "volAcq" && phase !== "recon") return;
+            var p = MaquinaFases.atual();
+            if (p === "topoAcq" || p === "volAcq") { return; }
             if (m.etapa === "irradiando") {
               counter.textContent = "IRRADIANDO — linha " + m.feito + " / " + m.total;
             } else {
@@ -1086,7 +976,7 @@
           onProgress: function (k) { paintProg(k); progressoNoNucleo(k); },
           onDone: function () { soundStop(); toRecon(); },
           onAbort: function (motivo) {
-            if (phase !== "volAcq") return;
+            if (MaquinaFases.atual() !== "volAcq") return;
             soundStop(); toPlan(true);
             SimTC.showMessage("Aquisição do volume abortada: " + motivo, "warning");
           }
@@ -1100,16 +990,16 @@
       // Fallback (cena 3D indisponível): corte a corte por tempo.
       var i = 0;
       var stepMs = Math.max(30, Math.round(VOL_MS / total));
-      volTimer = setInterval(function () {
+      MaquinaFases.setVolTimer(setInterval(function () {
         i++;
         if (i >= total) {
-          clearInterval(volTimer); volTimer = null;
+          MaquinaFases.clearVolTimer();
           soundStop();
           toRecon();
           return;
         }
         paintProg(i / (total - 1));
-      }, stepMs);
+      }, stepMs));
 
       // ---- aquisição AXIAL SEQUENCIAL (step-and-shoot) ----
       // steps ≈ comprimento ÷ colimação (grupos de cortes por rotação). A cada
@@ -1131,7 +1021,7 @@
             " — passo " + stepNum + " / " + steps + " · corte " + (idx + 1) + " / " + total;
         }
         function acquireStep() {
-          if (phase !== "volAcq") return;
+          if (MaquinaFases.atual() !== "volAcq") return;
           var startIdx = (s === 0) ? 0 : (sliceEndForStep(s - 1) + 1);
           var endIdx = sliceEndForStep(s);
           if (endIdx < startIdx) endIdx = startIdx;
@@ -1141,21 +1031,21 @@
           var span = Math.max(1, endIdx - startIdx);
           var tickMs = Math.max(40, Math.round(acqMsPerStep / (span + 1)));
           paintSeq(startIdx, s + 1, false);
-          volTimer = setInterval(function () {
-            if (phase !== "volAcq") { clearInterval(volTimer); volTimer = null; return; }
+          MaquinaFases.setVolTimer(setInterval(function () {
+            if (MaquinaFases.atual() !== "volAcq") { MaquinaFases.clearVolTimer(); return; }
             i++;
             if (i > endIdx) {
-              clearInterval(volTimer); volTimer = null;
+              MaquinaFases.clearVolTimer();
               if (SimTC.tableDriveApi.setScan) SimTC.tableDriveApi.setScan(0);
               soundStop();
               moveOrFinish();
               return;
             }
             paintSeq(i, s + 1, false);
-          }, tickMs);
+          }, tickMs));
         }
         function moveOrFinish() {
-          if (phase !== "volAcq") return;
+          if (MaquinaFases.atual() !== "volAcq") return;
           if (s >= steps - 1) { toRecon(); return; }
           soundStart("topo", 0); // zumbido de mesa em movimento (sem feixe)
           var res = SimTC.tableDriveApi.start({
@@ -1167,7 +1057,7 @@
             onProgress: function () { counter.textContent = "AVANÇANDO MESA — passo " + (s + 2) + " / " + steps; },
             onDone: function () { soundStop(); s++; acquireStep(); },
             onAbort: function (motivo) {
-              if (phase !== "volAcq") return;
+              if (MaquinaFases.atual() !== "volAcq") return;
               soundStop(); if (SimTC.tableDriveApi.setScan) SimTC.tableDriveApi.setScan(0);
               toPlan(true);
               SimTC.showMessage("Aquisição sequencial abortada: " + motivo, "warning");
@@ -1237,7 +1127,7 @@
     // dos PNG só para habilitar coronal e sagital. Ele saiu: a série que o
     // motor acabou de produzir já é o volume, com os HU verdadeiros.
     function toRecon() {
-      definirFase("recon");
+      MaquinaFases.definirFase("recon");
       if (ctrl) ctrl.classList.remove("is-acquiring");
       slider.disabled = true;
       startBtn.disabled = true; startBtn.textContent = "Reconstruindo…";
@@ -1274,12 +1164,12 @@
           SimTC.showMessage("Reconstrução indisponível (" + motorErro.message +
             ") — exibindo os cortes do volume.", "warning");
         }
-        if (phase === "recon") toReview();
+        if (MaquinaFases.atual() === "recon") toReview();
       });
     }
 
     function toReview() {
-      definirFase("review");
+      MaquinaFases.definirFase("review");
       if (ctrl) ctrl.classList.remove("is-acquiring");
       buildReport();
       // O relatório NÃO cobre a imagem automaticamente — foco no exame;

@@ -14,6 +14,7 @@ import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset, PERFIS,
   planoDeCarga, perfilSugerido, carregarManifesto, urlsDaSerie, formatarBytes,
   criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
+  novaCarga, comProgresso
 } from './comum.js?v=20260907ah';
 
 const $ = (id) => document.getElementById(id);
@@ -42,16 +43,7 @@ let perfil = perfilSugerido();
 let planoAtivo = 'axial';
 let emGrade = false;
 let anim3d = null;
-let sequenciaCarga = 0;
-let controladorCarga = null;
 const NOMES_PRESETS_RAPIDOS = ['Pulmão', 'Partes moles', 'Osso'];
-
-function novaCarga() {
-  controladorCarga?.abort();
-  controladorCarga = new AbortController();
-  const id = ++sequenciaCarga;
-  return { id, sinal: controladorCarga.signal, atual: () => id === sequenciaCarga };
-}
 
 // ---------------------------------------------------------------------------
 function iniciar() {
@@ -504,26 +496,7 @@ function escolherSerie(series) {
   abrirFolha('folhaSeries');
 }
 
-async function comProgresso(tarefa, cargaId = sequenciaCarga) {
-  const caixa = $('carregando');
-  caixa.hidden = false;
-  $('barraProgresso').style.width = '0%';
-  $('textoProgresso').textContent = 'Carregando…';
-  const p = (msg, frac) => {
-    $('textoProgresso').textContent = msg;
-    $('barraProgresso').style.width = `${Math.round((frac || 0) * 100)}%`;
-  };
-  try {
-    await tarefa(p);
-  } catch (err) {
-    if (err?.name === 'AbortError') return;
-    console.error(err);
-    $('textoErro').textContent = err.message || String(err);
-    $('erro').hidden = false;
-  } finally {
-    if (cargaId === sequenciaCarga) caixa.hidden = true;
-  }
-}
+
 
 iniciar();
 instalarPonteSimulador(aplicarVolume, fecharFolhas);

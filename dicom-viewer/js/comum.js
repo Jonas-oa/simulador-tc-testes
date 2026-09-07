@@ -205,3 +205,44 @@ export async function arquivosDoDrop(dt) {
   for (const e of entradas) await percorrer(e);
   return saida;
 }
+
+// ---------------------------------------------------------------------------
+// Gerenciamento de Carga e Progresso UI
+// ---------------------------------------------------------------------------
+let sequenciaCarga = 0;
+let controladorCarga = null;
+
+export function novaCarga() {
+  if (controladorCarga) controladorCarga.abort();
+  controladorCarga = new AbortController();
+  const id = ++sequenciaCarga;
+  return { id, sinal: controladorCarga.signal, atual: () => id === sequenciaCarga };
+}
+
+export async function comProgresso(tarefa, cargaId) {
+  const $ = (id) => document.getElementById(id);
+  const caixa = $('carregando');
+  const barra = $('barraProgresso');
+  const texto = $('textoProgresso');
+  if (caixa) caixa.hidden = false;
+  if (barra) barra.style.width = '0%';
+  if (texto) texto.textContent = 'Carregando…';
+  
+  const p = (msg, frac) => {
+    if (texto) texto.textContent = msg;
+    if (barra) barra.style.width = `${Math.round((frac || 0) * 100)}%`;
+  };
+  
+  try {
+    await tarefa(p);
+  } catch (err) {
+    if (err?.name === 'AbortError') return;
+    console.error(err);
+    if ($('textoErro')) $('textoErro').textContent = err.message || String(err);
+    if ($('erro')) $('erro').hidden = false;
+  } finally {
+    if ((cargaId === undefined || cargaId === sequenciaCarga) && caixa) {
+      caixa.hidden = true;
+    }
+  }
+}

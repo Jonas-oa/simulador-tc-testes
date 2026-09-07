@@ -11,6 +11,7 @@ import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset,
   carregarManifesto as buscarManifesto, urlsDaSerie, arquivosDoDrop,
   criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
+  novaCarga, comProgresso
 } from './comum.js?v=20260907ah';
 
 const $ = (id) => document.getElementById(id);
@@ -51,16 +52,6 @@ window.__leitor = {
 let render3d = null;
 let manifesto = [];
 let anim3d = null;
-let sequenciaCarga = 0;
-let controladorCarga = null;
-
-function novaCarga() {
-  controladorCarga?.abort();
-  controladorCarga = new AbortController();
-  const id = ++sequenciaCarga;
-  return { id, sinal: controladorCarga.signal, atual: () => id === sequenciaCarga };
-}
-
 // ---------------------------------------------------------------------------
 function iniciar() {
   viewports = [
@@ -551,29 +542,7 @@ function escolherSerie(series) {
 }
 
 // ---------------------------------------------------------------------------
-async function comProgresso(tarefa, cargaId = sequenciaCarga) {
-  const caixa = $('carregando');
-  const barra = $('barraProgresso');
-  const texto = $('textoProgresso');
-  caixa.hidden = false;
-  barra.style.width = '0%';
-  texto.textContent = 'Carregando…';
-  const p = (msg, frac) => {
-    texto.textContent = msg;
-    barra.style.width = `${Math.round((frac || 0) * 100)}%`;
-  };
-  try {
-    await tarefa(p);
-  } catch (err) {
-    if (err?.name === 'AbortError') return;
-    console.error(err);
-    $('textoErro').textContent = err.message || String(err);
-    $('erro').hidden = false;
-  } finally {
-    if (cargaId === sequenciaCarga) caixa.hidden = true;
-  }
-}
-
+// ---------------------------------------------------------------------------
 iniciar();
 instalarPonteSimulador(aplicarVolume);
 

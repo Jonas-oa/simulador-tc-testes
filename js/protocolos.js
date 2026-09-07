@@ -1,4 +1,4 @@
-﻿/**
+/**
  * js/protocolos.js
  * Simulador Educacional de TC — Tela de Protocolos.
  *
@@ -488,11 +488,10 @@
     function renderComparacao() {
       if (!cmpCorpo) return;
       var a = byId(currentId), b = byId(cmpSel && cmpSel.value);
-      if (!a || !b) { cmpCorpo.innerHTML = "<p class=\"ws-note\">Escolha um protocolo para comparar.</p>"; return; }
+      if (!a || !b) { cmpCorpo.replaceChildren(SimTC.ui.campo.vazio("Escolha um protocolo para comparar.", "ws-note")); return; }
       var difs = Gestor().comparar(normalizado(a), normalizado(b));
       if (!difs.length) {
-        cmpCorpo.innerHTML = "<p class=\"ws-note\">Os dois protocolos coincidem em todos os " +
-          "parametros que governam a aquisicao.</p>";
+        cmpCorpo.replaceChildren(SimTC.ui.campo.vazio("Os dois protocolos coincidem em todos os parâmetros que governam a aquisição.", "ws-note"));
         return;
       }
       var mostra = function (v, u) {
@@ -500,17 +499,17 @@
         if (v === true) return "ligado"; if (v === false) return "desligado";
         return String(v).replace(".", ",") + (u ? " " + u : "");
       };
-      var html = "<table class=\"proto-cmp__tab\"><thead><tr>" +
-        "<th>Parâmetro</th><th>" + esc(a.nome) + "</th><th>" + esc(b.nome) + "</th>" +
-        "</tr></thead><tbody>";
-      difs.forEach(function (d) {
-        html += "<tr><th scope=\"row\">" + esc(d.rotulo) + "</th><td>" +
-          mostra(d.de, d.unidade) + "</td><td class=\"is-dif\">" +
-          mostra(d.para, d.unidade) + "</td></tr>";
+      var linhas = difs.map(function (d) {
+        return {
+          parametro: d.rotulo,
+          valorA: mostra(d.de, d.unidade),
+          valorB: mostra(d.para, d.unidade),
+          temDiferenca: true
+        };
       });
-      html += "</tbody></table><p class=\"ws-note\">" + difs.length +
-        " diferença(s). O que não aparece aqui é igual nos dois.</p>";
-      cmpCorpo.innerHTML = html;
+      var tabela = SimTC.ui.lista.tabelaComparacao("Parâmetro", a.nome, b.nome, linhas);
+      var aviso = SimTC.ui.campo.vazio(difs.length + " diferença(s). O que não aparece aqui é igual nos dois.", "ws-note");
+      cmpCorpo.replaceChildren(tabela, aviso);
     }
 
     // Escape de HTML — em js/shared.js. A copia que existia aqui nao escapava
@@ -575,18 +574,19 @@
     if (btnDup) btnDup.addEventListener("click", function () {
       var p = byId(currentId);
       if (!p) return;
-      var nome = window.prompt("Nome da cópia:", p.nome + " (cópia)");
-      if (nome === null) return;
-      nome = nome.trim(); if (!nome) return;
-      var copia = Gestor().duplicar(normalizado(p), { nome: nome });
+      SimTC.pedirEntrada("Nome da cópia:", p.nome + " (cópia)").then(function (nome) {
+        if (nome === null) return;
+        nome = nome.trim(); if (!nome) return;
+        var copia = Gestor().duplicar(normalizado(p), { nome: nome });
       copia.nome = nome;
       copia.regiao = p.regiao;
       copia.favorito = false;
       protocols.push(copia);
-      persist(copia).then(function () {
-        selectProtocol(copia.id);
-        SimTC.showMessage("Cópia \"" + nome + "\" criada e destravada. " +
-          "O protocolo de referência continua intacto.", "success");
+        persist(copia).then(function () {
+          selectProtocol(copia.id);
+          SimTC.showMessage("Cópia \"" + nome + "\" criada e destravada. " +
+            "O protocolo de referência continua intacto.", "success");
+        });
       });
     });
 
@@ -616,10 +616,13 @@
           "Duplique este e altere um parâmetro.", "info");
         return;
       }
-      cmpSel.innerHTML = outros.map(function (x) {
-        return "<option value=\"" + esc(x.id) + "\">" + esc(x.nome) +
-               " · " + esc(x.regiao) + "</option>";
-      }).join("");
+      cmpSel.replaceChildren();
+      outros.forEach(function (x) {
+        var opt = document.createElement("option");
+        opt.value = x.id;
+        opt.textContent = x.nome + " · " + x.regiao;
+        cmpSel.appendChild(opt);
+      });
       cmpBox.hidden = false;
       renderComparacao();
     });
@@ -712,11 +715,12 @@
     });
     if (btnNew) btnNew.addEventListener("click", function () {
       if (!currentRegion) { SimTC.showMessage("Selecione uma região no modelo primeiro.", "warning"); return; }
-      var nome = window.prompt("Nome do novo protocolo (" + currentRegion + "):", "");
-      if (nome === null) return; nome = nome.trim(); if (!nome) return;
-      var novo = blank("p_" + Date.now(), nome, currentRegion);
-      protocols.push(novo);
-      persist(novo).then(function () { selectProtocol(novo.id); openEditor(); });
+      SimTC.pedirEntrada("Nome do novo protocolo (" + currentRegion + "):", "").then(function (nome) {
+        if (nome === null) return; nome = nome.trim(); if (!nome) return;
+        var novo = blank("p_" + Date.now(), nome, currentRegion);
+        protocols.push(novo);
+        persist(novo).then(function () { selectProtocol(novo.id); openEditor(); });
+      });
     });
 
     for (var z = 0; z < zones.length; z++) {

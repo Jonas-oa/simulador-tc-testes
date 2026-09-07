@@ -51,17 +51,20 @@
     function renderSeq(phase) {
       if (!seqEl) return;
       phase = ORDER.indexOf(phase) >= 0 ? phase : "idle";
-      var html = "";
-      STEPS.forEach(function (s, i) {
+      
+      var items = STEPS.map(function (s, i) {
         var st = stepState(s, phase);
         var label = st === "active" ? "em curso" : (st === "done" ? "concluído" : "aguardando");
-        html += '<li class="acq-step is-' + st + '">' +
-          '<span class="acq-step__num">' + (st === "done" ? "✓" : (i + 1)) + '</span>' +
-          '<span class="acq-step__body"><span class="acq-step__name">' + s.name + '</span>' +
-          '<span class="acq-step__sub">' + stepSub(s) + '</span></span>' +
-          '<span class="acq-step__state">' + label + '</span></li>';
+        return SimTC.ui.lista.passoDeAquisicao(
+          st === "done" ? "✓" : (i + 1),
+          s.name,
+          stepSub(s),
+          st,
+          label
+        );
       });
-      seqEl.innerHTML = html;
+      
+      seqEl.replaceChildren.apply(seqEl, items);
     }
 
     function dirTxt(d) {
@@ -75,36 +78,29 @@
       var p = (SimTC.examProtocol && SimTC.examProtocol.data) || null;
       var html = "";
       if (!p) {
-        paramsEl.innerHTML = '<p class="acq-params__empty">Nenhum protocolo selecionado.</p>';
+        paramsEl.replaceChildren(SimTC.ui.campo.vazio("Nenhum protocolo selecionado."));
         return;
       }
-      // O painel lê o modelo TIPADO e formata na hora, com unidade. Antes lia
-      // os campos planos em texto e repetia o que estivesse gravado — inclusive
-      // "≈55 mGy (ref.)" no lugar de um CTDIvol, e um pitch ao lado de
-      // "sequencial". A dose saiu daqui: ela é calculada e aparece na
-      // confirmação, com a faixa do exame, que é o que ela depende.
+      
       var n = window.SimTCCore.model.normalizarProtocolo(p);
       var aq = n.aquisicao, r = n.reconstrucoes[0] || {};
-      // Formatacao: js/ui/formatar.js. Este painel tinha a sua propria, e
-      // era a UNICA tela que ja escrevia com virgula — o resto do app dizia
-      // "87.0 mGy" com ponto. Agora e uma convencao so.
       var F = SimTC.fmt;
-      var rows = [
-        ["kV", F.n(aq.kv)], ["mAs", F.n(aq.mas)],
-        ["Pitch", aq.modo === "sequencial" ? "não se aplica" : F.n(aq.pitch)],
-        ["FOV", F.mm(r.fovMm, 0)],
-        ["Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " + F.mm(aq.colimacao.larguraMm)) : null],
-        ["Esp. corte", F.mm(r.espessuraMm)],
-        ["Kernel", r.kernel], ["Rotação", F.s(aq.tempoRotacaoS)],
-        ["Modo", modoTxt(aq.modo)], ["Tilt", F.graus(aq.tiltGantryDeg)]
+      
+      var campos = [
+        SimTC.ui.campo.par("kV", F.n(aq.kv)),
+        SimTC.ui.campo.par("mAs", F.n(aq.mas)),
+        SimTC.ui.campo.par("Pitch", aq.modo === "sequencial" ? "não se aplica" : F.n(aq.pitch)),
+        SimTC.ui.campo.par("FOV", F.mm(r.fovMm, 0)),
+        SimTC.ui.campo.par("Colimação", aq.colimacao ? (aq.colimacao.nDetectores + " × " + F.mm(aq.colimacao.larguraMm)) : null),
+        SimTC.ui.campo.par("Esp. corte", F.mm(r.espessuraMm)),
+        SimTC.ui.campo.par("Kernel", r.kernel),
+        SimTC.ui.campo.par("Rotação", F.s(aq.tempoRotacaoS)),
+        SimTC.ui.campo.par("Modo", modoTxt(aq.modo)),
+        SimTC.ui.campo.par("Tilt", F.graus(aq.tiltGantryDeg)),
+        SimTC.ui.campo.par("Direção", dirTxt(aq.direcao), "acq-param", true)
       ];
-      rows.forEach(function (linha) {
-        html += '<div class="acq-param"><span class="acq-param__k">' + linha[0] + '</span>' +
-          '<span class="acq-param__v">' + (linha[1] ? esc(linha[1]) : "—") + '</span></div>';
-      });
-      html += '<div class="acq-param acq-param--full"><span class="acq-param__k">Direção</span>' +
-        '<span class="acq-param__v">' + dirTxt(aq.direcao) + '</span></div>';
-      paramsEl.innerHTML = html;
+      
+      paramsEl.replaceChildren.apply(paramsEl, campos);
     }
 
     var curPhase = "idle";

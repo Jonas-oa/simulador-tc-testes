@@ -1,4 +1,4 @@
-﻿/**
+/**
  * js/sala-exame.js
  * Simulador Educacional de TC — Sala de Exame (cena 3D + controles fisicos).
  *
@@ -209,26 +209,14 @@
       //   - Paciente: abdome ~z+0.15, tórax ~z+0.36, cabeça ~z+0.75.
       //   - tableZ = -0.96 leva o tórax ao isocentro; -1.35 leva a cabeça.
       // -----------------------------------------------------------
-      var TABLE_Y_MIN = 0.50;   // altura mínima mecânica FORA do gantry (m)
-      var TABLE_Y_MAX = 0.88;   // altura máxima geral (dentro e fora do gantry) — 88 cm
-      var GANTRY_Y_MIN = 0.64;  // altura mínima permitida DENTRO do gantry — 64 cm
-      var GANTRY_Y_MAX = 0.88;  // altura máxima permitida DENTRO do gantry — 88 cm
-      var TABLE_Z_MAX = 0.90;                        // totalmente retraída (paciente fora, à frente do gantry)
-      var TABLE_Z_MIN = -1.10;                       // inserção máxima — permite tórax/abdome/cabeça no isocentro
-      var BORE_SAFE_Z = 0.20;                        // ponto (m) em que a ponta da mesa cruza a face do gantry
-      // Faixa de altura segura para permanecer/entrar no bore. O furo do
-      // gantry (raio 40 cm / diâmetro 80 cm, em torno do isocentro de
-      // 80 cm) comporta com folga toda a faixa mecânica da mesa, então a
-      // faixa segura é a própria faixa completa de altura (50–100 cm).
-      // Faixa de altura permitida DENTRO do gantry: 64 a 88 cm.
+      var FisicaMesa = SimTC.FisicaMesa;
+      var GANTRY_Y_MIN = 0.64;
+      var GANTRY_Y_MAX = 0.88;
+      var TABLE_Z_MAX = 0.90;
+      var TABLE_Z_MIN = -1.10;
+      var BORE_SAFE_Z = 0.20;
       var SAFE_Y_MIN = GANTRY_Y_MIN, SAFE_Y_MAX = GANTRY_Y_MAX;
-
-      // Meia-espessura do paciente (do topo do tampo ao centro do corpo).
-      // Usada para calcular o alinhamento do isocentro.
-      var PATIENT_HALF_THICKNESS = 0.12; // 12 cm (espessura média ~24 cm)
-
-      var tableY = 0.80; // inicia na altura do isocentro
-      var tableZ = TABLE_Z_MAX; // inicia totalmente retraída (fora do gantry)
+      var PATIENT_HALF_THICKNESS = 0.12;
 
       // -----------------------------------------------------------
       // Suporte da mesa — estilo Somatom (base retangular escalonada):
@@ -458,7 +446,7 @@
       standPatient();
 
       function applyTablePose() {
-        tableGroup.position.set(0, tableY, tableZ);
+        tableGroup.position.set(0, FisicaMesa.getY(), FisicaMesa.getZ());
 
         // Coluna-pistão: liga o topo da base fixa (BASE_FIXED_TOP, em
         // coordenadas do baseGroup, cuja origem está no piso) ao nível do
@@ -467,7 +455,7 @@
         // A coluna vai de BASE_FIXED_TOP até tableY; seu comprimento e
         // centro são recalculados a cada movimento (efeito pistão).
         var columnBottom = BASE_FIXED_TOP;
-        var columnTop = tableY - 0.02; // encosta logo abaixo do tampo
+        var columnTop = FisicaMesa.getY() - 0.02; // encosta logo abaixo do tampo
         var columnLen = Math.max(0.05, columnTop - columnBottom);
         column.scale.y = columnLen;
         column.position.y = columnBottom + columnLen / 2;
@@ -484,7 +472,7 @@
         var carriageFrontZ = (GANTRY_FACE_Z - 0.9);    // até a face do gantry
         var carriageLen = Math.max(0.3, carriageBackZ - carriageFrontZ);
         carriage.scale.z = carriageLen / 1.0; // geometria base tem 1.0 de profundidade
-        carriage.position.set(0, tableY - 0.10, carriageBackZ - carriageLen / 2);
+        carriage.position.set(0, FisicaMesa.getY() - 0.10, carriageBackZ - carriageLen / 2);
       }
       applyTablePose();
 
@@ -1081,141 +1069,27 @@
         gantryGroup.position.set(0, P.y - ry, P.z - rz);
       }
 
-      function abortAutoDrive(motivo) {
-        if (!autoDrive) return;
-        var ad = autoDrive;
-        autoDrive = null;
-        setSpin(0);
-        if (ad.onAbort) ad.onAbort(motivo || "Aquisição interrompida.");
-      }
-
-      SimTC.contratos.declarar("tableDriveApi", {
-        isPatientOnTable: function () { return !!patientPlaced; },
-        isBusy: function () { return !!autoDrive; },
-        // opts: { distanceMm, direction: "in"|"out", speedMmS, rotTimeS (0 = topograma), onProgress, onDone, onAbort }
-        start: function (opts) {
-          if (autoDrive) return { ok: false, motivo: "Já existe uma aquisição em andamento." };
-          var dist = Math.max(0.01, (opts.distanceMm || 0) / 1000);
-          var dir = (opts.direction === "in") ? -1 : 1;
-          var target = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, tableZ + dir * dist));
-          var travel = Math.abs(target - tableZ);
-          if (travel < dist * 0.98) {
-            // Curso insuficiente NA DIREÇÃO programada. Antes isto era só uma
-            // recusa, e era um beco sem saída: num protocolo caudocranial a
-            // mesa SAI enquanto varre, e a partir do repouso (totalmente
-            // recuada) não existe curso nenhum para fora — o exame recusava
-            // sempre, e o aluno tinha de adivinhar quantos milímetros avançar
-            // antes de tentar de novo.
-            //
-            // Um tomógrafo real não age assim: posicionar a mesa no início da
-            // varredura é parte do início da varredura. Então, quando dá para
-            // ganhar o curso movendo no sentido contrário, o console POSICIONA
-            // e emenda a aquisição — dizendo o que fez, para que continue
-            // sendo uma lição sobre curso de mesa e não uma mágica.
-            //
-            // Só quem VARRE pede isso (`posicionarAntes: true`). Um comando de
-            // posicionamento — o MOVER, o avanço entre cortes do sequencial —
-            // já É o posicionamento: pré-posicioná-lo criava um movimento a
-            // mais e fazia o guardião da faixa acusar que ela mudou sozinha.
-            var faltamMm = Math.round((dist - travel) * 1000);
-            var acao = (dir < 0) ? "out" : "in";
-            var partida = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, target - dir * dist));
-            var cursoDaPartida = Math.abs(
-              Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, partida + dir * dist)) - partida);
-
-            if (opts.posicionarAntes === true && cursoDaPartida >= dist * 0.98) {
-              var deslocMm = Math.round(Math.abs(partida - tableZ) * 1000);
-              SimTC.showMessage(
-                "Mesa posicionada " + deslocMm + " mm " +
-                (partida < tableZ ? "para dentro" : "para fora") +
-                " do gantry para acomodar a varredura de " + Math.round(dist * 1000) +
-                " mm. A aquisição começa em seguida.", "info");
-              moveUp = moveDown = moveIn = moveOut = false;
-              var opcoesDaVarredura = opts;
-              autoDrive = {
-                targetZ: partida,
-                startZ: tableZ,
-                speed: Math.max(0.02, SPEED_Z),   // reposicionar é rápido: não é varredura
-                onProgress: null,
-                onAbort: opts.onAbort || null,
-                onDone: function () {
-                  // Emenda a varredura de verdade, agora com curso disponível.
-                  var seg = {};
-                  for (var k in opcoesDaVarredura) {
-                    if (Object.prototype.hasOwnProperty.call(opcoesDaVarredura, k)) {
-                      seg[k] = opcoesDaVarredura[k];
-                    }
-                  }
-                  seg.posicionarAntes = false;
-                  var r2 = SimTC.tableDriveApi.start(seg);
-                  // Se ainda assim faltar curso, o operador precisa saber —
-                  // silêncio aqui deixaria o exame parado sem explicação.
-                  if (!r2 || !r2.ok) {
-                    SimTC.showMessage("Não foi possível iniciar após posicionar: " +
-                      ((r2 && r2.motivo) || "curso indisponível"), "warning");
-                    if (opcoesDaVarredura.onAbort) {
-                      opcoesDaVarredura.onAbort((r2 && r2.motivo) || "curso indisponível");
-                    }
-                  }
-                }
-              };
-              setSpin(0);
-              // `startZ` e a posicao onde a VARREDURA comeca — depois do
-              // posicionamento, nao antes. Quem chama guarda isso como
-              // referencia do topograma; devolver a posicao atual faria o
-              // inicio da faixa cair fora do curso da mesa.
-              return { ok: true, posicionando: true,
-                       deslocamentoMm: deslocMm, startZ: partida };
-            }
-
-            return {
-              ok: false,
-              acao: acao,
-              faltamMm: faltamMm,
-              motivo: "Curso insuficiente: faltam " + faltamMm + " mm " +
-                (dir < 0 ? "para dentro do gantry" : "para fora do gantry") + ". " +
-                (acao === "out"
-                  ? "Use SAIR para recuar a mesa e ganhar curso antes de iniciar."
-                  : "Use ENTRAR para avançar a mesa e ganhar curso antes de iniciar.")
-            };
-          }
-          // Segurança: um comando manual que esteja pressionado no momento em
-          // que a aquisição começa fica suspenso durante o autoDrive e, sem
-          // isto, VOLTA A VALER assim que o scan termina — a mesa arranca
-          // sozinha, sem ação do operador. Zerar aqui obriga uma nova pressão.
-          moveUp = moveDown = moveIn = moveOut = false;
-
-          var startZ0 = tableZ;
-          autoDrive = {
-            targetZ: target,
-            startZ: startZ0,
-            speed: Math.max(0.005, (opts.speedMmS || 50) / 1000),
-            onProgress: opts.onProgress || null,
-            onDone: opts.onDone || null,
-            onAbort: opts.onAbort || null
-          };
-          setSpin(opts.rotTimeS || 0);
-          if (displayStatusEl) {
-            displayStatusEl.textContent = opts.label || (opts.rotTimeS > 0 ? "AQUISIÇÃO HELICOIDAL" : "TOPOGRAMA");
-          }
-          return { ok: true, startZ: startZ0, targetZ: target };
-        },
-        getPos: function () { return tableZ; },
-        // Deslocamento vertical (cm) do eixo do paciente em relação ao
-        // isocentro. Física (AAPM): no topograma LATERAL, fora do
-        // isocentro = magnificação e erro no cálculo automático de dose.
+      SimTC.tableDriveApi = {
+        in: function () { FisicaMesa.setCmd("in", true); },
+        out: function () { FisicaMesa.setCmd("out", true); },
+        up: function () { FisicaMesa.setCmd("up", true); },
+        down: function () { FisicaMesa.setCmd("down", true); },
+        stopIn: function () { FisicaMesa.setCmd("in", false); },
+        stopOut: function () { FisicaMesa.setCmd("out", false); },
+        stopUp: function () { FisicaMesa.setCmd("up", false); },
+        stopDown: function () { FisicaMesa.setCmd("down", false); },
+        zerarMesa: function () { FisicaMesa.zerarMesa(); applyTablePose(); },
+        start: function (opts) { return FisicaMesa.iniciarVarredura(opts); },
+        getPos: function () { return FisicaMesa.getZ(); },
         getIsoOffsetCm: function () {
           if (!patientPlaced) return null;
           var v = new THREE.Vector3();
           patientPose.getWorldPosition(v);
           return (v.y - ISO_Y) * 100;
         },
-        stop: function () { abortAutoDrive("Aquisição interrompida pela workstation."); },
-        // Realça por alguns segundos o comando de mesa que resolve um impasse
-        // ("in" = ENTRAR, "out" = SAIR). Usado quando a aquisição é recusada
-        // por falta de curso, para que a orientação textual tenha um alvo.
+        stop: function () { FisicaMesa.abortAutoDrive("Aquisição interrompida pela workstation."); },
         hintControl: function (acao) {
-          var alvo = (acao === "in") ? btnIn : (acao === "out") ? btnOut : null;
+          var alvo = (acao === "in") ? document.getElementById("btn-in") : (acao === "out") ? document.getElementById("btn-out") : null;
           if (!alvo) return;
           if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
           if (hintEl) hintEl.classList.remove("is-hint");
@@ -1226,11 +1100,24 @@
             hintTimer = null; hintEl = null;
           }, 6000);
         },
-        // Inclina o gantry (graus) — visual do tilt de protocolo.
         setGantryTilt: function (deg) { setGantryTilt(deg); },
-        // Liga/desliga o arco de varredura girando SEM mover a mesa (usado no
-        // step-and-shoot: aquisição com a mesa parada entre os passos).
         setScan: function (rotTimeS) { setSpin(rotTimeS || 0); }
+      };
+
+      FisicaMesa.setViewCallbacks({
+        onMove: function (y, z) {
+          applyTablePose();
+          avisarNucleoDaMesa();
+        },
+        onAlert: function (msg) {
+          SimTC.showMessage(msg, "warning");
+        },
+        onSpinSet: function (rotTimeS) {
+          setSpin(rotTimeS || 0);
+        },
+        onUpdateReadout: function (speedMmS) {
+          updateReadouts(speedMmS);
+        }
       });
 
       // -----------------------------------------------------------
@@ -1252,85 +1139,10 @@
       var ultimoAlerta = "";
 
       function passoFisica(dt) {
-        // dt vem do relógio de passo fixo — não se mede mais o tempo aqui.
-
-        var nextY = tableY, nextZ = tableZ;
-        alertStatus = "";
-
-        // Contexto: a mesa está (ou vai ficar) dentro do gantry?
-        var isInsideBore = tableZ < BORE_SAFE_Z;
-
-        // Limites de altura dependem do contexto:
-        //   • Dentro do gantry: 64–88 cm (GANTRY_Y_MIN/MAX)
-        //   • Fora do gantry:   50–88 cm (TABLE_Y_MIN / TABLE_Y_MAX)
-        var yMin = isInsideBore ? GANTRY_Y_MIN : TABLE_Y_MIN;
-        var yMax = isInsideBore ? GANTRY_Y_MAX : TABLE_Y_MAX;
-
-        if (autoDrive) {
-          // Aquisição em curso: a MESA é comandada pelo protocolo (topograma
-          // ou helicoidal). Comandos manuais ficam suspensos; o Stop físico
-          // ou o Stop da workstation abortam.
-          var adDir = (autoDrive.targetZ >= tableZ) ? 1 : -1;
-          nextZ = tableZ + adDir * autoDrive.speed * dt;
-          if ((adDir > 0 && nextZ >= autoDrive.targetZ) || (adDir < 0 && nextZ <= autoDrive.targetZ)) {
-            nextZ = autoDrive.targetZ;
-          }
-          nextZ = Math.max(TABLE_Z_MIN, Math.min(TABLE_Z_MAX, nextZ));
-        } else {
-          if (moveUp) nextY = Math.min(yMax, tableY + SPEED_Y * dt);
-          if (moveDown) nextY = Math.max(yMin, tableY - SPEED_Y * dt);
-          if (moveIn) nextZ = Math.max(TABLE_Z_MIN, tableZ - SPEED_Z * dt);
-          if (moveOut) nextZ = Math.min(TABLE_Z_MAX, tableZ + SPEED_Z * dt);
-        }
-
-        // Intertravamento de entrada: só permite entrar no gantry se a
-        // altura estiver dentro da faixa segura (64–88 cm), evitando
-        // colisão com a estrutura do bore.
-        var willEnterBore = nextZ < BORE_SAFE_Z && tableZ >= BORE_SAFE_Z;
-        var isHeightSafe = nextY >= GANTRY_Y_MIN && nextY <= GANTRY_Y_MAX;
-
-        if (willEnterBore && !isHeightSafe) {
-          nextZ = tableZ;
-          alertStatus = "ALTURA INCOMPATÍVEL para entrada no gantry (ajuste para 64–88 cm)";
-        }
-
-        var moved = tableY !== nextY || tableZ !== nextZ;
-        if (moved) {
-          tableY = nextY;
-          tableZ = nextZ;
-          applyTablePose();
-          avisarNucleoDaMesa();
-        }
-
-        var anyMoveFlag = moveUp || moveDown || moveIn || moveOut;
-        SimTC.setIndicator("motion", (anyMoveFlag || !!autoDrive) && moved);
-
-        if (autoDrive) {
-          var ad = autoDrive;
-          if (alertStatus) {
-            // Intertravamento bloqueou (ex.: altura incompatível na entrada)
-            autoDrive = null; setSpin(0);
-            if (ad.onAbort) ad.onAbort(alertStatus);
-          } else {
-            var span = Math.abs(ad.targetZ - ad.startZ);
-            var prog = span > 0 ? Math.min(1, Math.abs(tableZ - ad.startZ) / span) : 1;
-            if (ad.onProgress) ad.onProgress(prog, tableZ);
-            if (tableZ === ad.targetZ) {
-              autoDrive = null; setSpin(0);
-              if (ad.onDone) ad.onDone();
-            }
-          }
-        }
-
+        FisicaMesa.passoFisica(dt);
         if (spinRotTime > 0) {
           spinArc.rotation.z -= (Math.PI * 2 / spinRotTime) * dt;
         }
-
-        if (alertStatus && alertStatus !== ultimoAlerta) {
-          SimTC.showMessage(alertStatus, "warning");
-        }
-        ultimoAlerta = alertStatus;
-
         var speedMmS = 0;
         if (autoDrive) speedMmS = autoDrive.speed * 1000;
         else if (moveIn || moveOut) speedMmS = SPEED_Z * 1000;
