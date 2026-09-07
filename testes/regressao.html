@@ -90,8 +90,9 @@
   //     P1-04b DLP do arquivo             P1-06 excluir paciente no exame
   //     P1-08 teclado nos comandos de mesa
   //   Os três que restam têm etapa marcada no plano; não são esquecimento.
+  //   ETAPA 3 (07/09/2026) corrigiu e tirou daqui:
+  //     P1-05 o MPR interno de 8 bits
   var PENDENTES = new Set([
-    "P1-05",   // ETAPA 3 — matar o MPR interno de 8 bits
     "P1-07",   // ETAPA 5 — protocolo tipado de ponta a ponta
     "P1-09"    // ETAPA 5 — depende do protocolo tipado
   ]);
@@ -177,6 +178,21 @@
     alvo.dispatchEvent(new M("click", { bubbles: true }));
     await ate(function () { return W().SimTC.examProtocol && W().SimTC.examProtocol.data; },
       "o protocolo ser selecionado", 8000);
+
+    // FOV largo o bastante para conter o paciente, SÓ EM MEMÓRIA.
+    //
+    // O catálogo de referência traz "220–250 mm" no crânio, e o motor de
+    // validação recusa isso com razão: 220 mm é menor que a largura do
+    // paciente no volume, e o que fica fora do FOV não é reconstruído. Com o
+    // ERRO em pé, a confirmação trava o botão e o exame da fase C nunca sai —
+    // os testes que dependem dele falhariam por um motivo que não é o deles.
+    //
+    // A suíte também não pode depender do FOV que o usuário tem salvo: ele é
+    // editável, e um teste que muda de resultado conforme o banco da máquina
+    // não serve de rede de segurança. Então o valor é ajustado aqui, no objeto
+    // em memória. Não há `persist()` no caminho, e o app é recarregado entre
+    // as fases: nada disso chega ao banco.
+    W().SimTC.examProtocol.data.fov = "400 mm";
   }
 
   /** Adquire o topograma e leva a mesa ao início da faixa. */

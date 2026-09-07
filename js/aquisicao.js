@@ -141,8 +141,6 @@
     var lastAcq = null; // parâmetros da última aquisição (p/ relatório)
     // MPR: plano de exibição atual e volume reconstruído da pilha axial.
     var plane = "axial";
-    var vol = null; // { W, H, Z, slices:[Uint8Array], spX, spY, spZ }
-    var mprCache = {}; // dataURL por plano+índice (evita reconstruir a cada tick)
 
     // Recusa da mesa: além da mensagem, realça o comando que resolve o
     // impasse (ENTRAR/SAIR), para que a orientação tenha um alvo visível.
@@ -494,11 +492,15 @@
     // Volume: rótulos por plano de exibição, convenção radiológica anatômica
     // (axial visto pelos pés → Direita do paciente à ESQUERDA da imagem).
     function updateVolOrient() {
-      // Geometria dos reformats (buildReformat): coronal = x(R-L) × Z(CC);
-      // sagital = Z(CC, horizontal) × y(A-P, vertical). Rótulos batem com os
-      // pixels gerados.
+      // Geometria das reformatações (js/motor-imagem.js): nos DOIS planos o
+      // eixo vertical é o crânio-caudal, com a cabeça em cima — coronal =
+      // x(D-E) na horizontal, sagital = y(A-P) na horizontal.
+      //
+      // O sagital antes saía deitado, com a cabeça apontando para o lado: era
+      // consequência de como o volume de 8 bits era montado, não uma escolha.
+      // Um perfil se lê de cabeça para cima.
       if (plane === "coronal") setOrientLabels("ws-vol-orient", "Cabeça", "Pés", "D", "E");
-      else if (plane === "sagital") setOrientLabels("ws-vol-orient", "A", "P", "Cabeça", "Pés");
+      else if (plane === "sagital") setOrientLabels("ws-vol-orient", "Cabeça", "Pés", "A", "P");
       else setOrientLabels("ws-vol-orient", "A", "P", "D", "E"); // axial
     }
     function showVolOrient(v) {
@@ -704,7 +706,7 @@
       counter.textContent = "—";
       topoImg.style.clipPath = "";
       // Descarta o volume/reformatações e volta o viewer ao plano axial.
-      plane = "axial"; vol = null; mprCache = {};
+      plane = "axial";
       if (SimTC.MotorImagem) { SimTC.MotorImagem.abortar(); SimTC.MotorImagem.limpar(); }
       motorPromessa = null; motorErro = null;
       renderSeletorSeries();
@@ -1191,109 +1193,30 @@
       }
     }
 
-    // ---- RECONSTRUÇÃO + MPR (reformatações coronal/sagital) ----
-    // Após a aquisição, monta um volume a partir da pilha axial (desenhando
-    // cada PNG num canvas offscreen e lendo os pixels), permitindo cortar o
-    // volume em coronal e sagital no navegador — sem novos assets. Se algo
-    // falhar (canvas "tainted", memória), segue só com o axial.
+    // ---- MPR: reformatacoes coronal e sagital ----
+    // A reformatacao mora em js/motor-imagem.js, junto da serie: e de la que
+    // sai o Int16Array com os HU reconstruidos, o pixelMm e o incrementoMm.
+    // Aqui ficou so a tela.
+    //
+    // Havia aqui um caminho que remontava um volume de 8 bits a partir dos PNG
+    // ja janelados de cada corte, percorrendo os cortes do VOLUME-FONTE em vez
+    // dos da serie. Foi removido: apagou 90 linhas, o cache proprio, a leitura
+    // de espacamento com valores fixos herdados de outro acervo, e a
+    // discordancia de tamanho entre os tres consumidores do coronal.
     var planeEl = document.getElementById("ws-plane");
-    function spacing() {
-      var sp = (manifest && manifest.espacamento_mm) || {};
-      return { x: +sp.x || 0.4297, y: +sp.y || 0.4297, z: +sp.z || 2.528 };
-    }
-    function buildVolume(done) {
-      try {
-        var Z = manifest.cortes;
-        var W = 256; // subamostragem para caber em memória e ser fluido
-        var scale = W / (manifest.largura || 512);
-        var H = Math.max(1, Math.round((manifest.altura || 507) * scale));
-        var cvs = document.createElement("canvas"); cvs.width = W; cvs.height = H;
-        var cx = cvs.getContext("2d", { willReadFrequently: true });
-        var slices = new Array(Z);
-        var loadedN = 0, failed = false;
-        for (var z = 0; z < Z; z++) {
-          (function (z) {
-            var im = new Image();
-            im.onload = function () {
-              try {
-                cx.drawImage(im, 0, 0, W, H);
-                var d = cx.getImageData(0, 0, W, H).data;
-                var g = new Uint8Array(W * H);
-                for (var p = 0, q = 0; p < d.length; p += 4, q++) g[q] = d[p];
-                slices[z] = g;
-              } catch (e) { failed = true; }
-              if (++loadedN === Z) finish();
-            };
-            im.onerror = function () { failed = true; if (++loadedN === Z) finish(); };
-            im.src = srcFor(z);
-          })(z);
-        }
-        function finish() {
-          if (failed) { vol = null; done(false); return; }
-          var sp = spacing();
-          vol = { W: W, H: H, Z: Z, slices: slices, spX: sp.x, spY: sp.y, spZ: sp.z };
-          done(true);
-        }
-      } catch (e) { vol = null; done(false); }
-    }
-    function buildReformat(pl, idx) {
-      if (!vol) return null;
-      var key = pl + ":" + idx;
-      if (mprCache[key]) return mprCache[key];
-      var W = vol.W, H = vol.H, Z = vol.Z;
-      var Xmm = (manifest.largura || 512) * vol.spX;
-      var Ymm = (manifest.altura || 507) * vol.spY;
-      var Zmm = Z * vol.spZ;
-      var raw = document.createElement("canvas"), out = document.createElement("canvas");
-      var url;
-      if (pl === "coronal") {
-        raw.width = W; raw.height = Z;
-        var rc = raw.getContext("2d");
-        var id = rc.createImageData(W, Z);
-        for (var z = 0; z < Z; z++) {
-          var row = Z - 1 - z; // z=0 (base) fica embaixo; vértice no topo
-          var s = vol.slices[z]; if (!s) continue;
-          for (var x = 0; x < W; x++) {
-            var v = s[idx * W + x], o = (row * W + x) * 4;
-            id.data[o] = id.data[o + 1] = id.data[o + 2] = v; id.data[o + 3] = 255;
-          }
-        }
-        rc.putImageData(id, 0, 0);
-        out.width = W; out.height = Math.max(1, Math.round(W * Zmm / Xmm));
-        var oc = out.getContext("2d"); oc.imageSmoothingEnabled = true;
-        oc.drawImage(raw, 0, 0, W, Z, 0, 0, out.width, out.height);
-        url = out.toDataURL();
-      } else { // sagital
-        raw.width = Z; raw.height = H;
-        var rc2 = raw.getContext("2d");
-        var id2 = rc2.createImageData(Z, H);
-        for (var y = 0; y < H; y++) {
-          for (var z2 = 0; z2 < Z; z2++) {
-            var col = Z - 1 - z2;
-            var s2 = vol.slices[z2]; if (!s2) continue;
-            var v2 = s2[y * W + idx], o2 = (y * Z + col) * 4;
-            id2.data[o2] = id2.data[o2 + 1] = id2.data[o2 + 2] = v2; id2.data[o2 + 3] = 255;
-          }
-        }
-        rc2.putImageData(id2, 0, 0);
-        out.width = Math.max(1, Math.round(H * Zmm / Ymm)); out.height = H;
-        var oc2 = out.getContext("2d"); oc2.imageSmoothingEnabled = true;
-        oc2.drawImage(raw, 0, 0, Z, H, 0, 0, out.width, out.height);
-        url = out.toDataURL();
-      }
-      mprCache[key] = url;
-      return url;
+    function temSerie() {
+      return !!(SimTC.MotorImagem && SimTC.MotorImagem.temSeries());
     }
     function planeMax() {
-      if (plane === "coronal") return (vol ? vol.H : 1) - 1;
-      if (plane === "sagital") return (vol ? vol.W : 1) - 1;
-      return (manifest ? manifest.cortes : 1) - 1;
+      if (plane === "axial") return Math.max(0, totalCortes() - 1);
+      var n = temSerie() ? SimTC.MotorImagem.cortesNoPlano(plane) : 0;
+      return Math.max(0, n - 1);
     }
     function showReformat(i) {
-      if (!vol) { show(i); return; }
+      if (!temSerie()) { show(i); return; }
       var maxI = planeMax();
       i = Math.max(0, Math.min(maxI, i | 0));
-      var url = buildReformat(plane, i);
+      var url = SimTC.MotorImagem.reformatar(plane, i);
       if (url) img.src = url;
       slider.value = i;
       counter.textContent = (plane === "coronal" ? "Coronal " : "Sagital ") + (i + 1) + " / " + (maxI + 1);
@@ -1303,7 +1226,7 @@
       else showReformat(i);
     }
     function setPlane(pl) {
-      if (pl !== "axial" && !vol) return; // sem volume, só axial
+      if (pl !== "axial" && !temSerie()) return; // sem série, só axial
       plane = pl;
       if (planeEl) {
         Array.prototype.forEach.call(planeEl.querySelectorAll(".ws-plane__btn"), function (b) {
@@ -1317,14 +1240,16 @@
       updateVolOrient();
     }
 
-    // Passo de RECONSTRUÇÃO entre a aquisição e a revisão. Monta o volume
-    // (habilita coronal/sagital) exibindo "Reconstruindo…"; ao terminar,
-    // segue para a revisão. Falha ao montar → revisão só com axial.
+    // Passo de RECONSTRUÇÃO entre a aquisição e a revisão: espera o motor
+    // terminar, exibindo "Reconstruindo…", e então segue para a revisão.
+    //
+    // Havia aqui um segundo passo, que remontava um volume de 8 bits a partir
+    // dos PNG só para habilitar coronal e sagital. Ele saiu: a série que o
+    // motor acabou de produzir já é o volume, com os HU verdadeiros.
     function toRecon() {
       phase = "recon";
       if (ctrl) ctrl.classList.remove("is-acquiring");
       announcePhase("volAcq"); // painel mantém "Volume" ativo durante a recon
-      mprCache = {};
       slider.disabled = true;
       startBtn.disabled = true; startBtn.textContent = "Reconstruindo…";
       counter.textContent = "Reconstruindo volume…";
@@ -1360,7 +1285,7 @@
           SimTC.showMessage("Reconstrução indisponível (" + motorErro.message +
             ") — exibindo os cortes do volume.", "warning");
         }
-        buildVolume(function () { if (phase === "recon") toReview(); });
+        if (phase === "recon") toReview();
       });
     }
 
@@ -1379,7 +1304,7 @@
       startBtn.disabled = true; startBtn.textContent = "Exame adquirido";
       if (stopBtn) stopBtn.disabled = false;
       // Seletor de plano só quando o volume reconstruiu (MPR disponível).
-      if (planeEl) planeEl.hidden = !vol;
+      if (planeEl) planeEl.hidden = !temSerie();
       plane = "axial";
       if (planeEl) {
         Array.prototype.forEach.call(planeEl.querySelectorAll(".ws-plane__btn"), function (b) {
@@ -1421,7 +1346,7 @@
       }
 
       SimTC.showMessage("Aquisição concluída (" + totalCortes() + " cortes)" +
-        (vol ? " — reformatações coronal/sagital disponíveis." : ".") + " Navegue e finalize com Stop.", "success");
+        (temSerie() ? " — reformatações coronal/sagital disponíveis." : ".") + " Navegue e finalize com Stop.", "success");
     }
 
     slider.addEventListener("input", function () { if (loaded) render(parseInt(slider.value, 10) || 0); });
@@ -1488,65 +1413,25 @@
       };
     }
 
+    // API do ambiente de processamento. Tudo aqui responde a partir da SÉRIE
+    // RECONSTRUÍDA, que é a única representação do exame que existe.
+    //
+    // Havia um segundo caminho, de reserva, que devolvia o volume de 8 bits
+    // remontado dos PNG e convertia os cinzas de volta em HU pela inversa da
+    // janela — declarando `unidadeHU: true` para uma faixa que na prática ia
+    // de -160 a +239. Sumiu junto com o volume que o alimentava.
     SimTC.mprApi = {
       hasVolume: function () {
-        return !!(SimTC.MotorImagem && SimTC.MotorImagem.temSeries()) || !!vol;
+        return temSerie();
       },
       count: function (pl) {
-        var M = SimTC.MotorImagem;
-        if (M && M.temSeries()) {
-          var s2 = M.serieAtual();
-          if (pl === "coronal" || pl === "sagital") return s2.matriz;
-          return s2.cortes;
-        }
-        if (pl === "coronal") return vol ? vol.H : 0;
-        if (pl === "sagital") return vol ? vol.W : 0;
-        return manifest ? manifest.cortes : 0;
+        return temSerie() ? SimTC.MotorImagem.cortesNoPlano(pl) : 0;
       },
-      reformat: function (pl, idx) { return buildReformat(pl, idx); },
+      reformat: function (pl, idx) {
+        return temSerie() ? SimTC.MotorImagem.reformatar(pl, idx) : null;
+      },
       exportVolume: function () {
-        var daSerie = payloadDaSerieReconstruida();
-        if (daSerie) return daSerie;
-        if (!vol) return null;
-        var janela = (manifest && manifest.janela_exibicao) || {};
-        var wl = Number(janela.wl); if (!isFinite(wl)) wl = 40;
-        var ww = Number(janela.ww); if (!isFinite(ww) || ww < 1) ww = 400;
-        var baixo = wl - 0.5 - (ww - 1) / 2;
-        var dados = new Int16Array(vol.W * vol.H * vol.Z);
-        var minimo = 32767, maximo = -32768, o = 0;
-        for (var z = 0; z < vol.Z; z++) {
-          var fatia = vol.slices[z];
-          for (var i = 0; i < fatia.length; i++, o++) {
-            var hu = Math.round(baixo + (fatia[i] / 255) * (ww - 1));
-            hu = Math.max(-32768, Math.min(32767, hu));
-            dados[o] = hu;
-            if (hu < minimo) minimo = hu;
-            if (hu > maximo) maximo = hu;
-          }
-        }
-        var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get) ? SimTC.examSessionApi.get() : null;
-        var prot = SimTC.examProtocol ? SimTC.examProtocol.data : null;
-        return {
-          buffer: dados.buffer,
-          dims: [vol.W, vol.H, vol.Z],
-          espacamento: [vol.spX, vol.spY, vol.spZ],
-          origem: [0, 0, 0],
-          minimo: minimo,
-          maximo: maximo,
-          janela: { centro: wl, largura: ww },
-          modalidade: "CT",
-          descricaoSerie: (manifest && manifest.nome ? manifest.nome : "Exame") + " — aquisição simulada",
-          descricaoEstudo: prot && prot.nome ? prot.nome : "Simulação educacional de TC",
-          fabricante: "Simulador TC Educacional",
-          idPaciente: pac && pac.prontuario ? pac.prontuario : "SIMULADO",
-          sintaxe: "Volume didático reconstruído de PNG",
-          numFatias: vol.Z,
-          unidadeHU: true,
-          inverterMonocromatico: false,
-          label: pac && pac.nome ? pac.nome : "Exame simulado",
-          notes: "HU aproximados a partir de imagens PNG já janeladas; use somente para treinamento das ferramentas.",
-          attribution: manifest && manifest.fonte ? manifest.fonte.nome : "Simulador TC Educacional"
-        };
+        return payloadDaSerieReconstruida();
       }
     };
 
@@ -1904,7 +1789,7 @@
       var t = totalCortes();
       slider.min = 0; slider.max = Math.max(0, t - 1);
       if (lastSlice > t - 1) lastSlice = Math.floor(t / 2);
-      plane = "axial"; vol = null; mprCache = {};
+      plane = "axial";
       renderSeletorSeries();
       show(lastSlice);
       var s = SimTC.MotorImagem.serieAtual();

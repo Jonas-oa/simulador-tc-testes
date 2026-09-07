@@ -173,6 +173,99 @@
       return url;
     },
 
+    /**
+     * Quantos cortes o plano tem, na série atual.
+     *
+     * Coronal e sagital cortam a matriz no plano, então têm `matriz` cortes;
+     * o axial tem os cortes que a reconstrução produziu. Antes existiam TRÊS
+     * respostas diferentes para isto — a do slider, a da mprApi e a da série —
+     * porque cada uma media um volume diferente.
+     */
+    cortesNoPlano: function (plano) {
+      var s = Motor.serieAtual();
+      if (!s) return 0;
+      return (plano === "coronal" || plano === "sagital") ? s.matriz : s.cortes;
+    },
+
+    /**
+     * Reformatação coronal ou sagital, a partir dos HU da série.
+     *
+     * Isto substitui um caminho que renderizava cada corte axial em PNG,
+     * recarregava como <img>, desenhava num canvas de 256 px, lia os pixels de
+     * volta e montava um volume de OITO BITS já janelado — destruindo os HU
+     * que o motor tinha acabado de reconstruir. Pior: o laço percorria os
+     * cortes do VOLUME-FONTE (125, no crânio) enquanto a série tinha 32, e a
+     * leitura saturava no último corte: três quartos das linhas do coronal
+     * eram cópias da mesma imagem, e o resultado era uma faixa vertical
+     * uniforme. Foi escrito antes de existir motor de reconstrução e nunca
+     * migrado depois que ele chegou.
+     *
+     * Agora a reformatação lê o mesmo Int16Array que o axial exibe, com o
+     * `pixelMm` e o `incrementoMm` que a própria reconstrução definiu.
+     *
+     * ORIENTAÇÃO. O volume é LPS: x cresce para a esquerda do paciente, y para
+     * posterior, z para superior. Nos dois planos o eixo vertical é o z, com a
+     * cabeça em cima — daí a inversão da linha. No coronal o eixo horizontal é
+     * x (direita→esquerda); no sagital é y (anterior→posterior), com o
+     * anterior à esquerda, que é como se lê um perfil.
+     *
+     * @param {"coronal"|"sagital"} plano
+     * @param {number} idx  linha (coronal, y) ou coluna (sagital, x) da matriz
+     * @returns {string|null} dataURL, ou null sem série
+     */
+    reformatar: function (plano, idx) {
+      var s = Motor.serieAtual();
+      if (!s || (plano !== "coronal" && plano !== "sagital")) return null;
+      var n = s.matriz, nz = s.cortes;
+      idx = Math.max(0, Math.min(n - 1, idx | 0));
+      var j = estado.janela;
+      var chave = "r:" + plano + ":" + estado.atual + ":" + idx + ":" + j.wl + ":" + j.ww;
+      if (cache[chave]) return cache[chave];
+
+      var lut = window.SimTCCore.lutJanela(j.wl, j.ww);
+      var MIN = window.SimTCCore.HU.MIN;
+      var planoDeCorte = n * n;
+
+      var cru = document.createElement("canvas");
+      cru.width = n; cru.height = nz;
+      var cx = cru.getContext("2d");
+      var img = cx.createImageData(n, nz);
+      var d = img.data;
+
+      for (var z = 0; z < nz; z++) {
+        var linha = nz - 1 - z;              // cabeça em cima
+        var base = z * planoDeCorte;
+        var destino = linha * n * 4;
+        for (var c = 0; c < n; c++) {
+          var hu = (plano === "coronal")
+            ? s.hu[base + idx * n + c]        // fixa y = idx, varre x
+            : s.hu[base + c * n + idx];       // fixa x = idx, varre y
+          var k = hu - MIN;
+          if (k < 0) k = 0; else if (k >= lut.length) k = lut.length - 1;
+          var o = destino + c * 4;
+          d[o] = d[o + 1] = d[o + 2] = lut[k];
+          d[o + 3] = 255;
+        }
+      }
+      cx.putImageData(img, 0, 0);
+
+      // A grade é anisotrópica: o corte tem `incrementoMm` e o pixel no plano
+      // tem `pixelMm`. Sem corrigir a proporção, um crânio de 158 mm com
+      // cortes de 5 mm apareceria achatado a um sexto da altura real.
+      var larguraMm = n * s.pixelMm;
+      var alturaMm = nz * s.incrementoMm;
+      var saida = document.createElement("canvas");
+      saida.width = n;
+      saida.height = Math.max(1, Math.round(n * alturaMm / larguraMm));
+      var sc = saida.getContext("2d");
+      sc.imageSmoothingEnabled = true;
+      sc.drawImage(cru, 0, 0, n, nz, 0, 0, saida.width, saida.height);
+
+      var url = saida.toDataURL();
+      cache[chave] = url;
+      return url;
+    },
+
     /** Estatística de HU numa janela quadrada do corte — HU REAIS. */
     estatistica: function (i, cx, cy, lado) {
       var s = Motor.serieAtual();

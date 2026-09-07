@@ -7,8 +7,9 @@
 > seguir** — sem depender do histórico de conversa, que você não tem.
 >
 > Última atualização: **07/09/2026** · auditoria master concluída (commit `73083a3`),
-> **ETAPAS 1 e 2 do plano concluídas** — a rede de segurança está de pé e 7 dos 9 P1 estão
-> corrigidos. A próxima ação é a **ETAPA 3** (matar o MPR interno). Ver o checklist no BLOCO 5.
+> **ETAPAS 1, 2 e 3 do plano concluídas** — a rede de segurança está de pé e **8 dos 9 P1**
+> estão corrigidos. A próxima ação é a **ETAPA 4** (ligar a interface ao núcleo), que é a
+> maior do plano. Ver o checklist no BLOCO 5.
 
 ---
 
@@ -52,7 +53,7 @@ python -m http.server 8777
 
 **Lendo a suíte de regressão** (`testes/regressao.html`) — ela é diferente das outras duas:
 ela afirma o comportamento **correto** dos 9 defeitos P1, então **falhar nela é o esperado**
-enquanto a ETAPA 2 não acontecer. O placar tem quatro números:
+enquanto o defeito correspondente não for corrigido. O placar tem quatro números:
 
 | Número | Significa |
 |---|---|
@@ -61,8 +62,8 @@ enquanto a ETAPA 2 não acontecer. O placar tem quatro números:
 | **corrigido(s)** | o defeito foi consertado mas o id continua em `PENDENTES` no topo do script. Tire-o de lá. **Reprova** de propósito, para a lista não mentir. |
 | **executados** | se for menor que o total, a suíte travou no meio. |
 
-Hoje o esperado é: `10/10 executados · 3 esperadas · 0 inesperadas · 0 corrigidos` — as três
-que restam são P1-05 (ETAPA 3), P1-07 e P1-09 (ETAPA 5). Cada defeito corrigido move um
+Hoje o esperado é: `10/10 executados · 2 esperadas · 0 inesperadas · 0 corrigidos` — as duas
+que restam são P1-07 e P1-09, ambas da ETAPA 5. Cada defeito corrigido move um
 número da coluna "esperadas" para "corrigidos"; aí você remove o id de `PENDENTES` e ele
 vira um teste verde permanente.
 
@@ -121,10 +122,10 @@ Leitura complementar, nesta ordem:
 | Fase | Estado |
 |---|---|
 | 0 a 7 | Completas e commitadas |
-| 8 — Viewer e MPR | **Quase.** Medidas (distância, ângulo, ROI em HU) e slab (média/MIP/MinIP) prontos no leitor. **Faltam:** reformatação **oblíqua** e ROI **elíptica/poligonal** (a atual é circular). |
+| 8 — Viewer e MPR | **Quase.** O MPR da tela de aquisição passou a sair da série reconstruída (ETAPA 3). Medidas (distância, ângulo, ROI em HU) e slab (média/MIP/MinIP) prontos no leitor. **Faltam:** reformatação **oblíqua** e ROI **elíptica/poligonal** (a atual é circular). |
 | 9 — Protocol Manager | **Parcial.** Duplicar, travar, comparar, versionar, exportar/importar e o motor de validação existem e funcionam. **Falta o essencial:** o protocolo persistido ainda é **texto livre** (ver P1-07). |
 | 10 — Educacional | **1 de 4.** A confirmação informada existe (e é a melhor parte do app), mas `education/` e `engines/` (perfis de fabricante) **não existem**. |
-| 11 — Testes/perf | **Parcial.** 114 testes verdes + 10 de regressão (vermelhos de propósito, ver BLOCO 0), rodando em CI desde a ETAPA 1. **Falta:** cobertura medida do `core/`, orçamento de performance verificável e testes de caos além dos dois que a regressão cobre. |
+| 11 — Testes/perf | **Parcial.** 114 testes verdes + 10 de regressão (8 verdes, 2 vermelhos de propósito — ver BLOCO 0), rodando em CI desde a ETAPA 1. **Falta:** cobertura medida do `core/`, orçamento de performance verificável e testes de caos além dos dois que a regressão cobre. |
 
 ## 2.2 O diagnóstico da auditoria (leia isto com atenção)
 
@@ -376,7 +377,11 @@ Elimina os quatro achados urgentes e cria a rede que torna a etapa 4 segura.
   - [x] P1-06 abortar exame ao excluir o paciente — a aquisição assina `EVENTOS.EXAME_ENCERRADO`
   - [ ] P1-07 protocolo tipado *(ETAPA 5 — é migração de dados, não correção cirúrgica)*
   - [ ] P1-09 pitch em sequencial *(ETAPA 5 — depende do protocolo tipado)*
-- [ ] **ETAPA 3 — Matar o MPR interno** *(média)* — P1-05: apagar `buildVolume`/`buildReformat` e reformatar do `Int16Array` da série. Fecha o último P1 da lista.
+- [x] **ETAPA 3 — Matar o MPR interno** *(média)* — concluída em 07/09/2026
+  - [x] P1-05: `buildVolume`/`buildReformat`/`spacing` apagados (−165 linhas em `js/aquisicao.js`); a reformatação passou para `js/motor-imagem.js`, junto da série, lendo o `Int16Array` com `pixelMm` e `incrementoMm` da própria reconstrução
+  - [x] Os três consumidores do coronal passaram a concordar: 256 na tela, 256 na `mprApi`, 256 na série (era 261 / 256 / 256)
+  - [x] O sagital deixou de sair deitado — nos dois planos o eixo vertical é o crânio-caudal, com a cabeça em cima; os rótulos de orientação acompanharam
+  - [x] `mprApi.exportVolume()` perdeu o caminho de reserva que devolvia HU aproximados por inversa da janela declarando `unidadeHU: true`
 
 ## Bloco B — estrutura (etapas 4 e 5)
 
