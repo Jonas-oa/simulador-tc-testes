@@ -172,7 +172,7 @@ summary:focus-visible,
 --------------------------------------------------------------------- */
 body {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;  /* area central, rodape de mensagem */
   height: 100vh;
 }
 
@@ -196,54 +196,28 @@ body {
 }
 
 /* ---------------------------------------------------------------------
-   4) BARRA DE STATUS
+   4) O QUE ERA A BARRA DE STATUS
+
+   A barra saiu: 123 px de altura numa janela de 900 para exibir uma marca,
+   um aviso e tres botoes — e os 123 px nem eram do conteudo. Faltava regra
+   para `.status-bar__actions`, entao os tres botoes de icone empilhavam
+   verticalmente em vez de ficarem lado a lado. Ver o comentario no
+   index.html, onde o elemento estava.
+
+   Sobrou daqui o `.indicator`, que mudou de casa (agora vive no display do
+   console) e continua logo abaixo. E sobrou o titulo, que virou invisivel:
+   o documento precisa de um <h1>, quem enxerga nao precisa le-lo.
 --------------------------------------------------------------------- */
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 18px;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.status-bar__brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-.status-bar__logo {
-  color: var(--accent-cyan-ink);
-  font-size: 1.2rem;
-}
-.status-bar__title {
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  font-size: 0.95rem;
-}
-.status-bar__subtitle {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  white-space: nowrap;
+.so-para-leitor-de-tela {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.status-bar__indicators {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  justify-content: flex-end;
-}
-@media (max-width: 640px) {
-  .status-bar__subtitle { display: none; }
-  .status-bar__indicators { gap: 8px; }
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 @media (max-width: 420px) {
-  .status-bar { padding: 8px 10px; gap: 8px; }
-  .status-bar__title { font-size: 0.8rem; }
   .indicator__label { font-size: var(--fs-micro); }
 }
 
@@ -449,6 +423,21 @@ body {
   text-shadow: 0 0 8px rgba(53, 197, 224, 0.5);
 }
 .display__value--mono { letter-spacing: 0.03em; }
+
+/* SISTEMA · PRONTO · LASER · MOVIMENTO, vindos da barra de status.
+   Foram para o HUD, e nao para o `.display--compact` logo acima, porque no
+   desktop aquele display fica OCULTO — quem mostra o estado da mesa ali e o
+   HUD sobre a cena. E o HUD aparece nos dois layouts. */
+.hud__indicadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-subtle);
+}
+/* O HUD e escuro nos DOIS temas: a tinta e a de superficie escura. */
+.hud__indicadores .indicator__label { color: var(--on-dark-secondary); }
 
 /* Painel de comandos (caixa semitransparente) */
 .panel {
@@ -698,13 +687,12 @@ body {
    acima. Reutiliza os design tokens (tema claro/escuro) já definidos.
    ===================================================================== */
 
-/* O body é uma grade de 3 linhas: barra de status (1), área central (2) e
-   rodapé (3). Os dois ambientes ocupam a MESMA célula central e só um fica
-   visível por vez (o outro recebe o atributo [hidden]). */
-.status-bar { grid-row: 1; }
+/* O body era uma grade de TRES linhas: barra de status, area central e
+   rodape. Com a barra fora, sao duas. Os dois ambientes ocupam a MESMA
+   celula central e so um fica visivel por vez (o outro recebe [hidden]). */
 .app-main,
-.workstation-main { grid-row: 2; min-height: 0; }
-.message-panel { grid-row: 3; }
+.workstation-main { grid-row: 1; min-height: 0; }
+.message-panel { grid-row: 2; }
 
 /* Alternador de ambiente (segmented control) na barra de status */
 .env-switch {
@@ -899,7 +887,8 @@ body.is-mobile .ws-plane { display: none !important; }
    protocolos e um quadrante a definir, todos visíveis e redimensionáveis.
    ===================================================================== */
 .dashboard {
-  grid-row: 2;
+  /* Linha 1 da grade do body. Era a 2 enquanto a barra de status ocupava a 1. */
+  grid-row: 1;
   display: flex;
   align-items: stretch;
   min-height: 0;
@@ -1072,7 +1061,6 @@ body.is-mobile .ws-plane { display: none !important; }
 }
 
 /* Base do modo celular */
-body.is-mobile .status-bar,
 body.is-mobile .message-panel { display: none; }
 body.is-mobile .dash-gutter { display: none !important; }
 body.is-mobile .dash-col { display: contents; }
@@ -1372,6 +1360,22 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
   font-size: 0.78rem; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px;
 }
+/* Os tres botoes que moravam na barra de status. Ficam depois do banner,
+   separados por um filete, e sao a UNICA forma de sair do modo console ou
+   entrar no modo celular — por isso a barra deixou de sumir junto com o
+   console (ver js/ui-layout.js). */
+.console-steps__acoes {
+  display: flex; align-items: center; gap: 2px;
+  margin-left: 8px; padding-left: 8px;
+  border-left: 1px solid var(--border-strong);
+}
+
+/* Fora do console guiado, a barra encolhe ate ser so os tres botoes: as
+   etapas nao querem dizer nada quando os quatro paineis estao na tela. */
+body:not(.console-mode) .console-steps .cstep,
+body:not(.console-mode) .console-steps .console-banner { display: none; }
+body:not(.console-mode) .console-steps { padding: 4px; }
+
 body.is-mobile .console-steps { display: none !important; }
 
 /* Modo console: mostra UMA etapa por vez, em tela cheia */

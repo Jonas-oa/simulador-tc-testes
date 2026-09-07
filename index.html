@@ -10,34 +10,36 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907ai" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907ai" />
+  <link rel="stylesheet" href="css/style.css?v=20260907ao" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907ao" />
 </head>
 <body data-theme="dark">
 
-  <header id="status-bar" class="status-bar" role="banner">
-    <div class="status-bar__brand">
-      <span class="status-bar__logo" aria-hidden="true">⌬</span>
-      <h1 class="status-bar__title">SIMULADOR TC</h1>
-      <span class="status-bar__subtitle">Uso educacional — não clínico</span>
-    </div>
+  <!--
+    A BARRA DE STATUS SAIU.
 
-    <div class="status-bar__indicators" id="status-indicators">
-      <div class="indicator" data-indicator="power" data-state="on" title="Sistema ligado">
-        <span class="indicator__dot"></span><span class="indicator__label">SISTEMA</span>
-      </div>
-      <div class="indicator" data-indicator="ready" data-state="on" title="Pronto para simulação">
-        <span class="indicator__dot"></span><span class="indicator__label">PRONTO</span>
-      </div>
-      <div class="indicator" data-indicator="laser" data-state="off" title="Lasers de posicionamento">
-        <span class="indicator__dot"></span><span class="indicator__label">LASER</span>
-      </div>
-      <div class="indicator" data-indicator="motion" data-state="off" title="Mesa em movimento">
-        <span class="indicator__dot"></span><span class="indicator__label">MOVIMENTO</span>
-      </div>
-    </div>
+    Ela media 123 px de altura numa janela de 900 — e não por conteúdo: não
+    havia regra de CSS para `.status-bar__actions`, então os três botões de
+    ícone empilhavam um sobre o outro em vez de ficarem lado a lado. Eram 13,7%
+    da tela do operador ocupados por uma marca, um aviso e três botões.
 
-    <div class="status-bar__actions">
+    O que morava nela foi para onde já se olha:
+
+      os três botões  -> a barra de etapas, que flutua e mede 42 px
+      os indicadores  -> o display do console, que já diz o estado da máquina
+      o título        -> continua aqui, só que invisível: o documento precisa de
+                         um <h1> para quem navega por cabeçalhos (ETAPA 9), e
+                         quem enxerga já sabe que app abriu.
+  -->
+  <h1 class="so-para-leitor-de-tela">Simulador Educacional de Tomografia Computadorizada</h1>
+
+  <nav class="console-steps" id="console-steps" hidden aria-label="Etapas do console de operação">
+    <button class="cstep" data-step="sim" type="button"><span class="cstep__num">1</span>Sala<span class="cstep__dot" id="cdot-sim" hidden></span></button>
+    <button class="cstep" data-step="pacproto" type="button"><span class="cstep__num">2</span>Paciente &amp; Protocolo<span class="cstep__dot" id="cdot-pacproto" hidden></span></button>
+    <button class="cstep" data-step="acq" type="button"><span class="cstep__num">3</span>Exame<span class="cstep__dot" id="cdot-acq" hidden></span></button>
+    <button class="cstep" data-step="mpr" type="button"><span class="cstep__num">4</span>MPR / 3D<span class="cstep__dot" id="cdot-mpr" hidden></span></button>
+    <div class="console-banner" id="console-banner">Sem paciente em exame</div>
+    <div class="console-steps__acoes">
       <button id="mobile-toggle" class="icon-btn" type="button" aria-label="Modo celular" title="Modo celular" aria-pressed="false">
         <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M17 1H7a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm0 18H7V5h10v14zm-3.5 3h-3a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5z"/></svg>
       </button>
@@ -48,14 +50,6 @@
         <svg viewBox="0 0 24 24" class="icon-btn__icon" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.5 5.5 0 0 1 12 3z"/></svg>
       </button>
     </div>
-  </header>
-
-  <nav class="console-steps" id="console-steps" hidden aria-label="Etapas do console de operação">
-    <button class="cstep" data-step="sim" type="button"><span class="cstep__num">1</span>Sala<span class="cstep__dot" id="cdot-sim" hidden></span></button>
-    <button class="cstep" data-step="pacproto" type="button"><span class="cstep__num">2</span>Paciente &amp; Protocolo<span class="cstep__dot" id="cdot-pacproto" hidden></span></button>
-    <button class="cstep" data-step="acq" type="button"><span class="cstep__num">3</span>Exame<span class="cstep__dot" id="cdot-acq" hidden></span></button>
-    <button class="cstep" data-step="mpr" type="button"><span class="cstep__num">4</span>MPR / 3D<span class="cstep__dot" id="cdot-mpr" hidden></span></button>
-    <div class="console-banner" id="console-banner">Sem paciente em exame</div>
   </nav>
 
   <nav class="mobile-switch" id="mobile-switch" hidden aria-label="Navegação do modo celular">
@@ -87,6 +81,21 @@
               <div class="hud__row"><span class="hud__label">MESA</span><span class="hud__value" id="hud-table-position">000,0 <small>mm</small></span></div>
               <div class="hud__row"><span class="hud__label">VELOC.</span><span class="hud__value" id="hud-table-speed">0,0 <small>mm/s</small></span></div>
               <div class="hud__row"><span class="hud__label">ALTURA</span><span class="hud__value" id="hud-table-height">80,0 <small>cm</small></span></div>
+              <div class="hud__indicadores" id="status-indicators">
+                <span class="indicator" data-indicator="power" data-state="on" title="Sistema ligado">
+                  <span class="indicator__dot"></span><span class="indicator__label">SISTEMA</span>
+                </span>
+                <span class="indicator" data-indicator="ready" data-state="on" title="Pronto para simulação">
+                  <span class="indicator__dot"></span><span class="indicator__label">PRONTO</span>
+                </span>
+                <span class="indicator" data-indicator="laser" data-state="off" title="Lasers de posicionamento">
+                  <span class="indicator__dot"></span><span class="indicator__label">LASER</span>
+                </span>
+                <span class="indicator" data-indicator="motion" data-state="off" title="Mesa em movimento">
+                  <span class="indicator__dot"></span><span class="indicator__label">MOVIMENTO</span>
+                </span>
+              </div>
+          </div>
             </div>
           </div>
           <div class="viewport__loading" id="viewport-loading" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Inicializando cena 3D…</span></div>
@@ -98,7 +107,6 @@
             <div class="display__row"><span class="display__label">MESA</span><span class="display__value display__value--mono" id="display-table">000.0 mm</span></div>
             <div class="display__row"><span class="display__label">ALTURA</span><span class="display__value display__value--mono" id="display-height">80.0 cm</span></div>
             <div class="display__row"><span class="display__label">DECÚBITO</span><span class="display__value" id="display-position">DORSAL</span></div>
-          </div>
 
           <div class="panel" id="sala-panel">
             <div class="panel__grip" id="sala-panel-grip" role="application" tabindex="0"
@@ -430,7 +438,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907ai"
+          src="dicom-viewer/index.html?embedded=1&v=20260907ao"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -444,71 +452,71 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907ai";</script>
+  <script>window.__SIMTC_REV__ = "20260907ao";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907ai"></script>
+  <script src="js/phantoms.js?v=20260907ao"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907ai"></script>
-  <script src="core/clock.js?v=20260907ai"></script>
-  <script src="core/model/patient.js?v=20260907ai"></script>
-  <script src="core/model/protocol.js?v=20260907ai"></script>
-  <script src="core/model/exam.js?v=20260907ai"></script>
-  <script src="core/state.js?v=20260907ai"></script>
-  <script src="core/phantom/volume.js?v=20260907ai"></script>
-  <script src="core/phantom/acervo.js?v=20260907ai"></script>
-  <script src="core/acquisition/fisica.js?v=20260907ai"></script>
-  <script src="core/acquisition/noise.js?v=20260907ai"></script>
-  <script src="core/acquisition/projector.js?v=20260907ai"></script>
-  <script src="core/acquisition/scan.js?v=20260907ai"></script>
-  <script src="core/dose/ctdi.js?v=20260907ai"></script>
-  <script src="core/dose/aec.js?v=20260907ai"></script>
-  <script src="core/protocol/validacao.js?v=20260907ai"></script>
-  <script src="core/protocol/gestor.js?v=20260907ai"></script>
-  <script src="core/dicom/writer.js?v=20260907ai"></script>
-  <script src="core/recon/serie.js?v=20260907ai"></script>
+  <script src="core/bus.js?v=20260907ao"></script>
+  <script src="core/clock.js?v=20260907ao"></script>
+  <script src="core/model/patient.js?v=20260907ao"></script>
+  <script src="core/model/protocol.js?v=20260907ao"></script>
+  <script src="core/model/exam.js?v=20260907ao"></script>
+  <script src="core/state.js?v=20260907ao"></script>
+  <script src="core/phantom/volume.js?v=20260907ao"></script>
+  <script src="core/phantom/acervo.js?v=20260907ao"></script>
+  <script src="core/acquisition/fisica.js?v=20260907ao"></script>
+  <script src="core/acquisition/noise.js?v=20260907ao"></script>
+  <script src="core/acquisition/projector.js?v=20260907ao"></script>
+  <script src="core/acquisition/scan.js?v=20260907ao"></script>
+  <script src="core/dose/ctdi.js?v=20260907ao"></script>
+  <script src="core/dose/aec.js?v=20260907ao"></script>
+  <script src="core/protocol/validacao.js?v=20260907ao"></script>
+  <script src="core/protocol/gestor.js?v=20260907ao"></script>
+  <script src="core/dicom/writer.js?v=20260907ao"></script>
+  <script src="core/recon/serie.js?v=20260907ao"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907ai"></script>
+  <script src="js/shared.js?v=20260907ao"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907ai"></script>
+  <script src="app/contratos.js?v=20260907ao"></script>
 
   <!-- Camada ui/: como o app escreve numero, num lugar so (ETAPA 7) -->
-  <script src="js/ui/formatar.js?v=20260907ai"></script>
-  <script src="js/ui/confirmar.js?v=20260907ai"></script>
-  <script src="js/ui/entrada.js?v=20260907ai"></script>
-  <script src="js/ui/campo.js?v=20260907ai"></script>
-  <script src="js/ui/lista.js?v=20260907ai"></script>
+  <script src="js/ui/formatar.js?v=20260907ao"></script>
+  <script src="js/ui/confirmar.js?v=20260907ao"></script>
+  <script src="js/ui/entrada.js?v=20260907ao"></script>
+  <script src="js/ui/campo.js?v=20260907ao"></script>
+  <script src="js/ui/lista.js?v=20260907ao"></script>
 
   <!-- Módulos de telas -->
   <!-- Peças que sairam do monolito da sala (ETAPA 6) -->
-  <script src="js/sala/cenario.js?v=20260907ai"></script>
-  <script src="js/sala/paciente.js?v=20260907ai"></script>
-  <script src="js/sala/gantry.js?v=20260907ai"></script>
-  <script src="js/fisica-mesa.js?v=20260907ai"></script>
-  <script src="js/sala-exame.js?v=20260907ai"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907ai"></script>
-  <script src="js/protocolos.js?v=20260907ai"></script>
+  <script src="js/sala/cenario.js?v=20260907ao"></script>
+  <script src="js/sala/paciente.js?v=20260907ao"></script>
+  <script src="js/sala/gantry.js?v=20260907ao"></script>
+  <script src="js/fisica-mesa.js?v=20260907ao"></script>
+  <script src="js/sala-exame.js?v=20260907ao"></script>
+  <script src="js/cadastro-pacientes.js?v=20260907ao"></script>
+  <script src="js/protocolos.js?v=20260907ao"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907ai"></script>
-  <script src="js/motor-imagem.js?v=20260907ai"></script>
-  <script src="js/exportar-dicom.js?v=20260907ai"></script>
-  <script src="js/medidas.js?v=20260907ai"></script>
+  <script src="js/fonte-volume.js?v=20260907ao"></script>
+  <script src="js/motor-imagem.js?v=20260907ao"></script>
+  <script src="js/exportar-dicom.js?v=20260907ao"></script>
+  <script src="js/medidas.js?v=20260907ao"></script>
   <!-- Peças que sairam do monolito da aquisicao (ETAPA 6) -->
-  <script src="js/aquisicao/som.js?v=20260907ai"></script>
-  <script src="js/aquisicao/box-planejamento.js?v=20260907ai"></script>
-  <script src="js/aquisicao/maquina-fases.js?v=20260907ai"></script>
-  <script src="js/aquisicao/painel.js?v=20260907ai"></script>
-  <script src="js/aquisicao.js?v=20260907ai"></script>
-  <script src="js/mpr.js?v=20260907ai"></script>
-  <script src="js/ui-layout.js?v=20260907ai"></script>
+  <script src="js/aquisicao/som.js?v=20260907ao"></script>
+  <script src="js/aquisicao/box-planejamento.js?v=20260907ao"></script>
+  <script src="js/aquisicao/maquina-fases.js?v=20260907ao"></script>
+  <script src="js/aquisicao/painel.js?v=20260907ao"></script>
+  <script src="js/aquisicao.js?v=20260907ao"></script>
+  <script src="js/mpr.js?v=20260907ao"></script>
+  <script src="js/ui-layout.js?v=20260907ao"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907ai"></script>
+  <script src="script.js?v=20260907ao"></script>
 </body>
 </html>

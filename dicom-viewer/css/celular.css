@@ -27,25 +27,38 @@ html, body {
 
 body {
   display: grid;
-  grid-template-rows: var(--topo) 1fr var(--ferramentas) calc(var(--abas) + var(--seguro-baixo));
+  /* Era `var(--topo) 1fr ...`. A barra de titulo saiu e virou sobreposicao:
+     sao 52 px a mais de imagem, que numa tela de celular contam. */
+  grid-template-rows: 1fr var(--ferramentas) calc(var(--abas) + var(--seguro-baixo));
   height: 100dvh;
 }
 
 [hidden] { display: none !important; }
 button, select, input { font: inherit; color: inherit; }
 
-/* ------------------------------------------------------------------ topo */
-.topo {
+/* ---------------------------------------------------- topo sobreposto */
+.so-para-leitor-de-tela {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Nao ocupa linha da grade: flutua sobre o palco. O fundo em degrade so
+   existe atras do texto, para ele continuar legivel sobre imagem clara. */
+.sobreposto-topo {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 30;
   display: grid;
   grid-template-columns: 44px 1fr 44px;
   align-items: center;
-  padding-top: env(safe-area-inset-top, 0px);
-  background: linear-gradient(180deg, #101a2c, #0b1220);
-  border-bottom: 1px solid var(--borda);
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(6, 12, 20, 0.82), rgba(6, 12, 20, 0));
+  padding-bottom: 10px;
 }
-.topo .titulo { text-align: center; overflow: hidden; padding: 0 4px; }
-.topo .titulo b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topo .titulo small { display: block; font-size: 11px; color: var(--texto-fraco); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sobreposto-topo .icone { pointer-events: auto; }
+.sobreposto-topo .titulo { text-align: center; overflow: hidden; padding: 0 4px; }
+.sobreposto-topo .titulo b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sobreposto-topo .titulo small { display: block; font-size: 11px; color: var(--texto-fraco); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icone {
   width: 44px; height: 44px; display: grid; place-items: center;
   background: none; border: 0; color: var(--texto); cursor: pointer;

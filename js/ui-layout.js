@@ -498,7 +498,13 @@
       STEPS.forEach(function (st) {
         body.classList.toggle("cstep-" + st, active && st === state.step);
       });
-      bar.hidden = !active;
+      // A barra some SO no modo celular. Antes ela sumia junto com o console
+      // guiado — e desde que os tres botoes de icone passaram a morar nela
+      // (a barra de status foi removida), some-la deixaria o operador sem
+      // como voltar ao console, sem como entrar no modo celular e sem como
+      // trocar o tema. Fora do console ela encolhe ate ser so os botoes; quem
+      // faz isso e o CSS.
+      bar.hidden = !podeUsarConsole();
     }
 
     function apply() {
