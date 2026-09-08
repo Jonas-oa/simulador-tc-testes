@@ -2,17 +2,17 @@
  * Leitor DICOM — orquestração da interface.
  */
 
-import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js?v=20260907ax';
-import { Viewport, PALETAS, construirLut } from './mpr.js?v=20260907ax';
-import { Renderizador3D, TRANSFERENCIAS } from './render3d.js?v=20260907ax';
-import { instalarPonteSimulador } from './simulator-bridge.js?v=20260907ax';
-import { FERRAMENTAS as FERR_MEDIDA } from './medidas.js?v=20260907ax';
+import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js?v=20260907bg';
+import { Viewport, PALETAS, construirLut } from './mpr.js?v=20260907bg';
+import { Renderizador3D, TRANSFERENCIAS } from './render3d.js?v=20260907bg';
+import { instalarPonteSimulador } from './simulator-bridge.js?v=20260907bg';
+import { FERRAMENTAS as FERR_MEDIDA } from './medidas.js?v=20260907bg';
 import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset,
   carregarManifesto as buscarManifesto, urlsDaSerie, arquivosDoDrop,
   criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
   novaCarga, comProgresso
-} from './comum.js?v=20260907ax';
+} from './comum.js?v=20260907bg';
 
 const $ = (id) => document.getElementById(id);
 

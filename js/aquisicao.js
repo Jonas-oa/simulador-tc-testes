@@ -1438,6 +1438,66 @@
      * e ela repete, de propósito, as mesmas palavras, para que a mensagem que
      * o aluno lê não dependa de qual caminho respondeu.
      */
+    /**
+     * Mostra o que falta, ANTES de o operador tentar.
+     *
+     * Cada pendencia vem do nucleo como uma frase ("Posicionar o paciente na
+     * mesa."). A frase e boa; o que faltava era o CAMINHO. Aqui cada uma vira
+     * um botao que muda para a etapa do console onde ela se resolve — porque
+     * dizer "posicione o paciente" numa tela que nao tem a mesa e dizer meio.
+     */
+    // A ORDEM IMPORTA, e ja mordeu: "Posicionar o PACIENTE na mesa" casa com
+    // /paciente/ tambem, e com a regra do paciente em primeiro lugar o botao
+    // mandava para o cadastro em vez da sala. A regra da mesa vem antes, e as
+    // outras ficaram mais especificas.
+    var DESTINO_DA_FALTA = [
+      { teste: /posicionar|na mesa|dec.bito/i, etapa: "sim", onde: "sala" },
+      { teste: /protocolo/i, etapa: "pacproto", onde: "protocolos" },
+      { teste: /paciente/i, etapa: "pacproto", onde: "cadastro" }
+    ];
+
+    function renderFaltas() {
+      var caixa = document.getElementById("acq-faltas");
+      var lista = document.getElementById("acq-faltas-lista");
+      if (!caixa || !lista) return;
+      var faltas = pendenciasParaIniciar();
+      // Durante a aquisicao a lista nao tem o que dizer: o exame ja comecou.
+      if (!faltas.length || MaquinaFases.atual() !== "idle") {
+        caixa.hidden = true;
+        return;
+      }
+      lista.innerHTML = "";
+      faltas.forEach(function (texto) {
+        var destino = null;
+        for (var i = 0; i < DESTINO_DA_FALTA.length; i++) {
+          if (DESTINO_DA_FALTA[i].teste.test(texto)) { destino = DESTINO_DA_FALTA[i]; break; }
+        }
+        var li = document.createElement("li");
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "acq-faltas__item" + (destino ? "" : " acq-faltas__item--sem-destino");
+        b.textContent = texto;
+        if (destino) {
+          b.title = "Ir para a etapa de " + destino.onde;
+          // A API do console e procurada no CLIQUE, e nao aqui.
+          //
+          // Este primeiro desenho acontece dentro de SimTC.Aquisicao.init(),
+          // que roda ANTES de SimTC.Layout.init() — quem declara o
+          // `consoleUiApi`. Perguntar por ela agora dava sempre "nao existe", e
+          // os tres botoes nasciam inertes ate o proximo evento redesenhar a
+          // lista. No clique ela ja existe ha muito tempo.
+          b.addEventListener("click", function () {
+            if (SimTC.consoleUiApi && SimTC.consoleUiApi.setStep) {
+              SimTC.consoleUiApi.setStep(destino.etapa);
+            }
+          });
+        }
+        li.appendChild(b);
+        lista.appendChild(li);
+      });
+      caixa.hidden = false;
+    }
+
     function pendenciasParaIniciar() {
       var Core = window.SimTCCore;
       if (Core && Core.sessao && Core.sessao.pendenciasParaIniciar) {
@@ -1644,6 +1704,16 @@
           "Exame interrompido: o paciente saiu da lista de trabalho durante a aquisição. " +
           "Nada foi arquivado.", "warning");
       });
+
+      // A lista do que falta se refaz a cada fato que possa resolver — ou
+      // criar — uma pendencia. Sao os mesmos eventos que o nucleo ja emite;
+      // nenhum estado novo, so uma leitura a mais.
+      [Core.EVENTOS.EXAME_SELECIONADO, Core.EVENTOS.EXAME_ENCERRADO,
+       Core.EVENTOS.PACIENTE_REMOVIDO, Core.EVENTOS.PROTOCOLO_SELECIONADO,
+       Core.EVENTOS.PROTOCOLO_ALTERADO, Core.EVENTOS.PACIENTE_POSICIONADO,
+       Core.EVENTOS.MESA_ESTADO, Core.EVENTOS.FASE_MUDOU
+      ].forEach(function (ev) { Core.bus.on(ev, renderFaltas); });
+      renderFaltas();
     })();
     var confirmOk = document.getElementById("ws-confirm-ok");
     var confirmCancel = document.getElementById("ws-confirm-cancel");
