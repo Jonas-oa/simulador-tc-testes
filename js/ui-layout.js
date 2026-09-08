@@ -486,6 +486,10 @@
       // Banner do console (desktop) e banner de paisagem do celular
       // compartilham a mesma informação de contexto.
       if (banner) banner.textContent = text;
+      // O trilho tem 66 px: o contexto nao cabe escrito nele. Continua no DOM
+      // (o leitor de tela o le, e o rodape de mensagens o repete por extenso) e
+      // aparece ao passar o mouse sobre a coluna.
+      if (bar) bar.setAttribute("title", text);
       var mb = document.getElementById("mobile-banner");
       if (mb) mb.textContent = text;
     }

@@ -179,7 +179,10 @@ body {
   grid-template-columns: 1fr auto;
   height: 100vh;
 }
-:root { --trilho-w: 132px; }
+/* Metade do que era (132 px): o trilho e navegacao, nao painel. Os rotulos
+   ficaram curtos — "Paciente", "Exame", "MPR" — e o nome inteiro esta no
+   `title` e no `aria-label` de cada botao. */
+:root { --trilho-w: 66px; }
 
 .app-main {
   display: grid;
@@ -620,6 +623,11 @@ body {
   border: 1px solid var(--border-strong);
   background: var(--bg-display);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  /* O popover flutua SOBRE a cena 3D e por isso e escuro nos dois temas — o
+     mesmo caso do HUD e da barra de abas do celular (ETAPA 9). A tinta tem de
+     ser a de superficie escura: com a do tema, no claro ele ficava com texto
+     #1a222c sobre fundo #0e1620, escuro sobre escuro. */
+  color: var(--on-dark-primary);
 }
 .pose-panel[hidden] { display: none; }
 
@@ -788,9 +796,14 @@ body {
 .ws-field { display: flex; flex-direction: column; gap: 3px; }
 .ws-field--full { grid-column: 1 / -1; }
 .ws-field__label { font-size: var(--fs-mini); letter-spacing: 0.05em; color: var(--text-secondary); text-transform: uppercase; }
+/* CAMPO DE FORMULARIO — segue o TEMA, e nao o visor.
+   Usava `--bg-display`, que e o fundo do VISOR DE IMAGEM e por isso e escuro
+   nos dois temas, de proposito. No tema claro isso dava caixas pretas com
+   texto escuro dentro, no meio de uma pagina clara: ilegiveis e fora do
+   layout. Um campo nao e um visor — e superficie de painel. */
 .ws-input {
-  background: var(--bg-display);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 7px 9px;
@@ -798,6 +811,8 @@ body {
   font-size: 0.82rem;
   width: 100%;
 }
+.ws-input::placeholder { color: var(--text-muted); }
+.ws-input:focus { border-color: var(--accent-cyan); }
 .ws-input:disabled { color: var(--text-muted); cursor: not-allowed; }
 
 .ws-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
@@ -975,11 +990,72 @@ body.is-mobile .ws-plane { display: none !important; }
 .pac-list__empty { font-size: 0.72rem; color: var(--text-muted); }
 .pac-list__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
 
-/* Subtítulos e dica da lista de trabalho */
-.pac-sub {
-  margin: 18px 0 2px; font-size: 0.7rem; font-weight: 700;
-  letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-muted);
+/* ---------------------------------------------------------------------
+   A TELA DE CADASTRO, EM BLOCOS
+
+   Era uma pilha: formulário, subtítulo, lista, subtítulo, lista — tudo com o
+   mesmo peso visual, e nada dizendo por onde se começa. Agora são blocos com
+   cabeçalho, e o primeiro deles é a WORKLIST, porque é ali que o dia começa
+   num tomógrafo de verdade: a agenda chega do RIS e o técnico confere.
+--------------------------------------------------------------------- */
+.cad-bloco {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  padding: 12px 14px 14px;
+  margin-bottom: 14px;
 }
+.cad-bloco__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 8px;
+}
+.cad-bloco__titulo {
+  margin: 0; font-size: 0.8rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary);
+}
+.cad-bloco__contagem {
+  font-size: var(--fs-mini); color: var(--accent-cyan-ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.cad-bloco__dica { margin: 0 0 10px; font-size: var(--fs-mini); color: var(--text-muted); line-height: 1.4; }
+.cad-bloco__dica strong { color: var(--text-secondary); }
+
+/* O cadastro é a ação principal desta tela: ganha a borda de acento. */
+.cad-bloco--form { border-color: var(--accent-cyan-dim); }
+.cad-bloco--form .cad-bloco__titulo { color: var(--accent-cyan-ink); }
+.ws-actions--cadastro { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.ws-btn--grande { padding: 9px 18px; font-size: 0.82rem; font-weight: 600; }
+
+/* ---- A worklist ---------------------------------------------------- */
+.wl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.wl-item__botao {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto;
+  align-items: start; gap: 10px; text-align: left;
+  padding: 8px 10px; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); background: var(--bg-panel-raised);
+  color: inherit; font: inherit; cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.wl-item__botao:hover { border-color: var(--accent-cyan); background: var(--bg-panel); }
+.wl-item__hora {
+  font-family: var(--font-mono); font-size: var(--fs-mini);
+  color: var(--text-secondary); font-variant-numeric: tabular-nums; padding-top: 1px;
+}
+.wl-item__corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wl-item__nome { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
+.wl-item__meta { font-size: var(--fs-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* A indicação clínica é o que justifica o protocolo — e por isso não é
+   letra miúda de rodapé: fica na cor do texto corrente. */
+.wl-item__indic { font-size: var(--fs-mini); color: var(--text-secondary); line-height: 1.35; }
+.wl-item__selo {
+  font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); white-space: nowrap; padding-top: 2px;
+}
+.wl-item.is-urgente .wl-item__botao { border-left: 3px solid var(--accent-amber); }
+.wl-item.is-urgente .wl-item__selo { color: var(--accent-amber-ink); font-weight: 700; }
+.wl-item.is-feito .wl-item__botao { opacity: 0.55; }
+.wl-item.is-feito .wl-item__selo { color: var(--accent-green-ink); }
+
 .pac-hint { margin: 0; font-size: var(--fs-mini); color: var(--text-muted); }
 
 /* Seleção explícita: o paciente EM EXAME é escolhido, nunca inferido pelo
@@ -1350,19 +1426,20 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
   grid-row: 1; grid-column: 2;
   width: var(--trilho-w);
   display: flex; flex-direction: column; align-items: stretch; gap: 3px;
-  padding: 8px 7px;
+  padding: 8px 5px;
   background: var(--bg-panel);
   border-left: 1px solid var(--border-strong);
   overflow-y: auto;
 }
 .cstep {
   position: relative; display: flex; flex-direction: column; align-items: center;
-  gap: 4px;
+  gap: 3px;
   border: 0; background: transparent; color: var(--text-secondary);
-  padding: 9px 4px; border-radius: var(--radius-md); cursor: pointer;
-  font: inherit; font-size: var(--fs-mini); line-height: 1.15; text-align: center;
+  padding: 8px 2px; border-radius: var(--radius-md); cursor: pointer;
+  font: inherit; font-size: var(--fs-micro); line-height: 1.1; text-align: center;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
+.cstep__rot { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .cstep:hover { background: var(--bg-hover, rgba(120, 200, 255, 0.08)); color: var(--text-primary); }
 .cstep.is-active { background: var(--accent-cyan); color: #04222b; font-weight: 600; }
 .cstep__num {
@@ -1378,17 +1455,20 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
 /* Contexto do exame: nome, prontuário, protocolo, posição da mesa. No
    trilho ele QUEBRA em várias linhas, no rodapé da coluna — era uma linha
    só com reticências quando a barra era horizontal. */
+/* Em 66 px nao cabe o contexto do exame escrito. Ele continua existindo — o
+   `updateInfo` segue escrevendo nele, e o leitor de tela o le —, mas some da
+   vista e reaparece como `title` do trilho inteiro (ver js/ui-layout.js).
+   O mesmo texto ja aparece por extenso no rodape de mensagens. */
 .console-banner {
-  margin-top: auto; padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--fs-micro); line-height: 1.35; color: var(--text-secondary);
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 /* Os três botões que moravam na barra de status. Ficam no pé do trilho, e
    são a ÚNICA forma de sair do modo console ou entrar no modo celular — por
    isso o trilho deixou de sumir junto com o console (ver js/ui-layout.js). */
 .console-steps__acoes {
-  display: flex; justify-content: center; gap: 4px;
-  padding-top: 8px; margin-top: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin-top: auto; padding-top: 10px;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1416,8 +1496,12 @@ body.console-mode.cstep-mpr:not(.is-mobile) #pane-mpr { display: flex; }
    estão em display:contents no modo console), então basta exibi-los juntos. */
 body.console-mode.cstep-pacproto:not(.is-mobile) #pane-pac,
 body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto { display: flex; }
+/* O cadastro ganha a coluna MAIOR nesta etapa. Antes ficava com 36% contra
+   64% dos protocolos — e é no cadastro que a etapa começa: worklist,
+   conferência de identidade, indicação clínica. O protocolo vem depois, e
+   cabe bem no que sobra. */
 body.console-mode.cstep-pacproto:not(.is-mobile) #pane-pac {
-  flex: 0 0 clamp(340px, 36%, 480px); border-right: 0;
+  flex: 0 0 clamp(420px, 54%, 720px); border-right: 0;
 }
 body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto { flex: 1 1 auto; }
 /* Formulário do paciente (etapa isolada, se acessada) centralizado; na etapa
@@ -1490,11 +1574,9 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
   /* Tela estreita: o trilho afina e o contexto sai — a navegação fica.
      Os três botões empilham: lado a lado eles somam 110 px e não cabem
      nos 62 px do trilho estreito. */
-  .console-steps { width: 62px; padding: 6px 4px; }
-  .cstep { font-size: 0; gap: 0; padding: 8px 2px; }
+  .console-steps { width: 54px; padding: 6px 3px; }
+  .cstep__rot { display: none; }
   .cstep__num { width: 26px; height: 26px; font-size: var(--fs-mini); }
-  .console-steps__acoes { flex-direction: column; align-items: center; }
-  .console-banner { display: none; }
 }
 
 /* PiP no modo celular (aba Exame): a sala 3D fica sempre visível no topo
@@ -1604,6 +1686,35 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-step.is-done { opacity: 0.62; }
 .acq-step__num { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-mini); background: var(--bg-panel-raised); color: var(--text-secondary); }
 .acq-step.is-active .acq-step__num { background: var(--accent-cyan); color: #00131c; }
+
+/* ---- O que falta para iniciar --------------------------------------------
+   Fica ACIMA do botao Iniciar, e nao depois dele: o lugar de dizer que falta
+   algo e antes de a pessoa tentar. Cada item e um botao que leva a etapa. */
+.acq-faltas {
+  margin: 8px 6px 2px; padding: 8px 10px;
+  border: 1px solid var(--accent-amber); border-radius: var(--radius-sm);
+  background: rgba(255, 176, 32, 0.08);
+}
+.acq-faltas__titulo {
+  display: block; font-size: var(--fs-micro); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent-amber-ink); margin-bottom: 5px;
+}
+.acq-faltas__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.acq-faltas__item {
+  width: 100%; text-align: left; display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); background: var(--bg-panel);
+  color: var(--text-primary); font: inherit; font-size: var(--fs-mini);
+  cursor: pointer;
+}
+.acq-faltas__item:hover { border-color: var(--accent-amber); }
+.acq-faltas__item::after {
+  content: "ir \2192"; margin-left: auto; color: var(--accent-amber-ink);
+  font-size: var(--fs-micro); white-space: nowrap;
+}
+.acq-faltas__item--sem-destino { cursor: default; }
+.acq-faltas__item--sem-destino::after { content: ""; }
 .acq-step.is-done .acq-step__num { background: var(--accent-cyan-dim); color: #eafaff; }
 .acq-step__body { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .acq-step__name { font-size: 0.8rem; color: var(--text-primary); }

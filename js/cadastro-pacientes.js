@@ -31,6 +31,9 @@
     var fAltura = document.getElementById("pac-altura");
     var fRegiao = document.getElementById("pac-regiao");
     var btnAdd = document.getElementById("pac-add");
+    var btnLimpar = document.getElementById("pac-limpar");
+    var wlEl = document.getElementById("wl-list");
+    var wlContagem = document.getElementById("wl-contagem");
     var listEl = document.getElementById("pac-list");
     var estudoEl = document.getElementById("estudo-list");
     var examList = document.getElementById("ws-patient-list");
@@ -308,6 +311,85 @@
     });
 
     // ---- cadastro --------------------------------------------------------
+    // ---- WORKLIST DO DIA ------------------------------------------------
+    //
+    // A lista que chegaria do RIS. Selecionar uma linha PREENCHE o formulario
+    // e nao cadastra: conferir a identidade do paciente contra a requisicao e
+    // um ato do operador, e o simulador nao vai pular esse ato por ele.
+    //
+    // Uma linha ja cadastrada continua na lista, marcada — o aluno ve o que ja
+    // passou pela sala sem que a agenda mude de tamanho no meio do turno.
+    var agenda = (window.SimTC && SimTC.worklistExemplo) || [];
+
+    function jaCadastrado(item) {
+      return worklist.todos().some(function (p) {
+        return p.prontuario && p.prontuario === item.prontuario;
+      });
+    }
+
+    function carregarDaWorklist(item) {
+      if (fPront) fPront.value = item.prontuario;
+      fNome.value = item.nome;
+      if (fSexo) fSexo.value = item.sexo;
+      if (fIdade) fIdade.value = String(item.idade);
+      if (fPeso) fPeso.value = String(item.pesoKg);
+      if (fAltura) fAltura.value = String(item.alturaCm);
+      if (fRegiao) fRegiao.value = item.regiao;
+      renderWorklist();
+      // O foco vai para o NOME, que e o campo que se confere olhando para a
+      // pessoa — nao para o botao de cadastrar.
+      fNome.focus();
+      fNome.select();
+      SimTC.showMessage(
+        "Carregado da worklist: " + item.nome + " · " + item.regiao + " · " +
+        item.indicacao + " Confira a identidade e cadastre.", "info");
+    }
+
+    function renderWorklist() {
+      if (!wlEl) return;
+      wlEl.innerHTML = "";
+      var pendentes = 0;
+      agenda.forEach(function (item) {
+        var feito = jaCadastrado(item);
+        if (!feito) pendentes++;
+        var li = document.createElement("li");
+        li.className = "wl-item" + (feito ? " is-feito" : "") +
+          (item.prioridade === "urgente" ? " is-urgente" : "");
+        li.innerHTML =
+          '<button type="button" class="wl-item__botao">' +
+            '<span class="wl-item__hora">' + SimTC.esc(item.hora) + '</span>' +
+            '<span class="wl-item__corpo">' +
+              '<span class="wl-item__nome">' + SimTC.esc(item.nome) + '</span>' +
+              '<span class="wl-item__meta">' + SimTC.esc(item.prontuario) + ' · ' +
+                SimTC.esc(item.sexo[0]) + ' · ' + item.idade + ' anos · ' +
+                item.pesoKg + ' kg · ' + item.alturaCm + ' cm</span>' +
+              '<span class="wl-item__indic">' + SimTC.esc(item.regiao) + ' — ' +
+                SimTC.esc(item.indicacao) + '</span>' +
+            '</span>' +
+            '<span class="wl-item__selo">' +
+              (feito ? "cadastrado" : (item.prioridade === "urgente" ? "urgente" : "")) +
+            '</span>' +
+          '</button>';
+        li.querySelector(".wl-item__botao").addEventListener("click", function () {
+          carregarDaWorklist(item);
+        });
+        wlEl.appendChild(li);
+      });
+      if (wlContagem) {
+        wlContagem.textContent = pendentes + " de " + agenda.length + " a fazer";
+      }
+    }
+
+    function limparFormulario() {
+      if (fPront) fPront.value = "";
+      fNome.value = "";
+      if (fIdade) fIdade.value = "";
+      if (fPeso) fPeso.value = "";
+      if (fAltura) fAltura.value = "";
+      fNome.focus();
+    }
+    if (btnLimpar) btnLimpar.addEventListener("click", limparFormulario);
+
     function addPatient() {
       var novo;
       try {
@@ -329,13 +411,8 @@
       // Cadastrar NÃO coloca em exame — a seleção é um ato separado.
       worklist.adicionar(novo);
       persist(novo).then(function () {
-        renderList(); renderExamList();
-        if (fPront) fPront.value = "";
-        fNome.value = "";
-        if (fIdade) fIdade.value = "";
-        if (fPeso) fPeso.value = "";
-        if (fAltura) fAltura.value = "";
-        fNome.focus();
+        renderList(); renderExamList(); renderWorklist();
+        limparFormulario();
         SimTC.showMessage(
           "Paciente \"" + novo.nome + "\" cadastrado" + (memoryFallback ? " (temporário)" : "") +
           ". Clique nele na lista para colocá-lo em exame.", "success");
@@ -350,8 +427,8 @@
     // ---- barramento: a tela apenas reage --------------------------------
     Core.bus.on(EV.EXAME_SELECIONADO, function () { renderList(); renderExamList(); });
     Core.bus.on(EV.EXAME_ENCERRADO, function () { renderList(); renderExamList(); });
-    Core.bus.on(EV.PACIENTE_ADICIONADO, function () { renderList(); });
-    Core.bus.on(EV.PACIENTE_REMOVIDO, function () { renderList(); renderExamList(); });
+    Core.bus.on(EV.PACIENTE_ADICIONADO, function () { renderList(); renderWorklist(); });
+    Core.bus.on(EV.PACIENTE_REMOVIDO, function () { renderList(); renderExamList(); renderWorklist(); });
 
     // ---- carga inicial ---------------------------------------------------
     Promise.all([
@@ -364,7 +441,7 @@
     ]).then(function (r) {
       worklist.carregar(r[0] || []);
       estudos = r[1] || [];
-      renderList(); renderExamList(); renderEstudos();
+      renderList(); renderExamList(); renderEstudos(); renderWorklist();
     });
   }
 

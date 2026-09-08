@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907ax" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907ax" />
+  <link rel="stylesheet" href="css/style.css?v=20260907bg" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907bg" />
 </head>
 <body data-theme="dark">
 
@@ -34,10 +34,10 @@
   <h1 class="so-para-leitor-de-tela">Simulador Educacional de Tomografia Computadorizada</h1>
 
   <nav class="console-steps" id="console-steps" hidden aria-label="Etapas do console de operação">
-    <button class="cstep" data-step="sim" type="button"><span class="cstep__num">1</span>Sala<span class="cstep__dot" id="cdot-sim" hidden></span></button>
-    <button class="cstep" data-step="pacproto" type="button"><span class="cstep__num">2</span>Paciente &amp; Protocolo<span class="cstep__dot" id="cdot-pacproto" hidden></span></button>
-    <button class="cstep" data-step="acq" type="button"><span class="cstep__num">3</span>Exame<span class="cstep__dot" id="cdot-acq" hidden></span></button>
-    <button class="cstep" data-step="mpr" type="button"><span class="cstep__num">4</span>MPR / 3D<span class="cstep__dot" id="cdot-mpr" hidden></span></button>
+    <button class="cstep" data-step="sim" type="button" title="Sala de exame" aria-label="Etapa 1: Sala de exame"><span class="cstep__num">1</span><span class="cstep__rot">Sala</span><span class="cstep__dot" id="cdot-sim" hidden></span></button>
+    <button class="cstep" data-step="pacproto" type="button" title="Paciente &amp; Protocolo" aria-label="Etapa 2: Paciente e Protocolo"><span class="cstep__num">2</span><span class="cstep__rot">Paciente</span><span class="cstep__dot" id="cdot-pacproto" hidden></span></button>
+    <button class="cstep" data-step="acq" type="button" title="Aquisição do exame" aria-label="Etapa 3: Aquisição do exame"><span class="cstep__num">3</span><span class="cstep__rot">Exame</span><span class="cstep__dot" id="cdot-acq" hidden></span></button>
+    <button class="cstep" data-step="mpr" type="button" title="Processamento — MPR e 3D" aria-label="Etapa 4: Processamento MPR e 3D"><span class="cstep__num">4</span><span class="cstep__rot">MPR</span><span class="cstep__dot" id="cdot-mpr" hidden></span></button>
     <div class="console-banner" id="console-banner">Sem paciente em exame</div>
     <div class="console-steps__acoes">
       <button id="mobile-toggle" class="icon-btn" type="button" aria-label="Modo celular" title="Modo celular" aria-pressed="false">
@@ -156,6 +156,26 @@
     <section class="dash-pane dash-pane--pac" id="pane-pac" aria-label="Cadastro de pacientes">
       <header class="dash-pane__head"><h2 class="dash-pane__title">Cadastro de pacientes</h2></header>
       <div class="dash-pane__body">
+
+        <!-- A WORKLIST VEM PRIMEIRO, e nao e ordem de tela: e ordem de
+             trabalho. Num tomografo o dia comeca na lista que chegou do RIS;
+             digitar paciente e a excecao, nao a regra. Ver js/worklist-exemplo.js. -->
+        <section class="cad-bloco cad-bloco--worklist">
+          <header class="cad-bloco__head">
+            <h3 class="cad-bloco__titulo">Worklist do dia</h3>
+            <span class="cad-bloco__contagem" id="wl-contagem"></span>
+          </header>
+          <p class="cad-bloco__dica">
+            Agendamentos recebidos do RIS. Clique para carregar no cadastro —
+            <strong>conferir a identidade antes de cadastrar é parte do exame.</strong>
+          </p>
+          <ul class="wl-list" id="wl-list"></ul>
+        </section>
+
+        <section class="cad-bloco cad-bloco--form">
+          <header class="cad-bloco__head">
+            <h3 class="cad-bloco__titulo">Cadastro</h3>
+          </header>
         <div class="pac-form" id="pac-form">
           <label class="ws-field ws-field--full"><span class="ws-field__label">Prontuário</span><input class="ws-input" id="pac-prontuario" type="text" placeholder="nº do prontuário"></label>
           <label class="ws-field ws-field--full"><span class="ws-field__label">Nome</span><input class="ws-input" id="pac-nome" type="text" placeholder="nome do paciente"></label>
@@ -172,15 +192,27 @@
             <label class="ws-field"><span class="ws-field__label">Altura (cm)</span><input class="ws-input" id="pac-altura" type="number" min="20" max="260" placeholder="cm"></label>
           </div>
           <label class="ws-field ws-field--full"><span class="ws-field__label">Região a examinar</span><select class="ws-input" id="pac-regiao"></select></label>
-          <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="pac-add" type="button">Cadastrar paciente</button></div>
+          <div class="ws-actions ws-actions--cadastro">
+            <button class="ws-btn ws-btn--ghost" id="pac-limpar" type="button">Limpar</button>
+            <button class="ws-btn ws-btn--primary ws-btn--grande" id="pac-add" type="button">Cadastrar paciente</button>
+          </div>
         </div>
+        </section>
 
-        <h3 class="pac-sub">Lista de trabalho</h3>
-        <p class="pac-hint" id="pac-hint">Clique em um paciente para colocá-lo em exame.</p>
-        <ul class="pac-list" id="pac-list"></ul>
+        <section class="cad-bloco">
+          <header class="cad-bloco__head">
+            <h3 class="cad-bloco__titulo">Pacientes cadastrados</h3>
+          </header>
+          <p class="cad-bloco__dica" id="pac-hint">Clique em um paciente para colocá-lo em exame.</p>
+          <ul class="pac-list" id="pac-list"></ul>
+        </section>
 
-        <h3 class="pac-sub">Exames realizados</h3>
-        <ul class="pac-list pac-list--estudos" id="estudo-list"></ul>
+        <section class="cad-bloco">
+          <header class="cad-bloco__head">
+            <h3 class="cad-bloco__titulo">Exames realizados</h3>
+          </header>
+          <ul class="pac-list pac-list--estudos" id="estudo-list"></ul>
+        </section>
       </div>
     </section>
     </div>
@@ -288,6 +320,15 @@
           <header class="acq-quad__head">Sequência dos protocolos</header>
           <div class="acq-quad__body acq-seq-wrap">
             <ul class="acq-seq" id="acq-seq"></ul>
+            <!-- O QUE FALTA PARA INICIAR.
+                 O nucleo sempre soube dizer; ate agora so dizia DEPOIS de o
+                 operador apertar Iniciar, numa faixa fina no rodape, e numa
+                 tela diferente daquela que resolve. Agora aparece antes, aqui,
+                 e cada item leva a etapa que o resolve. -->
+            <div class="acq-faltas" id="acq-faltas" hidden>
+              <span class="acq-faltas__titulo">Para iniciar, falta:</span>
+              <ul class="acq-faltas__lista" id="acq-faltas-lista"></ul>
+            </div>
             <div class="acq-seq__foot ws-actions ws-actions--center">
               <button class="ws-btn" id="ws-exam-move" type="button" hidden>Mover</button>
               <button class="ws-btn" id="ws-exam-report" type="button" hidden>Relatório</button>
@@ -442,7 +483,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907ax"
+          src="dicom-viewer/index.html?embedded=1&v=20260907bg"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -456,73 +497,74 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907ax";</script>
+  <script>window.__SIMTC_REV__ = "20260907bg";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907ax"></script>
+  <script src="js/phantoms.js?v=20260907bg"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907ax"></script>
-  <script src="core/clock.js?v=20260907ax"></script>
-  <script src="core/model/patient.js?v=20260907ax"></script>
-  <script src="core/model/protocol.js?v=20260907ax"></script>
-  <script src="core/model/exam.js?v=20260907ax"></script>
-  <script src="core/state.js?v=20260907ax"></script>
-  <script src="core/phantom/volume.js?v=20260907ax"></script>
-  <script src="core/phantom/acervo.js?v=20260907ax"></script>
-  <script src="core/acquisition/fisica.js?v=20260907ax"></script>
-  <script src="core/acquisition/noise.js?v=20260907ax"></script>
-  <script src="core/acquisition/projector.js?v=20260907ax"></script>
-  <script src="core/acquisition/scan.js?v=20260907ax"></script>
-  <script src="core/dose/ctdi.js?v=20260907ax"></script>
-  <script src="core/dose/aec.js?v=20260907ax"></script>
-  <script src="core/protocol/validacao.js?v=20260907ax"></script>
-  <script src="core/protocol/gestor.js?v=20260907ax"></script>
-  <script src="core/dicom/writer.js?v=20260907ax"></script>
-  <script src="core/recon/serie.js?v=20260907ax"></script>
+  <script src="core/bus.js?v=20260907bg"></script>
+  <script src="core/clock.js?v=20260907bg"></script>
+  <script src="core/model/patient.js?v=20260907bg"></script>
+  <script src="core/model/protocol.js?v=20260907bg"></script>
+  <script src="core/model/exam.js?v=20260907bg"></script>
+  <script src="core/state.js?v=20260907bg"></script>
+  <script src="core/phantom/volume.js?v=20260907bg"></script>
+  <script src="core/phantom/acervo.js?v=20260907bg"></script>
+  <script src="core/acquisition/fisica.js?v=20260907bg"></script>
+  <script src="core/acquisition/noise.js?v=20260907bg"></script>
+  <script src="core/acquisition/projector.js?v=20260907bg"></script>
+  <script src="core/acquisition/scan.js?v=20260907bg"></script>
+  <script src="core/dose/ctdi.js?v=20260907bg"></script>
+  <script src="core/dose/aec.js?v=20260907bg"></script>
+  <script src="core/protocol/validacao.js?v=20260907bg"></script>
+  <script src="core/protocol/gestor.js?v=20260907bg"></script>
+  <script src="core/dicom/writer.js?v=20260907bg"></script>
+  <script src="core/recon/serie.js?v=20260907bg"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907ax"></script>
+  <script src="js/shared.js?v=20260907bg"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907ax"></script>
+  <script src="app/contratos.js?v=20260907bg"></script>
 
   <!-- Camada ui/: como o app escreve numero, num lugar so (ETAPA 7) -->
-  <script src="js/ui/formatar.js?v=20260907ax"></script>
-  <script src="js/ui/confirmar.js?v=20260907ax"></script>
-  <script src="js/ui/entrada.js?v=20260907ax"></script>
-  <script src="js/ui/campo.js?v=20260907ax"></script>
-  <script src="js/ui/lista.js?v=20260907ax"></script>
+  <script src="js/ui/formatar.js?v=20260907bg"></script>
+  <script src="js/ui/confirmar.js?v=20260907bg"></script>
+  <script src="js/ui/entrada.js?v=20260907bg"></script>
+  <script src="js/ui/campo.js?v=20260907bg"></script>
+  <script src="js/ui/lista.js?v=20260907bg"></script>
 
   <!-- Módulos de telas -->
   <!-- Peças que sairam do monolito da sala (ETAPA 6) -->
-  <script src="js/sala/cenario.js?v=20260907ax"></script>
-  <script src="js/sala/glb.js?v=20260907ax"></script>
-  <script src="js/sala/paciente.js?v=20260907ax"></script>
-  <script src="js/sala/paciente-importado.js?v=20260907ax"></script>
-  <script src="js/sala/gantry.js?v=20260907ax"></script>
-  <script src="js/fisica-mesa.js?v=20260907ax"></script>
-  <script src="js/sala-exame.js?v=20260907ax"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907ax"></script>
-  <script src="js/protocolos.js?v=20260907ax"></script>
+  <script src="js/sala/cenario.js?v=20260907bg"></script>
+  <script src="js/sala/glb.js?v=20260907bg"></script>
+  <script src="js/sala/paciente.js?v=20260907bg"></script>
+  <script src="js/sala/paciente-importado.js?v=20260907bg"></script>
+  <script src="js/sala/gantry.js?v=20260907bg"></script>
+  <script src="js/fisica-mesa.js?v=20260907bg"></script>
+  <script src="js/sala-exame.js?v=20260907bg"></script>
+  <script src="js/worklist-exemplo.js?v=20260907bg"></script>
+  <script src="js/cadastro-pacientes.js?v=20260907bg"></script>
+  <script src="js/protocolos.js?v=20260907bg"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907ax"></script>
-  <script src="js/motor-imagem.js?v=20260907ax"></script>
-  <script src="js/exportar-dicom.js?v=20260907ax"></script>
-  <script src="js/medidas.js?v=20260907ax"></script>
+  <script src="js/fonte-volume.js?v=20260907bg"></script>
+  <script src="js/motor-imagem.js?v=20260907bg"></script>
+  <script src="js/exportar-dicom.js?v=20260907bg"></script>
+  <script src="js/medidas.js?v=20260907bg"></script>
   <!-- Peças que sairam do monolito da aquisicao (ETAPA 6) -->
-  <script src="js/aquisicao/som.js?v=20260907ax"></script>
-  <script src="js/aquisicao/box-planejamento.js?v=20260907ax"></script>
-  <script src="js/aquisicao/maquina-fases.js?v=20260907ax"></script>
-  <script src="js/aquisicao/painel.js?v=20260907ax"></script>
-  <script src="js/aquisicao.js?v=20260907ax"></script>
-  <script src="js/mpr.js?v=20260907ax"></script>
-  <script src="js/ui-layout.js?v=20260907ax"></script>
+  <script src="js/aquisicao/som.js?v=20260907bg"></script>
+  <script src="js/aquisicao/box-planejamento.js?v=20260907bg"></script>
+  <script src="js/aquisicao/maquina-fases.js?v=20260907bg"></script>
+  <script src="js/aquisicao/painel.js?v=20260907bg"></script>
+  <script src="js/aquisicao.js?v=20260907bg"></script>
+  <script src="js/mpr.js?v=20260907bg"></script>
+  <script src="js/ui-layout.js?v=20260907bg"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907ax"></script>
+  <script src="script.js?v=20260907bg"></script>
 </body>
 </html>
