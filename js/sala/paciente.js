@@ -95,8 +95,8 @@
   var TORSO_R = 0.12; // raio do torso — espessura ~24 cm
 
   // Cabeça com pescoço.
-  var head = new THREE.Mesh(new THREE.SphereGeometry(0.095, 32, 24), skin);
-  head.scale.set(0.95, 1.05, 1.0); // rosto levemente ovalado (menos "bola")
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.091, 32, 24), skin);
+  head.scale.set(0.93, 1.06, 1.0); // rosto mais estreito e ovalado
   head.position.set(0, TORSO_R, 0.76);
   patient.add(head);
   // Queixo/mandíbula sutil, para dar forma ao rosto sem cair no "uncanny".
@@ -104,44 +104,106 @@
   jaw.scale.set(0.9, 0.75, 0.95);
   jaw.position.set(0, TORSO_R - 0.03, 0.775);
   patient.add(jaw);
-  var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.09, 16), skin);
+  var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.04, 0.09, 16), skin);
   neck.rotation.x = Math.PI / 2;
   neck.position.set(0, TORSO_R - 0.01, 0.67);
   patient.add(neck);
 
-  // Cabelo escuro: calota + coque (como a paciente da referência).
+  // Cabelo escuro, preso num coque baixo — que é como o cabelo entra numa
+  // sala de TC: para trás, fora do campo, sem presilha de metal.
   var hairCap = new THREE.Mesh(
-    new THREE.SphereGeometry(0.099, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    new THREE.SphereGeometry(0.101, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58),
     hairMat
   );
   hairCap.position.copy(head.position);
   hairCap.rotation.x = -Math.PI / 2.4;
   patient.add(hairCap);
-  var hairBun = new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 12), hairMat);
-  hairBun.position.set(0, TORSO_R - 0.015, 0.76 + 0.09);
+  // Mechas caindo AO LADO da cabeça — não sobre o rosto.
+  //
+  // A primeira tentativa punha as mechas em `TORSO_R + 0.012`, acima do
+  // centro da cabeça. Deitado, +Y é o lado do ROSTO: elas atravessavam a
+  // face na altura dos olhos. Descem para abaixo do plano do rosto e recuam
+  // para trás da orelha, que é onde cabelo preso fica.
+  var mechaL = new THREE.Mesh(new THREE.SphereGeometry(0.036, 14, 12), hairMat);
+  mechaL.scale.set(0.52, 0.85, 1.35);
+  mechaL.position.set(-0.076, TORSO_R - 0.028, 0.788);
+  patient.add(mechaL);
+  var mechaR = mechaL.clone();
+  mechaR.position.x = 0.076;
+  patient.add(mechaR);
+  var hairBun = new THREE.Mesh(new THREE.SphereGeometry(0.043, 18, 14), hairMat);
+  hairBun.scale.set(1, 0.85, 0.9);
+  hairBun.position.set(0, TORSO_R - 0.028, 0.76 + 0.088);
   patient.add(hairBun);
 
-  // Ombros arredondados (esferas nas pontas do tronco superior).
-  var shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), scrub);
-  shoulderL.position.set(-0.135, TORSO_R * 0.9, 0.58);
+  // -----------------------------------------------------------------
+  // PROPORÇÃO FEMININA
+  //
+  // O que distingue uma silhueta feminina de uma masculina não é um detalhe
+  // solto: é a RELAÇÃO entre três larguras. No adulto médio,
+  //
+  //            biacromial (ombro)   bi-ilíaca (quadril)
+  //   mulher         ~36 cm                ~36 cm        ombro ≈ quadril
+  //   homem          ~40 cm                ~34 cm        ombro > quadril
+  //
+  // e a cintura marca mais no meio. O tronco por isso deixou de ser um cone
+  // só e virou três segmentos — tórax, cintura, quadril — com a cintura
+  // estreitando e o quadril voltando à largura do ombro.
+  //
+  // A ESPESSURA (TORSO_R, no eixo Y) não muda, e é de propósito: ela é o
+  // número que ensina a descer a mesa até o isocentro. O que muda é a
+  // largura, que o exame não usa para nada.
+  // -----------------------------------------------------------------
+  var OMBRO_X = 1.20;    // fator de largura do tórax
+  var CINTURA_X = 1.02;  // a cintura marca
+  var QUADRIL_X = 1.34;  // e o quadril volta a abrir
+
+  // Ombros arredondados — mais estreitos e um pouco mais baixos.
+  var shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), scrub);
+  shoulderL.scale.set(1.05, 0.92, 1);
+  shoulderL.position.set(-0.12, TORSO_R * 0.88, 0.575);
   patient.add(shoulderL);
-  var shoulderR = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), scrub);
-  shoulderR.position.set(0.135, TORSO_R * 0.9, 0.58);
+  var shoulderR = shoulderL.clone();
+  shoulderR.position.x = 0.12;
   patient.add(shoulderR);
 
-  // Tronco superior (tórax) — levemente elíptico (mais largo que alto).
-  var chest = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R, TORSO_R + 0.015, 0.34, 24), scrub);
-  chest.scale.x = 1.35; // ombros mais largos que a espessura
+  // Tórax, da linha dos ombros até abaixo do busto.
+  var chest = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R - 0.004, TORSO_R, 0.24, 24), scrub);
+  chest.scale.x = OMBRO_X;
   chest.rotation.x = Math.PI / 2;
-  chest.position.set(0, TORSO_R * 0.92, 0.44);
+  chest.position.set(0, TORSO_R * 0.92, 0.475);
   patient.add(chest);
 
-  // Avental com caimento (flare): tronco inferior alargando até os
-  // joelhos, como o avental da foto (cone truncado).
-  var gownSkirt = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R + 0.015, TORSO_R + 0.055, 0.5, 24), scrub);
-  gownSkirt.scale.x = 1.3;
+  // Busto: duas calotas rasas SOB o avental — o tecido é o mesmo, e é assim
+  // que aparece numa paciente de camisola, deitada.
+  function seio(x) {
+    var m = new THREE.Mesh(new THREE.SphereGeometry(0.058, 18, 14), scrub);
+    m.scale.set(1.0, 0.72, 1.05);
+    m.position.set(x, TORSO_R * 1.06, 0.47);
+    return m;
+  }
+  patient.add(seio(-0.062));
+  patient.add(seio(0.062));
+
+  // Cintura — o segmento que marca a silhueta.
+  var waist = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R - 0.012, TORSO_R - 0.004, 0.16, 24), scrub);
+  waist.scale.x = CINTURA_X;
+  waist.rotation.x = Math.PI / 2;
+  waist.position.set(0, TORSO_R * 0.9, 0.275);
+  patient.add(waist);
+
+  // Quadril — volta à largura do ombro, e um pouco além.
+  var hip = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R + 0.004, TORSO_R - 0.012, 0.2, 24), scrub);
+  hip.scale.x = QUADRIL_X;
+  hip.rotation.x = Math.PI / 2;
+  hip.position.set(0, TORSO_R * 0.9, 0.095);
+  patient.add(hip);
+
+  // Saia do avental: do quadril até os joelhos, com o caimento do tecido.
+  var gownSkirt = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R + 0.012, TORSO_R + 0.004, 0.28, 24), scrub);
+  gownSkirt.scale.x = 1.30;
   gownSkirt.rotation.x = Math.PI / 2;
-  gownSkirt.position.set(0, TORSO_R * 0.88, 0.02);
+  gownSkirt.position.set(0, TORSO_R * 0.88, -0.145);
   patient.add(gownSkirt);
 
   function limb(r, l, x, y, z, mat, r2) {
@@ -150,30 +212,29 @@
     m.position.set(x, y, z);
     return m;
   }
-  // Braços — de pele (manga curta), levemente afastados do tronco.
-  patient.add(limb(0.036, 0.46, -0.185, TORSO_R * 0.72, 0.33, skin, 0.028));
-  patient.add(limb(0.036, 0.46, 0.185, TORSO_R * 0.72, 0.33, skin, 0.028));
+  // Braços — de pele (manga curta), rentes ao tronco, que agora é mais estreito.
+  patient.add(limb(0.031, 0.46, -0.168, TORSO_R * 0.72, 0.33, skin, 0.024));
+  patient.add(limb(0.031, 0.46, 0.168, TORSO_R * 0.72, 0.33, skin, 0.024));
   // Mãos (pequenas esferas).
-  var handL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 14, 10), skin);
-  handL.position.set(-0.185, TORSO_R * 0.72, 0.08);
+  var handL = new THREE.Mesh(new THREE.SphereGeometry(0.028, 14, 10), skin);
+  handL.position.set(-0.168, TORSO_R * 0.72, 0.08);
   patient.add(handL);
-  var handR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 14, 10), skin);
-  handR.position.set(0.185, TORSO_R * 0.72, 0.08);
+  var handR = handL.clone();
+  handR.position.x = 0.168;
   patient.add(handR);
   // Pernas — de pele, do joelho (fim do avental) até o tornozelo,
-  // com panturrilha (mais grossa em cima).
-  patient.add(limb(0.048, 0.42, -0.075, TORSO_R * 0.75, -0.42, skin, 0.03));
-  patient.add(limb(0.048, 0.42, 0.075, TORSO_R * 0.75, -0.42, skin, 0.03));
+  // com panturrilha (mais grossa em cima) e juntas, como se deita.
+  patient.add(limb(0.044, 0.42, -0.066, TORSO_R * 0.75, -0.42, skin, 0.027));
+  patient.add(limb(0.044, 0.42, 0.066, TORSO_R * 0.75, -0.42, skin, 0.027));
   // Meias brancas nos pés (com "pezinho" apontando para cima quando deitada).
-  patient.add(limb(0.038, 0.10, -0.075, TORSO_R * 0.75, -0.68, sockMat, 0.035));
-  patient.add(limb(0.038, 0.10, 0.075, TORSO_R * 0.75, -0.68, sockMat, 0.035));
-  var footL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), sockMat);
+  patient.add(limb(0.034, 0.10, -0.066, TORSO_R * 0.75, -0.68, sockMat, 0.031));
+  patient.add(limb(0.034, 0.10, 0.066, TORSO_R * 0.75, -0.68, sockMat, 0.031));
+  var footL = new THREE.Mesh(new THREE.SphereGeometry(0.041, 14, 10), sockMat);
   footL.scale.set(0.8, 1.3, 0.8);
-  footL.position.set(-0.075, TORSO_R * 0.85, -0.73);
+  footL.position.set(-0.066, TORSO_R * 0.85, -0.73);
   patient.add(footL);
-  var footR = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), sockMat);
-  footR.scale.set(0.8, 1.3, 0.8);
-  footR.position.set(0.075, TORSO_R * 0.85, -0.73);
+  var footR = footL.clone();
+  footR.position.x = 0.066;
   patient.add(footR);
 
   // O paciente repousa sobre o topo do tampo (tampo tem 0.04 de

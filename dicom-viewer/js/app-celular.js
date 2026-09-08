@@ -6,16 +6,16 @@
  * deslizantes e carga adaptada à memória do aparelho.
  */
 
-import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js?v=20260907at';
-import { Viewport, PALETAS, construirLut } from './mpr.js?v=20260907at';
-import { Renderizador3D, TRANSFERENCIAS } from './render3d.js?v=20260907at';
-import { instalarPonteSimulador } from './simulator-bridge.js?v=20260907at';
+import { montarVolume, carregarUrls, carregarArquivosLocais } from './volume.js?v=20260907ax';
+import { Viewport, PALETAS, construirLut } from './mpr.js?v=20260907ax';
+import { Renderizador3D, TRANSFERENCIAS } from './render3d.js?v=20260907ax';
+import { instalarPonteSimulador } from './simulator-bridge.js?v=20260907ax';
 import {
   PRESETS, TRANSFER_PADRAO, PALETA_PADRAO, resolverPreset, PERFIS,
   planoDeCarga, perfilSugerido, carregarManifesto, urlsDaSerie, formatarBytes,
   criarCartaoExame, criarOpcaoSerie, preencherDetalhes,
   novaCarga, comProgresso
-} from './comum.js?v=20260907at';
+} from './comum.js?v=20260907ax';
 
 const $ = (id) => document.getElementById(id);
 

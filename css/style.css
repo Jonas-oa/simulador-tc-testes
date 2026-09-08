@@ -172,9 +172,14 @@ summary:focus-visible,
 --------------------------------------------------------------------- */
 body {
   display: grid;
-  grid-template-rows: 1fr auto;  /* area central, rodape de mensagem */
+  /* Duas linhas (área central, rodapé de mensagem) e duas colunas (conteúdo,
+     trilho de etapas). O trilho tem coluna própria justamente para não
+     sobrepor a imagem — ver o bloco TRILHO DE ETAPAS mais abaixo. */
+  grid-template-rows: 1fr auto;
+  grid-template-columns: 1fr auto;
   height: 100vh;
 }
+:root { --trilho-w: 132px; }
 
 .app-main {
   display: grid;
@@ -692,7 +697,8 @@ body {
    celula central e so um fica visivel por vez (o outro recebe [hidden]). */
 .app-main,
 .workstation-main { grid-row: 1; min-height: 0; }
-.message-panel { grid-row: 2; }
+/* O rodapé atravessa as duas colunas: a mensagem vale para a tela inteira. */
+.message-panel { grid-row: 2; grid-column: 1 / -1; }
 
 /* Alternador de ambiente (segmented control) na barra de status */
 .env-switch {
@@ -887,8 +893,9 @@ body.is-mobile .ws-plane { display: none !important; }
    protocolos e um quadrante a definir, todos visíveis e redimensionáveis.
    ===================================================================== */
 .dashboard {
-  /* Linha 1 da grade do body. Era a 2 enquanto a barra de status ocupava a 1. */
-  grid-row: 1;
+  /* Linha 1, coluna 1 da grade do body: o trilho de etapas ocupa a coluna 2. */
+  grid-row: 1; grid-column: 1;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   min-height: 0;
@@ -1328,53 +1335,71 @@ body:not(.is-mobile) #pane-sim .console .panel .panel__resize {
    sempre visível. O modo painel (4 quadrantes) continua disponível pelo
    botão de alternância. Exclusivo do desktop (o celular tem o seletor).
    ===================================================================== */
+/* ---------------------------------------------------------------------
+   TRILHO DE ETAPAS — vertical, à direita, com COLUNA PRÓPRIA
+
+   Era uma pílula horizontal `position: fixed` flutuando no alto da tela.
+   Flutuar quer dizer sobrepor: ela cobria a faixa superior da imagem, do
+   topograma e do editor de protocolo — e numa tela cheia de imagem médica,
+   cobrir é o que não se pode fazer.
+
+   Agora ocupa uma coluna da grade do body. Não cobre nada porque não está
+   por cima de nada: o conteúdo simplesmente termina onde o trilho começa.
+--------------------------------------------------------------------- */
 .console-steps {
-  position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
-  z-index: 60; display: flex; align-items: center; gap: 2px;
-  background: var(--bg-panel); border: 1px solid var(--border-strong);
-  border-radius: 999px; padding: 4px 12px 4px 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  max-width: min(94vw, 980px);
+  grid-row: 1; grid-column: 2;
+  width: var(--trilho-w);
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+  padding: 8px 7px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-strong);
+  overflow-y: auto;
 }
 .cstep {
-  position: relative; display: inline-flex; align-items: center; gap: 7px;
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  gap: 4px;
   border: 0; background: transparent; color: var(--text-secondary);
-  padding: 7px 13px; border-radius: 999px; cursor: pointer;
-  font: inherit; font-size: 0.85rem; white-space: nowrap;
+  padding: 9px 4px; border-radius: var(--radius-md); cursor: pointer;
+  font: inherit; font-size: var(--fs-mini); line-height: 1.15; text-align: center;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .cstep:hover { background: var(--bg-hover, rgba(120, 200, 255, 0.08)); color: var(--text-primary); }
 .cstep.is-active { background: var(--accent-cyan); color: #04222b; font-weight: 600; }
 .cstep__num {
-  display: inline-flex; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
   border: 1px solid currentColor; align-items: center; justify-content: center;
-  font-size: var(--fs-mini);
+  font-size: var(--fs-mini); flex: 0 0 auto;
 }
 .cstep__dot {
-  position: absolute; top: 3px; right: 5px; width: 8px; height: 8px;
+  position: absolute; top: 5px; right: 5px; width: 8px; height: 8px;
   border-radius: 50%; background: var(--accent-amber);
   box-shadow: 0 0 5px var(--accent-amber);
 }
+/* Contexto do exame: nome, prontuário, protocolo, posição da mesa. No
+   trilho ele QUEBRA em várias linhas, no rodapé da coluna — era uma linha
+   só com reticências quando a barra era horizontal. */
 .console-banner {
-  margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--border-strong);
-  font-size: 0.78rem; color: var(--text-secondary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px;
+  margin-top: auto; padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--text-secondary);
 }
-/* Os tres botoes que moravam na barra de status. Ficam depois do banner,
-   separados por um filete, e sao a UNICA forma de sair do modo console ou
-   entrar no modo celular — por isso a barra deixou de sumir junto com o
-   console (ver js/ui-layout.js). */
+/* Os três botões que moravam na barra de status. Ficam no pé do trilho, e
+   são a ÚNICA forma de sair do modo console ou entrar no modo celular — por
+   isso o trilho deixou de sumir junto com o console (ver js/ui-layout.js). */
 .console-steps__acoes {
-  display: flex; align-items: center; gap: 2px;
-  margin-left: 8px; padding-left: 8px;
-  border-left: 1px solid var(--border-strong);
+  display: flex; justify-content: center; gap: 4px;
+  padding-top: 8px; margin-top: 8px;
+  border-top: 1px solid var(--border-subtle);
 }
 
-/* Fora do console guiado, a barra encolhe ate ser so os tres botoes: as
-   etapas nao querem dizer nada quando os quatro paineis estao na tela. */
+/* Fora do console guiado o trilho encolhe até ser só os três botões: as
+   etapas não querem dizer nada quando os quatro painéis estão na tela. */
 body:not(.console-mode) .console-steps .cstep,
 body:not(.console-mode) .console-steps .console-banner { display: none; }
-body:not(.console-mode) .console-steps { padding: 4px; }
+body:not(.console-mode) .console-steps { width: auto; padding: 8px 6px; }
+body:not(.console-mode) .console-steps__acoes {
+  flex-direction: column; padding-top: 0; margin-top: 0; border-top: 0;
+}
 
 body.is-mobile .console-steps { display: none !important; }
 
@@ -1462,7 +1487,13 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
      navegação nenhuma quando o operador estreitava a janela e o modo celular
      não estava ligado: quatro painéis empilhados e nada para navegar entre
      eles. Ver o controlador único em js/ui-layout.js. */
-  .console-steps { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Tela estreita: o trilho afina e o contexto sai — a navegação fica.
+     Os três botões empilham: lado a lado eles somam 110 px e não cabem
+     nos 62 px do trilho estreito. */
+  .console-steps { width: 62px; padding: 6px 4px; }
+  .cstep { font-size: 0; gap: 0; padding: 8px 2px; }
+  .cstep__num { width: 26px; height: 26px; font-size: var(--fs-mini); }
+  .console-steps__acoes { flex-direction: column; align-items: center; }
   .console-banner { display: none; }
 }
 
