@@ -158,53 +158,93 @@
   var CINTURA_X = 1.02;  // a cintura marca
   var QUADRIL_X = 1.34;  // e o quadril volta a abrir
 
-  // Ombros arredondados — mais estreitos e um pouco mais baixos.
-  var shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), scrub);
-  shoulderL.scale.set(1.05, 0.92, 1);
-  shoulderL.position.set(-0.12, TORSO_R * 0.88, 0.575);
-  patient.add(shoulderL);
-  var shoulderR = shoulderL.clone();
-  shoulderR.position.x = 0.12;
-  patient.add(shoulderR);
+  // -----------------------------------------------------------------
+  // TRONCO EM UMA MALHA SO
+  //
+  // Eram QUATRO cilindros coaxiais encostados topo a topo — torax, cintura,
+  // quadril e saia — cada um com `scale.x` proprio: 1,20 / 1,02 / 1,34 / 1,30.
+  // Como a largura pulava de um para o outro (31% do quadril para a cintura),
+  // as superficies nao se encontravam: em cada junta ficava um degrau e a
+  // TAMPA CHATA do cilindro de tras, virada para fora. Mais duas esferas de
+  // busto encostadas por dentro, coincidentes com a parede do torax.
+  //
+  // Enquanto a sala estourava, isso nao aparecia: tudo saturava no mesmo
+  // branco e as emendas sumiam junto. Assim que a luz ganhou direcao e parou
+  // de cortar, cada peca passou a sombrear por conta propria e o corpo virou
+  // uma pilha de tubos sobrepostos. O defeito e antigo; a luz so o revelou.
+  //
+  // Agora e uma superficie unica, interpolada entre ESTACOES ao longo do eixo
+  // do corpo. Cada estacao e uma elipse — raio em Y (a espessura) e um fator
+  // em X (a largura) — entao a mesma malha continua faz ombro largo, cintura
+  // marcada e quadril aberto sem nenhuma junta.
+  //
+  // A ESPESSURA nao muda de proposito: e ela que ensina a descer a mesa ate o
+  // isocentro. O que varia entre estacoes e a largura, que o exame nao usa.
+  // -----------------------------------------------------------------
+  var OMBRO_X = 1.28;    // fator de largura na linha do ombro
+  var CINTURA_X = 1.01;  // a cintura marca
+  var QUADRIL_X = 1.34;  // e o quadril volta a abrir
 
-  // Tórax, da linha dos ombros até abaixo do busto.
-  var chest = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R - 0.004, TORSO_R, 0.24, 24), scrub);
-  chest.scale.x = OMBRO_X;
-  chest.rotation.x = Math.PI / 2;
-  chest.position.set(0, TORSO_R * 0.92, 0.475);
-  patient.add(chest);
+  //             z       raioY   fatorX      yEixo
+  var ESTACOES = [
+    [ 0.640,     0.020,  1.00,       0.112 ],  // fecha junto ao pescoco
+    [ 0.612,     0.062,  1.02,       0.112 ],
+    [ 0.585,     0.092,  1.16,       0.110 ],
+    [ 0.552,     0.106,  OMBRO_X,    0.110 ],  // ombro
+    [ 0.500,     0.115,  1.24,       0.110 ],
+    [ 0.452,     0.119,  1.20,       0.111 ],  // busto
+    [ 0.400,     0.117,  1.14,       0.110 ],
+    [ 0.340,     0.112,  1.06,       0.109 ],
+    [ 0.280,     0.108,  CINTURA_X,  0.108 ],  // cintura
+    [ 0.220,     0.111,  1.08,       0.108 ],
+    [ 0.160,     0.117,  1.20,       0.108 ],
+    [ 0.090,     0.123,  1.31,       0.107 ],  // quadril
+    [ 0.010,     0.126,  QUADRIL_X,  0.107 ],
+    [-0.080,     0.128,  1.33,       0.106 ],
+    [-0.170,     0.129,  1.30,       0.106 ],
+    [-0.250,     0.126,  1.25,       0.106 ],  // barra da camisola
+    [-0.292,     0.108,  1.12,       0.106 ],
+    [-0.308,     0.055,  1.00,       0.106 ],
+    [-0.315,     0.016,  1.00,       0.106 ]   // fecha a barra
+  ];
 
-  // Busto: duas calotas rasas SOB o avental — o tecido é o mesmo, e é assim
-  // que aparece numa paciente de camisola, deitada.
-  function seio(x) {
-    var m = new THREE.Mesh(new THREE.SphereGeometry(0.058, 18, 14), scrub);
-    m.scale.set(1.0, 0.72, 1.05);
-    m.position.set(x, TORSO_R * 1.06, 0.47);
-    return m;
+  /**
+   * Costura as estacoes numa superficie unica.
+   *
+   * As duas pontas fecham porque a primeira e a ultima estacao tem raio quase
+   * zero: sem isso o tubo ficaria aberto e, com as faces de tras descartadas,
+   * apareceria um buraco no pescoco e na barra.
+   */
+  function malhaPorEstacoes(estacoes, segmentos) {
+    var pos = [], uv = [], idx = [];
+    var aneis = estacoes.length;
+    for (var e = 0; e < aneis; e++) {
+      var st = estacoes[e];
+      for (var v = 0; v <= segmentos; v++) {
+        var a = (v / segmentos) * Math.PI * 2;
+        pos.push(Math.cos(a) * st[1] * st[2], st[3] + Math.sin(a) * st[1], st[0]);
+        uv.push(v / segmentos, e / (aneis - 1));
+      }
+    }
+    for (var e2 = 0; e2 < aneis - 1; e2++) {
+      for (var v2 = 0; v2 < segmentos; v2++) {
+        var a0 = e2 * (segmentos + 1) + v2;
+        var b0 = a0 + segmentos + 1;
+        idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1);
+      }
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();   // normais medias nas juntas: sem quina falsa
+    return g;
   }
-  patient.add(seio(-0.062));
-  patient.add(seio(0.062));
 
-  // Cintura — o segmento que marca a silhueta.
-  var waist = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R - 0.012, TORSO_R - 0.004, 0.16, 24), scrub);
-  waist.scale.x = CINTURA_X;
-  waist.rotation.x = Math.PI / 2;
-  waist.position.set(0, TORSO_R * 0.9, 0.275);
-  patient.add(waist);
-
-  // Quadril — volta à largura do ombro, e um pouco além.
-  var hip = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R + 0.004, TORSO_R - 0.012, 0.2, 24), scrub);
-  hip.scale.x = QUADRIL_X;
-  hip.rotation.x = Math.PI / 2;
-  hip.position.set(0, TORSO_R * 0.9, 0.095);
-  patient.add(hip);
-
-  // Saia do avental: do quadril até os joelhos, com o caimento do tecido.
-  var gownSkirt = new THREE.Mesh(new THREE.CylinderGeometry(TORSO_R + 0.012, TORSO_R + 0.004, 0.28, 24), scrub);
-  gownSkirt.scale.x = 1.30;
-  gownSkirt.rotation.x = Math.PI / 2;
-  gownSkirt.position.set(0, TORSO_R * 0.88, -0.145);
-  patient.add(gownSkirt);
+  var tronco = new THREE.Mesh(malhaPorEstacoes(ESTACOES, 40), scrub);
+  tronco.castShadow = true;
+  tronco.receiveShadow = true;
+  patient.add(tronco);
 
   function limb(r, l, x, y, z, mat, r2) {
     var m = new THREE.Mesh(new THREE.CylinderGeometry(r, (r2 !== undefined ? r2 : r * 0.85), l, 16), mat);
