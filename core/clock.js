@@ -86,8 +86,24 @@
     if (this._ultimoMs === null) { this._ultimoMs = t; return 0; }
 
     var decorridoS = (t - this._ultimoMs) / 1000;
-    this._ultimoMs = t;
+    // A referência só anda para FRENTE.
+    //
+    // Ela era reescrita antes desta guarda, inclusive quando a marca vinha do
+    // passado — e as duas fontes entregam marcas de bases diferentes: o timer
+    // passa o instante em que tica, o rAF passa o INÍCIO DO QUADRO, que já
+    // ficou para trás quando o callback executa. Com as duas ligadas, a
+    // referência recuava a cada quadro e o intervalo recuado era contado DUAS
+    // VEZES no tique seguinte. A simulação andava mais rápido que o relógio de
+    // parede, e o número de passos por quadro alternava (0, 2, 1, 2, 0…) —
+    // mesa e gantry avançavam aos solavancos.
+    //
+    // Medido com o entrelaçamento típico (worker a 16 ms, quadros a 16,7 ms):
+    // 3,3 % adiantado com 4 ms de latência do rAF, 12,7 % com 8 ms.
+    //
+    // Recusar o retrocesso é o que o cabeçalho deste arquivo já prometia:
+    // "quem chegar primeiro consome o intervalo e a outra fonte encontra ~0".
     if (!(decorridoS > 0)) return 0;   // relógio parado ou para trás
+    this._ultimoMs = t;
 
     if (decorridoS > this.atrasoMaxS) {
       this.descartadoS += decorridoS - this.atrasoMaxS;

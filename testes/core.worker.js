@@ -158,6 +158,26 @@ teste("relógio: tempo real para trás não gera passos negativos", function () 
   igual(passos, 0);
 });
 
+teste("relógio: marca atrasada não faz a referência recuar", function () {
+  // As duas fontes falam em bases diferentes: o timer entrega o instante em
+  // que tica, e o rAF entrega o INÍCIO DO QUADRO — já no passado quando o
+  // callback roda. A referência era reescrita mesmo com marca antiga, e o
+  // intervalo recuado voltava a ser contado no tique seguinte: a simulação
+  // adiantava e o número de passos por quadro oscilava.
+  var r = new C.Relogio({ passoS: 1 / 100 });
+  var passos = 0;
+  r.aoPasso(function () { passos++; });
+  r._rodando = true;
+  r.avancar(0);
+  r.avancar(100, "timer");   // 100 ms => 10 passos
+  igual(passos, 10);
+  r.avancar(96, "raf");      // marca 4 ms no passado => nada a consumir
+  igual(passos, 10, "marca atrasada não pode gerar passos");
+  r.avancar(110, "timer");   // +10 ms REAIS => exatamente 1 passo
+  igual(passos, 11, "o intervalo recuado não pode ser contado duas vezes");
+  igual(Math.round(r.tempoSimS * 1000), 110, "tempo simulado acompanha o real");
+});
+
 // =====================================================================
 // 3. PACIENTE E LISTA DE TRABALHO  (B-10)
 // =====================================================================

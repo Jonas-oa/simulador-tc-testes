@@ -626,11 +626,39 @@
     var curPhase = "idle";
     var userHidden = false;
 
+    /**
+     * O `resize` sintetico so pode sair daqui quando o viewport TROCOU DE PAI.
+     *
+     * `update` e assinante de `resize` (linha abaixo) e disparava um `resize`
+     * novo a cada chamada, mudando o layout ou nao. Bastava UM evento — girar
+     * a janela, entrar na etapa Exame, o `pokeResize` do console — para o
+     * evento passar a se realimentar quadro a quadro e nunca mais parar.
+     *
+     * Medido nesta pagina, na etapa Exame, com um unico `dispatchEvent`:
+     *
+     *     resize -> update -> rAF -> resize -> update -> rAF -> ...
+     *     70 eventos em 2 s (limitado so pela taxa de quadros)
+     *
+     * E cada um desses eventos rodava TODOS os handlers de resize do app: o
+     * `flex` em pixels do dashboard (leitura de clientWidth + escrita de
+     * estilo = layout sincrono forcado), o `fitTopo` do topograma, o canvas
+     * das medidas, as classes do console. Sessenta vezes por segundo, para
+     * nada. A cena 3D dividia cada quadro com esse trabalho — era essa a
+     * oscilacao, pior na tela 3D porque e ela que mora no quadrante afetado.
+     *
+     * `para`/`paraCasa` ja dizem se o pai mudou; era so perguntar.
+     */
+    function avisarLayout(mudou) {
+      if (!mudou) return;
+      requestAnimationFrame(function () { window.dispatchEvent(new Event("resize")); });
+    }
+
     // Devolve o viewport 3D ao quadrante da Sala.
     function toHome() {
-      emprestimo.paraCasa();
+      var mudou = emprestimo.paraCasa();
       pip.hidden = true;
       if (acq3d) acq3d.hidden = true;
+      avisarLayout(mudou);
     }
 
     function update() {
@@ -645,17 +673,18 @@
       // Layout de 4 quadrantes: a Sala 3D vive no quadrante inferior direito
       // (slot #acq3d-body), no desktop e no celular. O PiP flutuante fica
       // como fallback caso o slot não exista.
+      var mudou;
       if (acq3dBody) {
-        emprestimo.para(acq3dBody);
+        mudou = emprestimo.para(acq3dBody);
         if (acq3d) acq3d.hidden = false;
         pip.hidden = true;
       } else {
-        emprestimo.para(pipBody);
+        mudou = emprestimo.para(pipBody);
         pip.hidden = false;
         if (acq3d) acq3d.hidden = true;
       }
       // O ResizeObserver do renderer reajusta o canvas ao reparentar.
-      requestAnimationFrame(function () { window.dispatchEvent(new Event("resize")); });
+      avisarLayout(mudou);
     }
 
     SimTC.aoMudarFase(function (p) {
