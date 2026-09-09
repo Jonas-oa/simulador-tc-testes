@@ -27,38 +27,103 @@
   // -----------------------------------------------------------
   var ROOM_W = 6.2, ROOM_D = 6.2, ROOM_H = 3.2;
 
-  // Piso vinílico granulado (speckled) como nas salas reais: base
-  // cinza-azulada com granulado fino multicolorido, sem juntas.
-  function vinylFloorTexture() {
-    var size = 512;
+  // Piso de porcelanato escuro, com PLACA e JUNTA.
+  //
+  // Era um vinílico claro só granulado: sem junta nenhuma, o granulado sumia
+  // a dois metros de distância e o piso virava um cinza chapado — não havia
+  // nada na imagem que dissesse o tamanho da sala. A junta é o que dá escala:
+  // são dez placas de 62 cm atravessando os 6,2 m, e o olho lê a distância
+  // contando placas.
+  //
+  // A textura guarda 5×5 placas e é repetida 2×2 no piso. Uma placa só por
+  // textura sairia mais barata, mas repetir a MESMA placa dez vezes em fila
+  // é exatamente o que denuncia papel de parede; com 5, a fileira só se
+  // repete uma vez de ponta a ponta.
+  var PLACAS_NA_LARGURA = 10;               // 6,2 m ÷ 10 = 0,62 m por placa
+  function ceramicFloorTexture() {
+    var TILES = 5;                          // placas por lado NA TEXTURA
+    var size = 1024;
+    var cell = size / TILES;                // 204,8 px por placa
+    var JUNTA = 3;                          // ~9 mm na escala da placa
     var cnv = document.createElement("canvas");
     cnv.width = cnv.height = size;
     var ctx = cnv.getContext("2d");
-    ctx.fillStyle = "#aeb6bd";
+
+    // O rejunte é o fundo; cada placa é desenhada por cima, encolhida.
+    ctx.fillStyle = "#1e2124";
     ctx.fillRect(0, 0, size, size);
-    // Granulado fino denso (speckle)
-    var speckles = ["rgba(255,255,255,0.5)", "rgba(140,150,160,0.5)", "rgba(90,100,112,0.4)", "rgba(190,198,205,0.5)"];
-    for (var i = 0; i < 9000; i++) {
-      ctx.fillStyle = speckles[i % speckles.length];
-      var s = Math.random() < 0.85 ? 1 : 2;
-      ctx.fillRect(Math.random() * size, Math.random() * size, s, s);
+
+    for (var ty = 0; ty < TILES; ty++) {
+      for (var tx = 0; tx < TILES; tx++) {
+        var x = tx * cell + JUNTA, y = ty * cell + JUNTA;
+        var w = cell - JUNTA * 2, h = cell - JUNTA * 2;
+
+        // Cada placa sai do forno com um tom próprio. Sem essa variação as
+        // juntas viram uma grade desenhada sobre uma cor só.
+        var lum = 50 + Math.random() * 7;
+        ctx.fillStyle = "rgb(" + Math.round(lum * 0.97) + "," + Math.round(lum) + "," + Math.round(lum * 1.06) + ")";
+        ctx.fillRect(x, y, w, h);
+
+        // Veio nublado do porcelanato, preso dentro da placa: manchas que
+        // cruzassem a junta entregariam que a grade é só pintura.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        for (var m = 0; m < 16; m++) {
+          var cx = x + Math.random() * w, cy = y + Math.random() * h;
+          var raio = 14 + Math.random() * 34;
+          var claro = Math.random() < 0.5;
+          var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, raio);
+          g.addColorStop(0, claro ? "rgba(132,140,148,0.07)" : "rgba(22,25,28,0.13)");
+          g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Grão fino do polido — o que sobra do brilho quando a câmera chega perto.
+        for (var k = 0; k < 900; k++) {
+          ctx.fillStyle = (k % 2) ? "rgba(160,170,180,0.07)" : "rgba(18,21,24,0.14)";
+          ctx.fillRect(x + Math.random() * w, y + Math.random() * h, 1, 1);
+        }
+        ctx.restore();
+
+        // Aresta levemente mais escura: a placa tem espessura, e a luz não
+        // entra até o fundo da junta.
+        ctx.strokeStyle = "rgba(20,22,25,0.6)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      }
     }
+
     var tex = new THREE.CanvasTexture(cnv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(4, 4);
+    tex.repeat.set(PLACAS_NA_LARGURA / TILES, PLACAS_NA_LARGURA / TILES);
+    // Sem anisotropia a junta vira ruído cintilante no fundo da sala, que é
+    // justamente onde a câmera orbital costuma parar.
+    tex.anisotropy = 8;
     return tex;
   }
 
   var floor = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM_W, ROOM_D),
-    new THREE.MeshStandardMaterial({ map: vinylFloorTexture(), roughness: 0.5, metalness: 0.04 })
+    // Porcelanato é polido: rugosidade baixa o bastante para a luminária do
+    // teto deixar um brilho largo no chão, que é o que diz "piso duro".
+    new THREE.MeshStandardMaterial({ map: ceramicFloorTexture(), roughness: 0.42, metalness: 0.06 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Paredes off-white
-  var wallMat = new THREE.MeshStandardMaterial({ color: 0xeef0f0, roughness: 0.92 });
+  // Paredes: branco quebrado, alguns tons abaixo do que era.
+  //
+  // Estavam em 0xeef0f0 — quase o branco do papel. Numa sala fechada, sem
+  // janela para fora, uma parede assim não devolve o brilho da luminária: ela
+  // já está no teto da escala, e o que sobra é uma superfície chapada, sem
+  // canto e sem sombra. Descendo para 0xbcc3c5 a mesma luz volta a ter para
+  // onde subir, e a quina entre duas paredes passa a existir.
+  var wallMat = new THREE.MeshStandardMaterial({ color: 0xbcc3c5, roughness: 0.92 });
 
   var backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_H), wallMat);
   backWall.position.set(0, ROOM_H / 2, -ROOM_D / 2);
