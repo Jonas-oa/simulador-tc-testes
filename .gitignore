@@ -17,3 +17,7 @@ __pycache__/
 # (144 mil membros). Recria com:
 #   python ferramentas/zip_remoto.py indice <url> --saida indice_ts.json
 indice_ts.json
+
+# Configuracao local de desenvolvimento (servidor de preview). E da maquina,
+# nao do projeto: cada um aponta para onde quiser.
+.claude/
