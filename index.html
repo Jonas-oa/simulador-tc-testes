@@ -10,8 +10,8 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260907bg" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260907bg" />
+  <link rel="stylesheet" href="css/style.css?v=20260910cmd2" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260910cmd2" />
 </head>
 <body data-theme="dark">
 
@@ -77,7 +77,19 @@
         <section class="viewport" aria-label="Visualização 3D do equipamento">
           <canvas id="scene-canvas" aria-hidden="true"></canvas>
           <div class="viewport__overlay">
-            <div class="viewport__hud viewport__hud--unified">
+            <!-- As GRANDEZAS SAIRAM DAQUI e foram para o mostrador do gantry.
+                 Um HUD flutuando no canto e o mostrador do equipamento eram duas
+                 leituras da mesma coisa, em dois cantos da tela — e o do
+                 equipamento era enfeite, com numero fixo. Agora ha um so, e ele
+                 esta onde o operador olha: na maquina.
+
+                 O bloco CONTINUA no DOM, so-para-leitor-de-tela, e isso nao e
+                 sobra: o mostrador do gantry e desenhado em canvas, e canvas nao
+                 se le com leitor de tela. Este e o texto que a tecnologia
+                 assistiva anuncia — e e tambem o que o teste R-02 confere para
+                 garantir que o mostrador diz a verdade sobre a mesa. -->
+            <div class="viewport__hud viewport__hud--unified so-para-leitor-de-tela"
+                 role="status" aria-live="polite" aria-label="Estado da mesa">
               <div class="hud__row"><span class="hud__label">MESA</span><span class="hud__value" id="hud-table-position">000,0 <small>mm</small></span></div>
               <div class="hud__row"><span class="hud__label">VELOC.</span><span class="hud__value" id="hud-table-speed">0,0 <small>mm/s</small></span></div>
               <div class="hud__row"><span class="hud__label">ALTURA</span><span class="hud__value" id="hud-table-height">80,0 <small>cm</small></span></div>
@@ -108,31 +120,26 @@
             <div class="display__row"><span class="display__label">DECÚBITO</span><span class="display__value" id="display-position">DORSAL</span></div>
           </div>
 
-          <div class="panel" id="sala-panel">
-            <div class="panel__grip" id="sala-panel-grip" role="application" tabindex="0"
-                 aria-label="Mover painel de comandos: setas movem, Shift+setas movem devagar"
-                 title="Arraste para mover — ou use as setas do teclado"><span></span></div>
-            <div class="panel__resize" id="sala-panel-resize" role="slider" tabindex="0"
-                 aria-label="Tamanho do painel de comandos"
-                 aria-valuemin="75" aria-valuemax="150" aria-valuenow="100" aria-valuetext="100%"
-                 title="Arraste para redimensionar — ou use as setas do teclado"></div>
-            <div class="panel__row panel__row--top">
-              <button class="pad-btn pad-btn--toggle" id="btn-laser" type="button" data-action="laser-toggle" aria-pressed="false"><span class="pad-btn__icon">✛</span><span class="pad-btn__label">Laser</span></button>
-              <button class="pad-btn pad-btn--stop" id="btn-stop" type="button" data-action="stop"><span class="pad-btn__icon">■</span><span class="pad-btn__label">Stop</span></button>
+          <!-- COMANDOS DO EQUIPAMENTO: agora no proprio gantry.
+               Mesa (sobe/desce/entra/sai), laser, zerar e a parada de
+               emergencia sairam daqui e viraram botoes clicaveis nas duas
+               chapas de comando da face do aparelho — que e onde o tecnico os
+               procura numa sala de verdade. Ver js/sala/gantry.js.
+
+               Este painel deixou de flutuar: nao tem mais alca de arrastar nem
+               punho de redimensionar, e o que sobrou nele NAO e comando de
+               maquina — e escolha de sessao (como o paciente esta deitado, o
+               que reiniciar, o que mostrar). Isso nao tem lugar no gantry.
+
+               As setas do teclado continuam movendo a mesa, em qualquer lugar
+               da pagina: e o caminho sem mouse, e o teste P1-08 o vigia. -->
+          <div class="panel panel--sessao">
+            <div class="panel__row panel__row--duplo">
               <button class="pad-btn" id="pose-toggle" type="button" aria-expanded="false" aria-controls="pose-panel"><span class="pad-btn__icon" id="pose-current-icon" aria-hidden="true">☰</span><span class="pad-btn__label">Decúbito</span></button>
+              <button class="pad-btn" id="btn-start" type="button" data-action="start"><span class="pad-btn__icon">▶</span><span class="pad-btn__label">Iniciar</span></button>
             </div>
-
-            <div class="dpad" aria-label="Controle de movimento da mesa">
-              <button class="dpad__btn dpad__btn--up" id="btn-table-up" type="button" data-action="table-up" aria-label="Subir mesa">▲</button>
-              <button class="dpad__btn dpad__btn--left" id="btn-table-out" type="button" data-action="table-out" aria-label="Sair do gantry">◀</button>
-              <button class="dpad__btn dpad__btn--center" id="btn-start" type="button" data-action="start" aria-label="Iniciar">▶</button>
-              <button class="dpad__btn dpad__btn--right" id="btn-table-in" type="button" data-action="table-in" aria-label="Entrar no gantry">▶</button>
-              <button class="dpad__btn dpad__btn--down" id="btn-table-down" type="button" data-action="table-down" aria-label="Descer mesa">▼</button>
-            </div>
-
-            <div class="panel__row panel__row--bottom">
+            <div class="panel__row panel__row--duplo">
               <button class="pad-btn" id="btn-reset" type="button" data-action="reset"><span class="pad-btn__icon">↺</span><span class="pad-btn__label">Reiniciar</span></button>
-              <button class="pad-btn" id="btn-zero" type="button" data-action="zero"><span class="pad-btn__icon">⊘</span><span class="pad-btn__label">Zerar</span></button>
               <!-- Oculta a FIGURA, não o paciente do exame: quem está na mesa
                    continua na mesa, e a aquisição não muda. Serve para olhar a
                    mesa, os lasers e o isocentro sem o corpo na frente. -->
@@ -278,12 +285,20 @@
                 <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="ws-report-close" type="button">Ver cortes</button></div>
               </div>
 
+              <!-- RESUMO DO QUE VAI SER IRRADIADO.
+                   Era um portao: depois do topograma, Iniciar abria um modal e
+                   so o "Confirmar e adquirir" disparava o volume. Dois cliques
+                   para a mesma decisao, e o segundo chegava quando o operador
+                   ja tinha decidido.
+                   O portao saiu; a INFORMACAO ficou, e melhorou de lugar — em
+                   vez de aparecer no instante do clique, fica na tela durante
+                   todo o planejamento, que e quando ela muda alguma coisa: e
+                   ajustando a faixa que se ve o DLP subir. -->
               <div class="ws-report ws-confirm" id="ws-confirm" hidden>
-                <h3 class="ws-report__title">Confirmar aquisição</h3>
+                <h3 class="ws-report__title">O que será irradiado</h3>
                 <div class="ws-report__body" id="ws-confirm-body"></div>
                 <div class="ws-actions">
-                  <button class="ws-btn ws-btn--primary" id="ws-confirm-ok" type="button">Confirmar e adquirir</button>
-                  <button class="ws-btn ws-btn--ghost" id="ws-confirm-cancel" type="button">Cancelar</button>
+                  <button class="ws-btn ws-btn--ghost" id="ws-confirm-cancel" type="button">Cancelar exame</button>
                 </div>
               </div>
 
@@ -483,7 +498,7 @@
           class="mpr-workstation__frame"
           id="mpr-workstation"
           title="Leitor DICOM, reconstrução MPR e volumétrica 3D"
-          src="dicom-viewer/index.html?embedded=1&v=20260907bg"
+          src="dicom-viewer/index.html?embedded=1&v=20260910cmd2"
           loading="eager"
           allow="fullscreen"
         ></iframe>
@@ -497,74 +512,74 @@
     <span class="message-panel__text" id="message-text">Simulador carregado. Este ambiente é exclusivamente educacional e não deve ser utilizado para qualquer finalidade clínica ou diagnóstica.</span>
   </footer>
 
-  <script>window.__SIMTC_REV__ = "20260907bg";</script>
+  <script>window.__SIMTC_REV__ = "20260907bk";</script>
   <!-- Módulos JS — carregados em ordem de dependência -->
   <script src="js/vendor/three.min.js"></script>
-  <script src="js/phantoms.js?v=20260907bg"></script>
+  <script src="js/phantoms.js?v=20260910cmd2"></script>
 
   <!-- NÚCLEO (core/): domínio puro, sem DOM nem Three.js. Carrega antes de
        tudo porque a sala e as telas passam a consumi-lo. Os mesmos arquivos
        rodam dentro de um Worker em testes/core.html. -->
-  <script src="core/bus.js?v=20260907bg"></script>
-  <script src="core/clock.js?v=20260907bg"></script>
-  <script src="core/model/patient.js?v=20260907bg"></script>
-  <script src="core/model/protocol.js?v=20260907bg"></script>
-  <script src="core/model/exam.js?v=20260907bg"></script>
-  <script src="core/state.js?v=20260907bg"></script>
-  <script src="core/phantom/volume.js?v=20260907bg"></script>
-  <script src="core/phantom/acervo.js?v=20260907bg"></script>
-  <script src="core/acquisition/fisica.js?v=20260907bg"></script>
-  <script src="core/acquisition/noise.js?v=20260907bg"></script>
-  <script src="core/acquisition/projector.js?v=20260907bg"></script>
-  <script src="core/acquisition/scan.js?v=20260907bg"></script>
-  <script src="core/dose/ctdi.js?v=20260907bg"></script>
-  <script src="core/dose/aec.js?v=20260907bg"></script>
-  <script src="core/protocol/validacao.js?v=20260907bg"></script>
-  <script src="core/protocol/gestor.js?v=20260907bg"></script>
-  <script src="core/dicom/writer.js?v=20260907bg"></script>
-  <script src="core/recon/serie.js?v=20260907bg"></script>
+  <script src="core/bus.js?v=20260910cmd2"></script>
+  <script src="core/clock.js?v=20260910cmd2"></script>
+  <script src="core/model/patient.js?v=20260910cmd2"></script>
+  <script src="core/model/protocol.js?v=20260910cmd2"></script>
+  <script src="core/model/exam.js?v=20260910cmd2"></script>
+  <script src="core/state.js?v=20260910cmd2"></script>
+  <script src="core/phantom/volume.js?v=20260910cmd2"></script>
+  <script src="core/phantom/acervo.js?v=20260910cmd2"></script>
+  <script src="core/acquisition/fisica.js?v=20260910cmd2"></script>
+  <script src="core/acquisition/noise.js?v=20260910cmd2"></script>
+  <script src="core/acquisition/projector.js?v=20260910cmd2"></script>
+  <script src="core/acquisition/scan.js?v=20260910cmd2"></script>
+  <script src="core/dose/ctdi.js?v=20260910cmd2"></script>
+  <script src="core/dose/aec.js?v=20260910cmd2"></script>
+  <script src="core/protocol/validacao.js?v=20260910cmd2"></script>
+  <script src="core/protocol/gestor.js?v=20260910cmd2"></script>
+  <script src="core/dicom/writer.js?v=20260910cmd2"></script>
+  <script src="core/recon/serie.js?v=20260910cmd2"></script>
 
   <!-- shared.js PRIMEIRO: define window.SimTC -->
-  <script src="js/shared.js?v=20260907bg"></script>
+  <script src="js/shared.js?v=20260910cmd2"></script>
 
   <!-- Contratos entre os modulos de tela: quem oferece DECLARA, e a
        ausencia vira erro visivel no boot em vez de sumir em silencio. -->
-  <script src="app/contratos.js?v=20260907bg"></script>
+  <script src="app/contratos.js?v=20260910cmd2"></script>
 
   <!-- Camada ui/: como o app escreve numero, num lugar so (ETAPA 7) -->
-  <script src="js/ui/formatar.js?v=20260907bg"></script>
-  <script src="js/ui/confirmar.js?v=20260907bg"></script>
-  <script src="js/ui/entrada.js?v=20260907bg"></script>
-  <script src="js/ui/campo.js?v=20260907bg"></script>
-  <script src="js/ui/lista.js?v=20260907bg"></script>
+  <script src="js/ui/formatar.js?v=20260910cmd2"></script>
+  <script src="js/ui/confirmar.js?v=20260910cmd2"></script>
+  <script src="js/ui/entrada.js?v=20260910cmd2"></script>
+  <script src="js/ui/campo.js?v=20260910cmd2"></script>
+  <script src="js/ui/lista.js?v=20260910cmd2"></script>
 
   <!-- Módulos de telas -->
   <!-- Peças que sairam do monolito da sala (ETAPA 6) -->
-  <script src="js/sala/cenario.js?v=20260907bg"></script>
-  <script src="js/sala/glb.js?v=20260907bg"></script>
-  <script src="js/sala/paciente.js?v=20260907bg"></script>
-  <script src="js/sala/paciente-importado.js?v=20260907bg"></script>
-  <script src="js/sala/gantry.js?v=20260907bg"></script>
-  <script src="js/fisica-mesa.js?v=20260907bg"></script>
-  <script src="js/sala-exame.js?v=20260907bg"></script>
-  <script src="js/worklist-exemplo.js?v=20260907bg"></script>
-  <script src="js/cadastro-pacientes.js?v=20260907bg"></script>
-  <script src="js/protocolos.js?v=20260907bg"></script>
+  <script src="js/sala/cenario.js?v=20260910cmd2"></script>
+  <script src="js/sala/glb.js?v=20260910cmd2"></script>
+  <script src="js/sala/paciente.js?v=20260910cmd2"></script>
+  <script src="js/sala/paciente-importado.js?v=20260910cmd2"></script>
+  <script src="js/sala/gantry.js?v=20260910cmd2"></script>
+  <script src="js/fisica-mesa.js?v=20260910cmd2"></script>
+  <script src="js/sala-exame.js?v=20260910cmd2"></script>
+  <script src="js/worklist-exemplo.js?v=20260910cmd2"></script>
+  <script src="js/cadastro-pacientes.js?v=20260910cmd2"></script>
+  <script src="js/protocolos.js?v=20260910cmd2"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
-  <script src="js/fonte-volume.js?v=20260907bg"></script>
-  <script src="js/motor-imagem.js?v=20260907bg"></script>
-  <script src="js/exportar-dicom.js?v=20260907bg"></script>
-  <script src="js/medidas.js?v=20260907bg"></script>
+  <script src="js/fonte-volume.js?v=20260910cmd2"></script>
+  <script src="js/motor-imagem.js?v=20260910cmd2"></script>
+  <script src="js/exportar-dicom.js?v=20260910cmd2"></script>
+  <script src="js/medidas.js?v=20260910cmd2"></script>
   <!-- Peças que sairam do monolito da aquisicao (ETAPA 6) -->
-  <script src="js/aquisicao/som.js?v=20260907bg"></script>
-  <script src="js/aquisicao/box-planejamento.js?v=20260907bg"></script>
-  <script src="js/aquisicao/maquina-fases.js?v=20260907bg"></script>
-  <script src="js/aquisicao/painel.js?v=20260907bg"></script>
-  <script src="js/aquisicao.js?v=20260907bg"></script>
-  <script src="js/mpr.js?v=20260907bg"></script>
-  <script src="js/ui-layout.js?v=20260907bg"></script>
+  <script src="js/aquisicao/som.js?v=20260910cmd2"></script>
+  <script src="js/aquisicao/box-planejamento.js?v=20260910cmd2"></script>
+  <script src="js/aquisicao/maquina-fases.js?v=20260910cmd2"></script>
+  <script src="js/aquisicao/painel.js?v=20260910cmd2"></script>
+  <script src="js/aquisicao.js?v=20260910cmd2"></script>
+  <script src="js/mpr.js?v=20260910cmd2"></script>
+  <script src="js/ui-layout.js?v=20260910cmd2"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
-  <script src="script.js?v=20260907bg"></script>
+  <script src="script.js?v=20260910cmd2"></script>
 </body>
 </html>

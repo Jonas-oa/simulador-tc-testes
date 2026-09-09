@@ -466,6 +466,10 @@ body {
   gap: 8px;
 }
 .panel__row--top { grid-template-columns: 1fr 1fr 1fr; }
+.panel__row--duplo { grid-template-columns: 1fr 1fr; }
+/* O painel de sessao nao flutua: nao tem alca nem punho, e ocupa a
+   largura do console como qualquer outro bloco ancorado. */
+.panel--sessao { padding: 10px; }
 .panel__row--bottom { grid-template-columns: repeat(3, 1fr); }
 
 /* Botões gerais do painel */
@@ -1163,16 +1167,29 @@ body.is-mobile.mob-3d #pane-sim .app-main { display: block; position: relative; 
 body.is-mobile.mob-3d #pane-sim .viewport { position: absolute; inset: 0; height: 100%; width: 100%; }
 /* o HUD do viewport já mostra os dados; oculta o display do console p/ limpar */
 body.is-mobile.mob-3d #pane-sim .console .display--compact { display: none; }
-/* console = camada de comandos flutuantes; não bloqueia o arraste do 3D */
+/* No celular vale a mesma regra do desktop: a faixa de sessão fica ANCORADA
+   no pé do quadrante, e nada paira sobre o equipamento. O comando da mesa
+   está nas chapas do gantry, que se alcançam com o dedo na própria cena. */
+body.is-mobile.mob-3d #pane-sim .app-main {
+  display: flex; flex-direction: column; position: relative; height: 100%;
+}
+body.is-mobile.mob-3d #pane-sim .viewport {
+  position: relative; inset: auto; flex: 1 1 auto; min-height: 0; width: 100%;
+}
 body.is-mobile.mob-3d #pane-sim .console {
-  position: absolute; inset: 0; z-index: 20; pointer-events: none;
-  display: block; background: transparent; padding: 0; overflow: visible;
+  position: static; z-index: auto; pointer-events: auto;
+  display: block; background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px 8px; overflow: visible; flex: 0 0 auto;
 }
 body.is-mobile.mob-3d #pane-sim .console .panel {
-  position: absolute; right: 12px; bottom: 12px; width: auto; margin: 0; pointer-events: auto;
-  background: rgba(6, 12, 20, 0.42); backdrop-filter: blur(7px);
-  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
-  padding: 10px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  position: relative; right: auto; bottom: auto; width: auto; margin: 0;
+  background: transparent; backdrop-filter: none;
+  border: 0; border-radius: 0; box-shadow: none; padding: 0;
+  flex-direction: row; align-items: stretch; gap: 8px;
+}
+body.is-mobile.mob-3d #pane-sim .console .pose-panel {
+  top: auto; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 260px;
 }
 
 /* --- TELA "EXAME": 4 quadrantes (pane-acq preenche a tela) ---
@@ -1326,24 +1343,45 @@ body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
 /* --- 1) Seletor Sala/Paciente/Protocolo/Exame só aparece no celular --- */
 body:not(.is-mobile) .mobile-switch { display: none !important; }
 
-/* --- 2) 3D do PC: viewport ocupa o quadrante; console vira camada flutuante --- */
-body:not(.is-mobile) #pane-sim .app-main { display: block; position: relative; height: 100%; }
-body:not(.is-mobile) #pane-sim .viewport { position: absolute; inset: 0; height: 100%; width: 100%; }
-/* HUD do viewport já mostra os dados; display do console fica oculto (paridade com o celular) */
+/* --- 2) 3D do PC: viewport em cima, faixa de sessão ANCORADA embaixo ---
+
+   O console era uma CAMADA sobre a cena, e o painel dentro dele flutuava no
+   canto, arrastável e redimensionável. Isso fazia sentido enquanto ele era o
+   comando do equipamento — mas o comando saiu daqui e foi para as chapas do
+   próprio gantry, que é onde o técnico o procura. O que sobrou é escolha de
+   sessão, e escolha de sessão não tem por que tapar a cena.
+
+   Agora o quadrante é uma coluna: a cena ocupa o que sobra, a faixa fica
+   embaixo, e nada mais paira sobre o equipamento. */
+body:not(.is-mobile) #pane-sim .app-main {
+  display: flex; flex-direction: column; position: relative; height: 100%;
+}
+body:not(.is-mobile) #pane-sim .viewport {
+  position: relative; inset: auto; flex: 1 1 auto; min-height: 0; width: 100%;
+}
+/* As grandezas moram no mostrador do gantry; o display do console seria uma
+   terceira cópia da mesma leitura. */
 body:not(.is-mobile) #pane-sim .console .display--compact { display: none; }
 body:not(.is-mobile) #pane-sim .console {
-  position: absolute; inset: 0; z-index: 20; pointer-events: none;
-  display: block; background: transparent; padding: 0; overflow: visible;
+  position: static; z-index: auto; pointer-events: auto;
+  display: block; background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px 8px; overflow: visible; flex: 0 0 auto;
 }
 body:not(.is-mobile) #pane-sim .console .panel {
-  position: absolute; width: auto; margin: 0; pointer-events: auto;
-  left: var(--panel-left, auto); top: var(--panel-top, auto);
-  right: var(--panel-right, 12px); bottom: var(--panel-bottom, 12px);
-  transform: scale(var(--panel-scale, 1)); transform-origin: top left;
-  touch-action: none;
-  background: rgba(6, 12, 20, 0.42); backdrop-filter: blur(7px);
-  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
-  padding: 10px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  position: relative; width: auto; margin: 0; pointer-events: auto;
+  left: auto; top: auto; right: auto; bottom: auto;
+  transform: none;
+  background: transparent; backdrop-filter: none;
+  border: 0; border-radius: 0; box-shadow: none;
+  padding: 0;
+  flex-direction: row; align-items: stretch; gap: 8px;
+}
+body:not(.is-mobile) #pane-sim .console .panel .panel__row { flex: 0 0 auto; }
+/* O seletor de decúbito abre PARA CIMA: a faixa está no pé do quadrante, e um
+   popover ancorado no topo cairia fora da tela. */
+body:not(.is-mobile) #pane-sim .console .pose-panel {
+  top: auto; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 280px;
 }
 body:not(.is-mobile) #pane-sim .console .panel .panel__grip {
   display: flex; align-items: center; justify-content: center;
@@ -1738,6 +1776,15 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-adj__3d .acq3d { position: absolute; left: 0; right: 0; top: 18px; bottom: 0; width: auto; height: auto; min-height: 0; border: 0; background: #0a1018; }
 .acq-adj__3d .acq3d__body { position: absolute; inset: 0; }
 .acq-adj__3d .acq3d__tag { position: absolute; top: 4px; left: 6px; z-index: 2; }
+
+/* O HUD NAO ENTRA NO QUADRANTE DO EXAME.
+   O viewport 3D e emprestado para ca durante a aquisicao (ver `emprestar` em
+   js/ui-layout.js) e trazia junto o HUD — MESA, VELOC., ALTURA e os quatro
+   indicadores. Numa janela de 1440 isso e uma caixa de 321x115 dentro de um
+   quadrante de 322x310: 37% da imagem coberta por numeros que a tela do exame
+   nao precisa, e que continuam na tela da Sala, onde a mesa e o assunto. */
+#acq3d-body .viewport__hud { display: none; }
+#acq3d-body .viewport__overlay { pointer-events: none; }
 
 /* --- MOBILE PAISAGEM: mantém a grade 2×2 (dashboard já recua faixa+banner) --- */
 /* (herda a grade base; só garantimos que o viewer preencha) */

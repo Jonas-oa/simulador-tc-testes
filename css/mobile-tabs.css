@@ -188,14 +188,22 @@ body.is-mobile.mob-3d #pane-sim {
   height: 100%;
 }
 
-body.is-mobile.mob-3d #pane-sim .app-main,
-body.is-mobile.mob-3d #pane-sim .viewport {
+body.is-mobile.mob-3d #pane-sim .app-main {
   height: 100%;
   min-height: 100%;
 }
 
-body.is-mobile.mob-3d #pane-sim .console .panel {
-  bottom: calc(76px + env(safe-area-inset-bottom));
+/* A CENA ENCOLHE PARA A FAIXA CABER.
+
+   Enquanto a faixa de comandos flutuava por cima, prender o viewport em
+   `height: 100%` era certo: ele ocupava o quadrante inteiro e o painel
+   pairava. Agora a faixa e um irmao ANCORADO no pe da coluna, e um
+   viewport de altura fixa nao lhe deixa espaco — medido: a faixa caia em
+   top=721 numa janela de 720, ou seja, fora da tela. */
+body.is-mobile.mob-3d #pane-sim .viewport {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 body.is-mobile .mobile-rotate {
@@ -204,9 +212,8 @@ body.is-mobile .mobile-rotate {
 
 @media (max-width: 600px) {
   body.is-mobile.mob-3d #pane-sim .console .panel {
-    right: 8px;
-    width: min(210px, 58vw);
-    padding: 8px;
+    width: auto;
+    padding: 0;
   }
 
   body.is-mobile.mob-3d .dpad {
@@ -244,14 +251,11 @@ body.is-mobile .mobile-rotate {
 .panel__grip,
 .panel__resize { display: none; }
 
+/* A faixa nao e mais arrastavel: as variaveis de posicao e escala que a
+   colocavam onde o dedo largasse deixaram de ter dono. */
 body.is-mobile.mob-3d #pane-sim .console .panel {
-  left: var(--panel-left, auto);
-  top: var(--panel-top, auto);
-  right: var(--panel-right, 12px);
-  bottom: var(--panel-bottom, 12px);
-  transform: scale(var(--panel-scale, 1));
-  transform-origin: top left;
-  touch-action: none;
+  left: auto; top: auto; right: auto; bottom: auto;
+  transform: none;
 }
 
 body.is-mobile.mob-3d #pane-sim .console .panel .panel__grip {

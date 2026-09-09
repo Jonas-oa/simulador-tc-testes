@@ -107,7 +107,16 @@
     if (panel) panel.setAttribute("data-message-type", type);
   }
 
+  // O ESTADO das luzes fica guardado, nao so escrito no DOM.
+  //
+  // Enquanto o unico consumidor era o HUD em HTML, escrever o atributo
+  // bastava: o DOM era a memoria. Agora o mostrador do gantry mostra as
+  // mesmas quatro luzes, e ele desenha em canvas — precisa PERGUNTAR o
+  // estado, e ninguem tinha como responder.
+  var estadoIndicadores = { power: true, ready: true, laser: false, motion: false };
+
   function setIndicator(name, on) {
+    estadoIndicadores[name] = !!on;
     var el = document.querySelector('[data-indicator="' + name + '"]');
     if (el) el.setAttribute("data-state", on ? "on" : "off");
   }
@@ -244,6 +253,7 @@
   SimTC.initTheme       = initTheme;
   SimTC.showMessage     = showMessage;
   SimTC.setIndicator    = setIndicator;
+  SimTC.indicadores     = estadoIndicadores;
   SimTC.aoMudarFase     = aoMudarFase;
   SimTC.FASE_DA_TELA    = FASE_DA_TELA;
   SimTC.REGIOES         = REGIOES_DISPLAY;

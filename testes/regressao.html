@@ -218,14 +218,25 @@
   }
 
   /** Abre a confirmação pré-aquisição. */
-  async function ateAConfirmacao() {
-    $("ws-exam-start").click();
+  /**
+    * Espera o RESUMO do que vai ser irradiado aparecer.
+    *
+    * Antes isto clicava em Iniciar e esperava um modal: a confirmacao era um
+    * portao entre o topograma e o volume, com um segundo clique proprio. O
+    * portao saiu (o segundo clique nao decidia nada), e o resumo passou a
+    * acompanhar o planejamento — ja esta na tela quando o topograma termina.
+    * Entao aqui so se espera; quem irradia e o Iniciar, no teste.
+    */
+  async function ateOResumo() {
     await ate(function () { var c = $("ws-confirm"); return c && !c.hidden; },
-      "a confirmação pré-aquisição abrir", 15000);
+      "o resumo do que sera irradiado aparecer", 15000);
   }
 
   /** Encerra o exame e volta ao repouso. */
   async function pararExame() {
+    // O "Cancelar exame" do resumo deixou de apenas fechar um modal: hoje
+    // aborta o exame e volta ao repouso, que e exatamente o que esta funcao
+    // quer.
     var cancel = $("ws-confirm-cancel");
     if (cancel && !$("ws-confirm").hidden) cancel.click();
     var stop = $("ws-exam-stop");
@@ -310,21 +321,26 @@
     // A mesa tem batente em 0,88 m. No topo, o comando de subir não tem para
     // onde ir — testa descendo.
     var subindo = antes < 0.87;
-    var btn = $(subindo ? "btn-table-up" : "btn-table-down");
-    ok(btn, "botão de mover mesa não encontrado");
 
+    // AS SETAS, e não mais um botão em HTML.
+    //
+    // Os comandos de mesa saíram da tela e foram para as chapas de comando do
+    // gantry, que são desenhadas em canvas e por isso não recebem foco nem
+    // tecla. O caminho sem mouse passou a ser o atalho global de setas, e é
+    // ele que este teste tem de vigiar: se alguém remover o `keydown` do
+    // window, a mesa fica só no clique e o teclado perde a mesa.
     var K = W().KeyboardEvent;
-    btn.focus();
-    btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    var tecla = subindo ? "ArrowUp" : "ArrowDown";
+    W().dispatchEvent(new K("keydown", { key: tecla, bubbles: true, cancelable: true }));
     try {
       await ate(function () { return Math.abs(alturaM() - antes) > 0.002; },
-        "a mesa se mover com Enter pressionado", 8000, 150);
+        "a mesa se mover com a seta pressionada", 8000, 150);
     } catch (e) {
-      throw new Error("a mesa não se moveu com Enter (" + (antes * 100).toFixed(1) +
+      throw new Error("a mesa não se moveu com " + tecla + " (" + (antes * 100).toFixed(1) +
         " cm, " + (subindo ? "subindo" : "descendo") +
-        "): setHeld() liga só pointerdown/pointerup");
+        "): o atalho global de teclado sumiu, e não há outro caminho sem mouse");
     } finally {
-      btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
+      W().dispatchEvent(new K("keyup", { key: tecla, bubbles: true }));
     }
   });
 
@@ -357,8 +373,9 @@
 
     var antes = alturaCm();
     var subindo = antes < 87;
-    var btn = $(subindo ? "btn-table-up" : "btn-table-down");
-    ok(btn, "botao de mover mesa nao encontrado");
+    // Os botoes de mesa agora moram no gantry, em canvas. O caminho sem mouse
+    // — e o que este teste usa para por a mesa em movimento — e a seta.
+    var tecla = subindo ? "ArrowUp" : "ArrowDown";
 
     var rafOriginal = W().requestAnimationFrame;
     var pedidos = 0;
@@ -369,13 +386,12 @@
       W().requestAnimationFrame = function () { pedidos++; return 0; };
       await new Promise(function (r) { setTimeout(r, 250); });
 
-      btn.focus();
-      btn.dispatchEvent(new K("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      W().dispatchEvent(new K("keydown", { key: tecla, bubbles: true, cancelable: true }));
       try {
         await ate(function () { return Math.abs(alturaCm() - antes) > 0.5; },
           "a mesa se mover sem o navegador pintar (relogio pela fonte de Worker)", 8000, 120);
       } finally {
-        btn.dispatchEvent(new K("keyup", { key: "Enter", bubbles: true }));
+        W().dispatchEvent(new K("keyup", { key: tecla, bubbles: true }));
       }
 
       ok(pedidos > 0, "o app nem pediu quadro: o laco de desenho nao esta no rAF global, " +
@@ -507,11 +523,17 @@
     $("ws-exam-move").click();
     await ate(function () { return !W().SimTC.tableDriveApi.isBusy(); },
       "a mesa parar", 90000);
-    await ateAConfirmacao();
+    await ateOResumo();
 
-    ok($("ws-confirm-ok").disabled,
-      "a confirmação liberou irradiar sem protocolo — o núcleo já sabe o que falta: " +
-      pendencias);
+    // Sem protocolo, quem recusa e o Iniciar — nao ha mais um botao de
+    // confirmar para ficar desabilitado. A recusa tem de DIZER o que falta.
+    var antes = $("message-text").textContent;
+    $("ws-exam-start").click();
+    await dormir(600);
+    var agora = $("message-text").textContent;
+    ok(agora !== antes && /protocolo|impedimento|irradiar/i.test(agora),
+      "o Iniciar nao recusou (ou recusou sem dizer por que) sem protocolo — o " +
+      "nucleo ja sabe o que falta: " + pendencias + " · mensagem: \"" + agora.slice(0, 90) + "\"");
   });
 
   // =====================================================================
@@ -581,7 +603,7 @@
     D().querySelector('[data-step="acq"]').click();
     await dormir(400);
     await ateOPlanejamento();
-    await ateAConfirmacao();
+    await ateOResumo();
 
     var dlps = dlpsNoTexto($("ws-confirm-body").innerText);
     ok(dlps.length > 0, "a confirmação não mostrou nenhum DLP");
@@ -592,11 +614,9 @@
   });
 
   teste("P1-04a", "o exame arquivado guarda os cortes da SÉRIE", async function () {
-    // Depende do exame iniciado no teste anterior: confirma e espera terminar.
-    var botao = $("ws-confirm-ok");
-    ok(botao && !$("ws-confirm").hidden, "a confirmação não estava aberta");
-    ok(!botao.disabled, "a confirmação bloqueou o exame: " + botao.textContent);
-    botao.click();
+    // Depende do exame planejado no teste anterior: irradia e espera terminar.
+    ok(!$("ws-confirm").hidden, "o resumo do que sera irradiado nao estava na tela");
+    $("ws-exam-start").click();
 
     anuncia("irradiando e reconstruindo — isto leva alguns minutos…");
     await ate(function () {

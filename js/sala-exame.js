@@ -54,6 +54,53 @@
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       if (renderer.outputColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+      /**
+       * CURVA DE EXPOSICAO — sem ela a sala estourava.
+       *
+       * Nao havia tone mapping nenhum: o que o shader calculava ia direto
+       * para o framebuffer, e tudo acima de 1,0 virava 255 chapado. As luzes
+       * desta sala somam ambiente 0,32 + hemisferica 0,42 + principal 0,78 +
+       * preenchimento 0,30. Numa superficie virada PARA CIMA, que pega a
+       * hemisferica inteira e quase toda a principal, isso da x1,59 — medido.
+       * Ou seja: qualquer material com albedo acima de ~0xa1 saturava.
+       *
+       * O efeito nao era 'a sala clara demais', era PERDA DE INFORMACAO. O
+       * topo do gantry, o tampo da mesa, a lateral da carenagem e o avental
+       * da paciente chegavam todos ao mesmo 255,255,255 — nao eram brancos
+       * parecidos, eram o MESMO pixel. Por isso o equipamento lia chapado por
+       * mais que se ajustasse cor de peca: as pecas ja estavam no teto.
+       *
+       * ACES filmico comprime o topo em vez de cortar. A curva do r128 e a
+       * aproximacao de Narkowicz:
+       *
+       *     f(x) = x(2,51x + 0,03) / (x(2,43x + 0,59) + 0,14)
+       *
+       * Ela nunca chega a 1, entao nada satura: f(1,0)=0,80  f(1,6)=0,89
+       * f(2,0)=0,92. E levanta um pouco a sombra — f(0,3)=0,44 — que e o que
+       * devolve leitura ao lado escuro das pecas.
+       *
+       * A exposicao 1,4 nao e chute: e a que devolve a face frontal do gantry
+       * ao 162 em que ela ja estava. Toda a paleta do gantry e do colchao foi
+       * calibrada medindo o pixel DESSA face, entao ancorar a exposicao nela
+       * conserta o estouro sem invalidar a calibragem que ja estava certa.
+       * Varrida a exposicao de 1,0 a 1,45 sobre a cena inteira, o estouro fica
+       * em 0,00% dos pixels em todas — a curva comprime o topo, entao subir a
+       * exposicao levanta o meio-tom sem devolver o problema:
+       *
+       *     exp    face    parede   topo do gantry   tampo    medio da cena
+       *     1,0    136     138      209              227      118
+       *     1,4    163     167      222              236      143
+       *
+       * O que NAO foi mexido aqui: `outputEncoding` continua linear. Passar o
+       * renderizador para sRGB e a correcao de fundo, e vale fazer um dia —
+       * mas reescreve TODA cor da cena de uma vez (piso, paredes, colchao,
+       * gantry) e obriga a re-tunar tudo. E outra conversa, nao a do estouro.
+       */
+      if (THREE.ACESFilmicToneMapping !== undefined) {
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.6;
+      }
+
       function handleResize() {
         var w = container.clientWidth;
         var h = container.clientHeight;
@@ -86,7 +133,11 @@
       updateCamera();
 
       var dragging = false, lastX = 0, lastY = 0;
-      function pointerDown(x, y) { dragging = true; lastX = x; lastY = y; }
+      function pointerDown(x, y) {
+        var alvo = comandoNoPonto(x, y);
+        if (alvo) { acionarComando(alvo); return; }   // botao do aparelho: nao gira
+        dragging = true; lastX = x; lastY = y;
+      }
       function pointerMove(x, y) {
         if (!dragging) return;
         var dx = x - lastX, dy = y - lastY;
@@ -95,7 +146,71 @@
         polar = Math.min(MAX_POLAR, Math.max(MIN_POLAR, polar - dy * 0.006));
         updateCamera();
       }
-      function pointerUp() { dragging = false; }
+      function pointerUp() { dragging = false; soltarComando(); }
+
+      // -----------------------------------------------------------
+      // COMANDO PELO PROPRIO APARELHO
+      //
+      // Os botoes do gantry eram desenho. Agora o clique na cena e testado
+      // contra as duas chapas de comando ANTES de virar giro de camera: se
+      // caiu num botao, o comando sai e a camera nao gira; se caiu em
+      // qualquer outro lugar, a orbita segue como antes.
+      //
+      // O teste e feito contra a CENA INTEIRA, e nao so contra as chapas, de
+      // proposito: se a mesa ou o paciente estiverem na frente do painel, o
+      // primeiro acerto e neles e o botao NAO responde — como no aparelho de
+      // verdade, em que a mao nao atravessa o que esta na frente.
+      // -----------------------------------------------------------
+      var rcCmd = new THREE.Raycaster();
+      var pontoCmd = new THREE.Vector2();
+      var comandoAtivo = null;
+      var SEGURA = { up: 1, down: 1, in: 1, out: 1 };   // botoes de manter apertado
+
+      function comandoNoPonto(clientX, clientY) {
+        if (!aparelho || !aparelho.facesComando) return null;
+        var r = canvas.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        pontoCmd.x = ((clientX - r.left) / r.width) * 2 - 1;
+        pontoCmd.y = -((clientY - r.top) / r.height) * 2 + 1;
+        rcCmd.setFromCamera(pontoCmd, camera);
+        var hits = rcCmd.intersectObjects(scene.children, true);
+        for (var i = 0; i < hits.length; i++) {
+          var o = hits[i].object;
+          // Os lasers sao linhas sem escrita de profundidade: atravessam a
+          // cena e nao podem tapar um botao.
+          if (!o.visible || o.type === "Line" || o.type === "LineSegments") continue;
+          if (aparelho.emergencias.indexOf(o) >= 0) return { acao: "parar", face: null };
+          if (aparelho.facesComando.indexOf(o) >= 0) {
+            var acao = hits[i].uv ? aparelho.zonaEm(hits[i].uv.x, hits[i].uv.y) : null;
+            return acao ? { acao: acao, face: o } : null;
+          }
+          return null;   // algo mais perto: o painel esta tapado
+        }
+        return null;
+      }
+
+      function repintarComandos(pressionada) {
+        if (!aparelho || !aparelho.facesComando) return;
+        aparelho.facesComando.forEach(function (f) {
+          if (f.userData.repintar) f.userData.repintar(pressionada, { laser: laserOn });
+        });
+      }
+
+      function acionarComando(alvo) {
+        comandoAtivo = alvo;
+        var a = alvo.acao;
+        if (SEGURA[a]) { FisicaMesa.setCmd(a, true); repintarComandos(a); return; }
+        if (a === "laser") { alternarLaser(); repintarComandos("laser"); return; }
+        if (a === "zerar") { marcarZero(); repintarComandos("zerar"); return; }
+        if (a === "parar") { pararTudo(); return; }
+      }
+
+      function soltarComando() {
+        if (!comandoAtivo) return;
+        if (SEGURA[comandoAtivo.acao]) FisicaMesa.setCmd(comandoAtivo.acao, false);
+        comandoAtivo = null;
+        repintarComandos(null);
+      }
 
       canvas.addEventListener("mousedown", function (e) { pointerDown(e.clientX, e.clientY); });
       window.addEventListener("mousemove", function (e) { pointerMove(e.clientX, e.clientY); });
@@ -153,10 +268,34 @@
       // -----------------------------------------------------------
       // Iluminação — difusa e "clínica" (sala bem iluminada, sombras suaves)
       // -----------------------------------------------------------
-      scene.add(new THREE.AmbientLight(0xf0f4f8, 0.32));
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x8f979e, 0.42));
+      /**
+       * MENOS LUZ SEM DIRECAO, MAIS LUZ COM DIRECAO.
+       *
+       * Ambiente 0,32 + hemisferica 0,42 davam 0,74 de luz CHAPADA — quase
+       * metade do total da sala vindo de lugar nenhum. Luz sem direcao nao
+       * produz sombra propria, entao as quinas somem e cada peca vira uma
+       * silhueta de uma cor so. Era essa a razao de fundo de a sala parecer
+       * plana, e ela sobrevivia a qualquer ajuste de cor.
+       *
+       * Com a curva ACES ligada o defeito ficou pior de ver, nao melhor: a
+       * curva LEVANTA a sombra (f(0,3)=0,44), entao um lado escuro que ja era
+       * claro demais virou cinza leitoso. Baixar so a exposicao nao servia —
+       * escureceria o meio-tom junto, e o meio-tom estava certo.
+       *
+       * O corte foi na luz chapada (0,74 -> 0,42) e o que saiu voltou na
+       * principal, que TEM direcao (0,78 -> 0,98). O topo continua no mesmo
+       * lugar; o que muda e o lado escuro das pecas, que desce de ~171 para
+       * ~126 e volta a existir como sombra.
+       *
+       * A cor do chao da hemisferica tambem desceu (0x8f979e -> 0x6b7278):
+       * ela representa a luz que o PISO devolve, e o piso virou porcelanato
+       * escuro. Um chao escuro que ainda devolvia luz de chao claro era
+       * sobra da epoca do vinilico.
+       */
+      scene.add(new THREE.AmbientLight(0xf0f4f8, 0.14));
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x6b7278, 0.28));
 
-      var key = new THREE.DirectionalLight(0xffffff, 0.78);
+      var key = new THREE.DirectionalLight(0xffffff, 0.98);
       key.position.set(2.5, 5.5, 2);
       key.castShadow = true;
       key.shadow.mapSize.set(2048, 2048);
@@ -167,7 +306,7 @@
       key.shadow.radius = 4; // sombras mais suaves
       scene.add(key);
 
-      var fill = new THREE.DirectionalLight(0xe8f0f8, 0.3);
+      var fill = new THREE.DirectionalLight(0xe8f0f8, 0.20);
       fill.position.set(-4, 3.5, -3);
       scene.add(fill);
 
@@ -294,9 +433,30 @@
       topPlate.receiveShadow = true;
       tableGroup.add(topPlate);
 
+      // Colchao em cinza claro. Estava em 0xdfe5e8, a um passo do branco do
+      // tampo (0xf2f5f7): as duas pecas se fundiam numa so, e o aluno nao via
+      // onde termina a chapa e comeca o acolchoado — que e justamente a
+      // superficie onde o paciente deita e onde o laser cai.
+      //
+      // 0x7b7f82 e MAIS ESCURO do que "cinza claro" parece pedir, e isso e
+      // proposital: ESTA CENA ESTOURA. A luz soma ambiente 0,32 + hemisferica
+      // 0,42 + principal 0,78 + preenchimento 0,3, sem tone mapping, e a face
+      // de cima do colchao — voltada para a luz — sai multiplicada por ~1,6.
+      // Medido no enquadramento padrao, amostrando o pixel do colchao:
+      //
+      //     albedo 0x6b6f72 -> tela 172,180,186
+      //     albedo 0x7b7f82 -> tela 197,205,211   <- este
+      //     albedo 0x8b8f92 -> tela 222,230,236
+      //     albedo 0xa0a0a0 -> tela 253           (no limite)
+      //     albedo 0xb0b0b0 -> tela 255           (branco puro)
+      //
+      // Acima de ~0xa1 tudo satura em branco. A primeira tentativa aqui foi
+      // 0xc3c9cd, que E cinza claro no material — e chegava a tela como o
+      // mesmo branco 255 do tampo. Escolher a cor pelo numero, sem olhar o
+      // pixel, nesta cena nao funciona.
       var cushion = new THREE.Mesh(
         new THREE.BoxGeometry(0.56, 0.025, 1.85),
-        new THREE.MeshStandardMaterial({ color: 0xdfe5e8, roughness: 0.75 })
+        new THREE.MeshStandardMaterial({ color: 0x7b7f82, roughness: 0.75 })
       );
       // Assentado sobre o topo do tampo (tampo: centro em 0, espessura
       // 0.04 → topo em +0.02). Colchão de 2.5 cm apoiado nesse topo.
@@ -837,22 +997,24 @@
         }
       }
 
-      if (btnLaser) {
-        btnLaser.addEventListener("click", function () {
-          setLaser(!laserOn);
-          SimTC.showMessage(laserOn ? "Laser de posicionamento ligado (desliga sozinho em 40 s)." : "Laser de posicionamento desligado.", "info");
-        });
+      // As TRES acoes abaixo sao declaradas com nome porque agora tem DOIS
+      // acionadores cada uma: o botao em HTML e o botao pintado no gantry,
+      // que o raycast aciona. Uma acao, dois caminhos ate ela — e nao duas
+      // copias da mesma logica, que e como as duas divergem com o tempo.
+      function alternarLaser() {
+        setLaser(!laserOn);
+        SimTC.showMessage(laserOn ? "Laser de posicionamento ligado (desliga sozinho em 40 s)." : "Laser de posicionamento desligado.", "info");
       }
+      if (btnLaser) btnLaser.addEventListener("click", alternarLaser);
 
-      if (btnZero) {
-        btnZero.addEventListener("click", function () {
-          // Define a posição atual da mesa como o ponto zero de referência
-          // para a aquisição. O laser transversal marca esse plano.
-          tableZeroRef = FisicaMesa.getZ();
-          updateReadouts(0);
-          SimTC.showMessage("Posição da mesa zerada neste ponto (marco zero para a aquisição). Este é um ponto de controle — não é obrigatório para adquirir o exame.", "success");
-        });
+      // Define a posição atual da mesa como o ponto zero de referência
+      // para a aquisição. O laser transversal marca esse plano.
+      function marcarZero() {
+        tableZeroRef = FisicaMesa.getZ();
+        updateReadouts(0);
+        SimTC.showMessage("Posição da mesa zerada neste ponto (marco zero para a aquisição). Este é um ponto de controle — não é obrigatório para adquirir o exame.", "success");
       }
+      if (btnZero) btnZero.addEventListener("click", marcarZero);
 
       if (btnStart) {
         btnStart.addEventListener("click", function () {
@@ -879,18 +1041,20 @@
         });
       }
 
-      if (btnStop) {
-        btnStop.addEventListener("click", function () {
-          FisicaMesa.setCmd("up", false);
-          FisicaMesa.setCmd("down", false);
-          FisicaMesa.setCmd("in", false);
-          FisicaMesa.setCmd("out", false);
-          FisicaMesa.abortAutoDrive("PARADA DE EMERGÊNCIA — aquisição abortada.");
-          var statusEl = document.getElementById("display-status");
-          if (statusEl) statusEl.textContent = "PARADO";
-          SimTC.showMessage("PARADA DE EMERGÊNCIA acionada. Todos os movimentos foram interrompidos.", "warning");
-        });
+      // O cogumelo vermelho do gantry chama esta mesma funcao — e o unico
+      // controle que o aluno tem de saber achar sem procurar.
+      function pararTudo() {
+        FisicaMesa.setCmd("up", false);
+        FisicaMesa.setCmd("down", false);
+        FisicaMesa.setCmd("in", false);
+        FisicaMesa.setCmd("out", false);
+        FisicaMesa.abortAutoDrive("PARADA DE EMERGÊNCIA — aquisição abortada.");
+        estadoMostrador = "PARADO";
+        var statusEl = document.getElementById("display-status");
+        if (statusEl) statusEl.textContent = "PARADO";
+        SimTC.showMessage("PARADA DE EMERGÊNCIA acionada. Todos os movimentos foram interrompidos.", "warning");
       }
+      if (btnStop) btnStop.addEventListener("click", pararTudo);
 
       // -----------------------------------------------------------
       // Seletor de posicionamento do paciente (decúbito + entrada)
@@ -1056,6 +1220,7 @@
       // com a pagina oculta; sem esta guarda seriam seis escritas por passo
       // com a mesa parada, que e o estado normal.
       var ultimoEscrito = {};
+      var estadoMostrador = "AGUARDANDO";
       function escrever(el, chave, texto, comHtml) {
         if (!el || ultimoEscrito[chave] === texto) return;
         ultimoEscrito[chave] = texto;
@@ -1101,11 +1266,37 @@
         // a "descer a mesa" para centralizar o paciente.
         var patientCenterY = FisicaMesa.getY() + 0.02 + PATIENT_HALF_THICKNESS;
         var isoDelta = Math.abs(patientCenterY - ISO_Y);
-        if (displayStatusEl && simulationRunning) {
-          var estado = (isoDelta <= 0.01) ? "ISOCENTRO OK"
-                     : (patientCenterY > ISO_Y) ? "DESCER MESA" : "SUBIR MESA";
-          escrever(displayStatusEl, "dispStatus", estado, false);
+        if (simulationRunning) {
+          estadoMostrador = (isoDelta <= 0.01) ? "ISOCENTRO OK"
+                          : (patientCenterY > ISO_Y) ? "DESCER MESA" : "SUBIR MESA";
+          escrever(displayStatusEl, "dispStatus", estadoMostrador, false);
         }
+
+        // As MESMAS grandezas, no mostrador do aparelho.
+        atualizarMostrador(posText, SimTC.fmt.n(currentSpeedMmS, 1), heightText);
+      }
+
+      /**
+       * Espelha o HUD no mostrador do gantry.
+       *
+       * Redesenhar um canvas de 768x320 custa; `updateReadouts` roda no passo
+       * da fisica, dezenas de vezes por segundo, e com a mesa parada os
+       * valores nao mudam. Por isso a chave: so repinta quando algo que
+       * APARECE no mostrador mudou de verdade — as tres grandezas, o estado
+       * ou uma das quatro luzes.
+       */
+      var ultimoMostrador = "";
+      function atualizarMostrador(mesa, veloc, altura) {
+        if (!aparelho || !aparelho.atualizarDisplay) return;
+        var luz = SimTC.indicadores || {};
+        var chave = [mesa, veloc, altura, estadoMostrador,
+                     luz.power, luz.ready, luz.laser, luz.motion].join("|");
+        if (chave === ultimoMostrador) return;
+        ultimoMostrador = chave;
+        aparelho.atualizarDisplay({
+          mesa: mesa, veloc: veloc, altura: altura,
+          estado: estadoMostrador, luzes: luz
+        });
       }
 
       // -----------------------------------------------------------
@@ -1120,7 +1311,7 @@
       // uma copia que ninguem mais atribuia — e a guarda acima, que bloqueia os
       // comandos manuais durante a aquisicao, lia essa copia: era sempre null,
       // logo a guarda nunca fechava.
-      var hintTimer = null, hintEl = null; // realce temporário do comando de recuperação
+      var hintTimer = null; // realce temporário do comando de recuperação
 
       function setSpin(rotTimeS) {
         spinRotTime = rotTimeS > 0 ? rotTimeS : 0;
@@ -1165,16 +1356,23 @@
           return (v.y - ISO_Y) * 100;
         },
         stop: function () { FisicaMesa.abortAutoDrive("Aquisição interrompida pela workstation."); },
+        /**
+         * Acende o botao que a workstation quer que o operador aperte.
+         *
+         * Isto estava MORTO havia tempo: procurava `btn-in` e `btn-out`, ids
+         * que nunca existiram — os botoes chamavam-se `btn-table-in` e
+         * `btn-table-out`. A guarda `if (!alvo) return;` engolia o engano em
+         * silencio, entao a workstation pedia "aperte ENTRA" e nada acendia.
+         *
+         * Agora aponta para o botao que existe de verdade: o do gantry.
+         */
         hintControl: function (acao) {
-          var alvo = (acao === "in") ? document.getElementById("btn-in") : (acao === "out") ? document.getElementById("btn-out") : null;
-          if (!alvo) return;
+          if (acao !== "in" && acao !== "out") return;
           if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
-          if (hintEl) hintEl.classList.remove("is-hint");
-          hintEl = alvo;
-          alvo.classList.add("is-hint");
+          repintarComandos(acao);
           hintTimer = setTimeout(function () {
-            alvo.classList.remove("is-hint");
-            hintTimer = null; hintEl = null;
+            repintarComandos(comandoAtivo ? comandoAtivo.acao : null);
+            hintTimer = null;
           }, 6000);
         },
         setGantryTilt: function (deg) { setGantryTilt(deg); },
