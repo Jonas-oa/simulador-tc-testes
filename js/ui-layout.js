@@ -3,11 +3,9 @@
  * Simulador Educacional de TC — Layout e Infraestrutura de UI.
  *
  * Gerencia toda a camada de apresentacao transversal, sem logica clinica:
- *   • Console guiado desktop (etapas 1→2→3→4, banner de contexto)
- *   • Divisorias arrastaveis do painel de 4 quadrantes
- *   • Modo celular (classes mob-*, seletor flutuante)
+ *   • Navegação única por telas (classes mob-*, seletor flutuante)
  *   • Painel de comandos movel da Sala (arrastar/escalar)
- *   • PiP da Sala 3D durante a aquisicao
+ *   • Quadrante da Sala 3D durante a aquisicao
  *   • Reparenting dos botoes de aquisicao no celular
  *
  * Persiste estado em localStorage (layout, etapa, posicao do painel).
@@ -121,7 +119,7 @@
   }
 
   // =================================================================
-  // MODO DE LAYOUT — um controlador só
+  // LAYOUT ÚNICO — navegação móvel em qualquer tamanho de tela
   //
   // Havia DOIS, ligados aos mesmos botões: `initMobileMode` aqui e
   // js/mobile-tabs.js. Cada clique em "Sala" ou "Exame" disparava os dois,
@@ -138,39 +136,22 @@
   // auditoria: `body.className` vazio, console-steps oculto, mobile-switch
   // oculto.
   //
-  // A regra agora é uma só, e é invariante:
-  //
-  //     o app nunca fica sem navegação.
-  //
-  // Em tela estreita, o modo celular entra sozinho — a menos que o operador
-  // tenha saído dele de propósito nesta sessão, e nesse caso a barra de
-  // etapas fica no lugar. As duas navegações se revezam; nunca somem juntas.
+  // A interface móvel é a única apresentação do simulador, inclusive em
+  // monitores grandes. Assim as quatro telas e a navegação permanecem iguais
+  // no computador, tablet e celular.
   // =================================================================
   var VIEWS = ["3d", "aq", "pacproto", "mpr"];
   var CLASSES_VIEW = ["mob-3d", "mob-aq", "mob-pacproto", "mob-mpr"];
   var CHAVE_VIEW = "simuladorTC.mobileView";
-  var CHAVE_SAIU = "simuladorTC.mobileExit";
-  var ESTREITO = 900;
 
   function initModoDeLayout() {
     var body = document.body;
     var btn = document.getElementById("mobile-toggle");
     var sw = document.getElementById("mobile-switch");
-    var bExit = document.getElementById("mob-exit");
     var botoes = Array.prototype.slice.call(document.querySelectorAll("[data-mobile-view]"));
-    if (!btn || !sw || botoes.length !== VIEWS.length) return;
+    if (!sw || botoes.length !== VIEWS.length) return;
 
     function pokeResize() { window.dispatchEvent(new Event("resize")); }
-    function estreito() { return window.innerWidth <= ESTREITO; }
-    function saiuDeProposito() {
-      try { return sessionStorage.getItem(CHAVE_SAIU) === "1"; } catch (e) { return false; }
-    }
-    function marcarSaida(saiu) {
-      try {
-        if (saiu) sessionStorage.setItem(CHAVE_SAIU, "1");
-        else sessionStorage.removeItem(CHAVE_SAIU);
-      } catch (e) { /* sem persistência: vale só para esta janela */ }
-    }
     function normalizar(v) {
       // Migração: as telas "pac" e "proto" foram fundidas em "pacproto".
       if (v === "pac" || v === "proto") v = "pacproto";
@@ -200,37 +181,18 @@
       });
     }
 
-    function ligarCelular(ligado) {
-      body.classList.toggle("is-mobile", ligado);
-      btn.setAttribute("aria-pressed", ligado ? "true" : "false");
-      sw.hidden = !ligado;
-      if (ligado) setView(viewGuardada(), false);
-      else CLASSES_VIEW.forEach(function (c) { body.classList.remove(c); });
+    function aplicarLayoutMobile() {
+      body.classList.add("is-mobile");
+      if (btn) btn.setAttribute("aria-pressed", "true");
+      sw.hidden = false;
+      setView(viewGuardada(), false);
       pokeResize();
     }
 
-    btn.addEventListener("click", function () {
-      var ligando = !body.classList.contains("is-mobile");
-      marcarSaida(!ligando);
-      ligarCelular(ligando);
-    });
     botoes.forEach(function (b) {
       b.addEventListener("click", function () { setView(b.getAttribute("data-mobile-view")); });
     });
-    if (bExit) bExit.addEventListener("click", function () {
-      marcarSaida(true);
-      ligarCelular(false);
-    });
-
-    // Reavalia a CADA redimensionamento, e não só na carga: girar o tablet ou
-    // estreitar a janela é exatamente quando o app ficava sem navegação.
-    function reavaliar() {
-      var celular = body.classList.contains("is-mobile");
-      if (estreito() && !celular && !saiuDeProposito()) ligarCelular(true);
-    }
-    window.addEventListener("resize", reavaliar);
-    reavaliar();
-    if (body.classList.contains("is-mobile")) setView(viewGuardada(), false);
+    aplicarLayoutMobile();
   }
 
   function initMobilePanel() {
@@ -561,8 +523,8 @@
   // -----------------------------------------------------------------
   // EMPRESTAR UM ELEMENTO A OUTRO LUGAR DA TELA
   //
-  // Dois pedacos do app mudam de pai conforme a etapa: o viewport 3D (vai do
-  // quadrante da Sala para o slot do Exame) e a barra de comandos da sequencia
+  // Dois pedacos do app mudam de pai conforme a etapa: o viewport 3D (vai da
+  // Sala para o quadrante do Exame) e a barra de comandos da sequencia
   // (vai para o topo, no modo celular). A manobra era escrita duas vezes, igual
   // nas duas, e nas duas o endereco de casa era guardado como REFERENCIA AO
   // IRMAO SEGUINTE:
@@ -598,8 +560,8 @@
   }
 
   // A auditoria (item E-06) sugeria PARAR de reparentar o canvas WebGL e, em
-  // vez disso, deixa-lo num unico lugar, posicionado por CSS sobre o slot da
-  // vez. Foi medido antes de decidir: seis idas e voltas entre a Sala e o
+  // vez disso, deixa-lo num unico lugar, posicionado por CSS sobre o quadrante
+  // da vez. Foi medido antes de decidir: seis idas e voltas entre a Sala e o
   // Exame, no Chromium, com o contexto sob observacao —
   //
   //     sala -> sala-view    1439x738   canvas 1769x907
@@ -611,20 +573,13 @@
   // de um slot custaria sincronizar posicao, rolagem e empilhamento a mao — mais
   // superficie de erro do que a que existe hoje, para consertar algo que nao
   // esta quebrado. FICA COMO ESTA, e a medida fica escrita para quem revisitar.
-  function initAcqPip() {
-    var pip = document.getElementById("pip-3d");
-    var pipBody = document.getElementById("pip-body");
-    var pipBar = document.getElementById("pip-bar");
-    var pipHide = document.getElementById("pip-hide");
+  function initAcq3d() {
     var acq3d = document.getElementById("acq3d");
     var acq3dBody = document.getElementById("acq3d-body");
-    var viewer = document.getElementById("ws-slice-viewer");
     var vp = document.querySelector("#pane-sim .viewport");
-    if (!pip || !pipBody || !viewer || !vp) return;
+    if (!acq3d || !acq3dBody || !vp) return;
 
     var emprestimo = emprestar(vp, "viewport 3D");
-    var curPhase = "idle";
-    var userHidden = false;
 
     /**
      * O `resize` sintetico so pode sair daqui quando o viewport TROCOU DE PAI.
@@ -656,8 +611,7 @@
     // Devolve o viewport 3D ao quadrante da Sala.
     function toHome() {
       var mudou = emprestimo.paraCasa();
-      pip.hidden = true;
-      if (acq3d) acq3d.hidden = true;
+      acq3d.hidden = true;
       avisarLayout(mudou);
     }
 
@@ -666,86 +620,87 @@
       var mobile = b.classList.contains("is-mobile");
       var onExamDesktop = !!(SimTC.consoleUiApi && SimTC.consoleUiApi.isConsole() && SimTC.consoleUiApi.getStep() === "acq");
       var onExamMobile = mobile && b.classList.contains("mob-aq");
-      // Sala 3D fica SEMPRE visível na etapa Exame (antes, durante e depois
-      // da aquisição), para o aluno acompanhar a mesa.
-      var want = (onExamDesktop || onExamMobile) && !userHidden;
-      if (!want) { toHome(); return; }
-      // Layout de 4 quadrantes: a Sala 3D vive no quadrante inferior direito
-      // (slot #acq3d-body), no desktop e no celular. O PiP flutuante fica
-      // como fallback caso o slot não exista.
-      var mudou;
-      if (acq3dBody) {
-        mudou = emprestimo.para(acq3dBody);
-        if (acq3d) acq3d.hidden = false;
-        pip.hidden = true;
-      } else {
-        mudou = emprestimo.para(pipBody);
-        pip.hidden = false;
-        if (acq3d) acq3d.hidden = true;
-      }
+      var onExam = onExamDesktop || onExamMobile;
+      if (!onExam) { toHome(); return; }
+
+      // Durante a aquisição, a cena ocupa o quadrante inferior direito.
+      var mudou = emprestimo.para(acq3dBody);
+      acq3d.hidden = false;
       // O ResizeObserver do renderer reajusta o canvas ao reparentar.
       avisarLayout(mudou);
     }
 
     SimTC.aoMudarFase(function (p) {
-      // Nova aquisição reexibe o PiP mesmo se o aluno o ocultou antes.
-      if ((p === "topoAcq" || p === "volAcq" || p === "moving") && curPhase !== p) userHidden = false;
-      curPhase = p;
       update();
     });
-    // Troca de aba no modo celular (mob-*) também reavalia o PiP.
+    // Troca de aba no modo celular (mob-*) também reavalia a Sala 3D.
     var mo = new MutationObserver(update);
     mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     // Troca de etapa/modo dispara resize (pokeResize) — reavaliamos aqui.
     window.addEventListener("resize", update);
-    if (pipHide) pipHide.addEventListener("click", function () { userHidden = true; update(); });
-
-    // Arrastável pela barra, limitado ao viewer.
-    if (pipBar) pipBar.addEventListener("pointerdown", function (e) {
-      if (e.target === pipHide) return;
-      e.preventDefault();
-      try { pipBar.setPointerCapture(e.pointerId); } catch (err) {}
-      var vr = viewer.getBoundingClientRect();
-      var pr = pip.getBoundingClientRect();
-      var offX = e.clientX - pr.left, offY = e.clientY - pr.top;
-      function move(ev) {
-        var x = Math.min(Math.max(0, ev.clientX - vr.left - offX), Math.max(0, vr.width - pr.width));
-        var y = Math.min(Math.max(0, ev.clientY - vr.top - offY), Math.max(0, vr.height - pr.height));
-        pip.style.left = x + "px";
-        pip.style.top = y + "px";
-        pip.style.right = "auto";
-      }
-      function up() {
-        try { pipBar.releasePointerCapture(e.pointerId); } catch (err) {}
-        pipBar.removeEventListener("pointermove", move);
-        pipBar.removeEventListener("pointerup", up);
-        pipBar.removeEventListener("pointercancel", up);
-      }
-      pipBar.addEventListener("pointermove", move);
-      pipBar.addEventListener("pointerup", up);
-      pipBar.addEventListener("pointercancel", up);
-    });
   }
 
-  function initMobileExamCommands() {
+  function initFloatingExamCommands() {
     var foot = document.querySelector(".acq-seq__foot");
-    var host = document.getElementById("acq-topo-cmds");
-    if (!foot || !host) return;
+    var host = document.getElementById("acq-command-float-body");
+    var floater = document.getElementById("acq-command-float");
+    var drag = document.getElementById("acq-command-float-drag");
+    var acqPane = document.getElementById("pane-acq");
+    if (!foot || !host || !floater || !acqPane) return;
     var emprestimo = emprestar(foot, "comandos da sequencia");
     function update() {
       var b = document.body;
       var want = b.classList.contains("is-mobile") && b.classList.contains("mob-aq");
       if (want) {
         emprestimo.para(host);
-        host.hidden = false;
+        floater.hidden = false;
       } else {
         emprestimo.paraCasa();
-        host.hidden = true;
+        floater.hidden = true;
       }
     }
     var mo = new MutationObserver(update);
     mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     window.addEventListener("resize", update);
+
+    // A alça é a única área arrastável. Os botões permanecem livres para
+    // executar os comandos da aquisição sem disputar o gesto com a janela.
+    if (drag) drag.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      try { drag.setPointerCapture(e.pointerId); } catch (err) {}
+
+      var paneRect = acqPane.getBoundingClientRect();
+      var floatRect = floater.getBoundingClientRect();
+      var offsetX = e.clientX - floatRect.left;
+      var offsetY = e.clientY - floatRect.top;
+      var padding = 8;
+
+      // Converte a posição inicial centralizada por CSS em coordenadas locais
+      // antes do primeiro movimento, preservando exatamente a posição vista.
+      floater.style.left = (floatRect.left - paneRect.left) + "px";
+      floater.style.top = (floatRect.top - paneRect.top) + "px";
+      floater.style.right = "auto";
+      floater.style.bottom = "auto";
+      floater.style.transform = "none";
+
+      function move(ev) {
+        var maxX = Math.max(padding, paneRect.width - floatRect.width - padding);
+        var maxY = Math.max(padding, paneRect.height - floatRect.height - padding);
+        var x = Math.min(Math.max(padding, ev.clientX - paneRect.left - offsetX), maxX);
+        var y = Math.min(Math.max(padding, ev.clientY - paneRect.top - offsetY), maxY);
+        floater.style.left = x + "px";
+        floater.style.top = y + "px";
+      }
+      function stop() {
+        try { drag.releasePointerCapture(e.pointerId); } catch (err) {}
+        drag.removeEventListener("pointermove", move);
+        drag.removeEventListener("pointerup", stop);
+        drag.removeEventListener("pointercancel", stop);
+      }
+      drag.addEventListener("pointermove", move);
+      drag.addEventListener("pointerup", stop);
+      drag.addEventListener("pointercancel", stop);
+    });
     update();
   }
 
@@ -756,8 +711,8 @@
       initModoDeLayout();
       initMobilePanel();
       initConsoleMode();
-      initAcqPip();
-      initMobileExamCommands();
+      initAcq3d();
+      initFloatingExamCommands();
     }
   };
 

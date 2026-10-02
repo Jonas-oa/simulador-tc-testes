@@ -1030,36 +1030,6 @@ body.is-mobile .ws-plane { display: none !important; }
 .ws-actions--cadastro { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .ws-btn--grande { padding: 9px 18px; font-size: 0.82rem; font-weight: 600; }
 
-/* ---- A worklist ---------------------------------------------------- */
-.wl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.wl-item__botao {
-  width: 100%; display: grid; grid-template-columns: auto 1fr auto;
-  align-items: start; gap: 10px; text-align: left;
-  padding: 8px 10px; border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm); background: var(--bg-panel-raised);
-  color: inherit; font: inherit; cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-.wl-item__botao:hover { border-color: var(--accent-cyan); background: var(--bg-panel); }
-.wl-item__hora {
-  font-family: var(--font-mono); font-size: var(--fs-mini);
-  color: var(--text-secondary); font-variant-numeric: tabular-nums; padding-top: 1px;
-}
-.wl-item__corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.wl-item__nome { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
-.wl-item__meta { font-size: var(--fs-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-/* A indicação clínica é o que justifica o protocolo — e por isso não é
-   letra miúda de rodapé: fica na cor do texto corrente. */
-.wl-item__indic { font-size: var(--fs-mini); color: var(--text-secondary); line-height: 1.35; }
-.wl-item__selo {
-  font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--text-muted); white-space: nowrap; padding-top: 2px;
-}
-.wl-item.is-urgente .wl-item__botao { border-left: 3px solid var(--accent-amber); }
-.wl-item.is-urgente .wl-item__selo { color: var(--accent-amber-ink); font-weight: 700; }
-.wl-item.is-feito .wl-item__botao { opacity: 0.55; }
-.wl-item.is-feito .wl-item__selo { color: var(--accent-green-ink); }
-
 .pac-hint { margin: 0; font-size: var(--fs-mini); color: var(--text-muted); }
 
 /* Seleção explícita: o paciente EM EXAME é escolhido, nunca inferido pelo
@@ -1194,7 +1164,7 @@ body.is-mobile.mob-3d #pane-sim .console .pose-panel {
 
 /* --- TELA "EXAME": 4 quadrantes (pane-acq preenche a tela) ---
    (o show/hide dos panes por aba é consolidado em mobile-tabs.css) --- */
-body.is-mobile.mob-aq #pane-acq { order: 3; }
+body.is-mobile.mob-aq #pane-acq { order: 3; position: relative; }
 body.is-mobile.mob-aq .dash-pane { flex: 0 0 auto; overflow: visible; }
 body.is-mobile.mob-aq .dash-pane__body { overflow: visible; }
 
@@ -1553,27 +1523,6 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
   max-width: none; margin: 0;
 }
 
-/* Picture-in-picture da sala 3D durante a aquisição (modo console):
-   o .viewport REAL é reparentado para cá — o ResizeObserver do renderer
-   reajusta o canvas sozinho. Arrastável pela barra; "—" oculta. */
-.pip {
-  position: absolute; z-index: 8; right: 14px; top: 14px;
-  width: min(360px, 44%); height: min(250px, 44%);
-  display: flex; flex-direction: column; overflow: hidden;
-  border: 1px solid var(--border-strong); border-radius: 10px;
-  background: #0a1018; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-}
-.pip__bar {
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  padding: 4px 9px; font-size: 0.72rem; color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06); cursor: grab;
-  user-select: none; -webkit-user-select: none; touch-action: none;
-}
-.pip__bar:active { cursor: grabbing; }
-.pip__hide { border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; padding: 0 5px; line-height: 1; }
-.pip__body { position: relative; flex: 1 1 auto; min-height: 0; }
-.pip__body .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
-
 /* Relatório didático do exame + fixação rápida (fase de revisão) */
 .ws-report {
   position: absolute; z-index: 9; left: 50%; top: 50%;
@@ -1598,7 +1547,7 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
 .ws-quiz__result { font-size: 0.8rem; align-self: center; color: var(--text-secondary); }
 
 /* Correções mobile/tela estreita (console guiado):
-   1) [hidden] sempre vence display de classe (PiP aparecia vazio);
+   1) [hidden] sempre vence display de classe;
    2) a barra de etapas do console é EXCLUSIVA de telas largas — em
       telefones o controle é o seletor fixo inferior do modo celular;
    3) em tela estreita o modo console não esconde quadrantes: vale o
@@ -1617,10 +1566,7 @@ body.console-mode.cstep-pacproto:not(.is-mobile) #pane-proto .dash-pane__body {
   .cstep__num { width: 26px; height: 26px; font-size: var(--fs-mini); }
 }
 
-/* PiP no modo celular (aba Exame): a sala 3D fica sempre visível no topo
-   do viewer de aquisição. Fixa uma altura confortável e garante que as
-   regras de mob-aq (que ocultam #pane-sim) não escondam o viewport
-   reparentado para dentro do PiP. */
+/* Sala 3D no modo celular (aba Exame): a cena ocupa o quarto quadrante. */
 body.is-mobile.mob-aq #ws-slice-viewer { flex-direction: column; align-items: stretch; justify-content: flex-start; aspect-ratio: auto; min-height: 0; overflow: visible; }
 /* Topograma limitado em altura para sobrar espaço aos controles; largura
    ajustada ao conteúdo para as linhas (box) permanecerem alinhadas. */
@@ -1628,8 +1574,6 @@ body.is-mobile.mob-aq .ws-topo { align-self: center; width: fit-content; max-wid
 body.is-mobile.mob-aq .ws-topo__img { width: auto; height: auto; max-width: 100%; max-height: 42vh; }
 /* Controles em fluxo normal, sempre acessíveis abaixo do topograma. */
 body.is-mobile.mob-aq .ws-overlay--bottom { position: static; margin-top: 8px; pointer-events: auto; }
-body.is-mobile.mob-aq .pip { position: relative; right: auto; top: auto; left: auto; width: 100%; height: 240px; margin: 0 0 10px; flex: 0 0 auto; }
-body.is-mobile.mob-aq .pip__body .viewport { display: block !important; }
 body.is-mobile.mob-aq .ws-overlay { position: static; }
 body.is-mobile.mob-aq .ws-overlay--bottom { background: none; margin-top: auto; }
 
@@ -1637,26 +1581,10 @@ body.is-mobile.mob-aq .ws-overlay--bottom { background: none; margin-top: auto; 
    CORREÇÕES MOBILE — aquisição (2026-07d)
    1) O quadrante de aquisição recebe ALTURA explícita no celular para o
       topograma horizontal caber e o fitTopo medir corretamente.
-   2) A sala 3D fica sempre visível durante a aquisição: uma faixa 3D no
-      topo do quadrante de exame (o PiP desktop não vale no celular).
+   2) A Sala 3D permanece no quarto quadrante da grade.
    ===================================================================== */
 body.is-mobile.mob-aq #pane-acq { min-height: auto; }
 body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
-
-/* Faixa 3D fixa no topo da aquisição (mobile): o .viewport REAL é
-   reparentado para cá durante topograma/posicionamento/volume. */
-.acq3d {
-  position: relative; width: 100%; height: 19vh; min-height: 116px;
-  border-bottom: 1px solid var(--border-strong);
-  background: #0a1018; overflow: hidden; flex: 0 0 auto;
-}
-.acq3d .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
-.acq3d__tag {
-  position: absolute; top: 6px; left: 8px; z-index: 2;
-  font-size: 0.7rem; color: rgba(255,255,255,0.7);
-  background: rgba(0,0,0,0.4); padding: 2px 7px; border-radius: 6px;
-  pointer-events: none;
-}
 
 /* Contador em destaque durante a aquisição do volume */
 .ws-viewer-ctrl.is-acquiring .ws-slice-counter {
@@ -1668,16 +1596,16 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 
 /* =====================================================================
    AQUISIÇÃO — LAYOUT DE 4 QUADRANTES (referência: console Siemens)
-   sup.esq Topograma · sup.dir Volumes · inf.esq Sequência dos protocolos
-   · inf.dir Ajuste do protocolo + Sala 3D. O corpo de #pane-acq vira uma
-   grade 2×2. Estrutura reaproveita os elementos existentes (mesmos IDs);
+   sup.esq Topograma · sup.dir Volumes · inf.esq Aquisição
+   · inf.dir Sala 3D. O corpo de #pane-acq vira uma grade 2×2.
+   Estrutura reaproveita os elementos existentes (mesmos IDs);
    a lógica de aquisição não muda. Etapa 1 (layout).
    ===================================================================== */
 .acq4 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  grid-template-areas: "topo vol" "seq adj";
+  grid-template-areas: "topo vol" "seq room";
   gap: 2px;
   height: 100%;
   min-height: 0;
@@ -1688,7 +1616,7 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-quad--topo { grid-area: topo; }
 .acq-quad--vol  { grid-area: vol; }
 .acq-quad--seq  { grid-area: seq; }
-.acq-quad--adj  { grid-area: adj; }
+.acq-quad--3d   { grid-area: room; }
 
 .acq-quad {
   display: flex; flex-direction: column;
@@ -1716,7 +1644,22 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-quad--vol .acq-quad__body { background: #000; }
 .acq-quad--vol #ws-slice-viewer { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; aspect-ratio: auto; border: 0; }
 
-/* Q3 · Sequência dos protocolos */
+/* Q4 · Sala 3D: o viewport principal é emprestado durante a aquisição. */
+.acq-quad--3d .acq-quad__body { background: #0a1018; }
+.acq3d { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.acq3d .viewport { position: absolute; inset: 0; width: 100%; height: 100%; }
+.acq3d__body { position: absolute; inset: 0; }
+.acq3d__tag {
+  position: absolute; top: 6px; left: 8px; z-index: 2;
+  font-size: 0.7rem; color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.4); padding: 2px 7px; border-radius: 6px;
+  pointer-events: none;
+}
+/* O HUD da sala não entra no quadrante do exame. */
+#acq3d-body .viewport__hud { display: none; }
+#acq3d-body .viewport__overlay { pointer-events: none; }
+
+/* Q3 · Aquisição */
 .acq-seq-wrap { display: flex; flex-direction: column; padding: 8px; gap: 8px; overflow: hidden; }
 .acq-seq { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
 .acq-step { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-panel); }
@@ -1762,40 +1705,78 @@ body.is-mobile.mob-aq #pane-acq .ws-viewer--full { min-height: 0; }
 .acq-seq__foot { flex: 0 0 auto; margin: 0; }
 .acq-seq-wrap .ws-note { flex: 0 0 auto; margin: 0; font-size: var(--fs-micro); }
 
-/* Q4 · Ajuste do protocolo + Sala 3D */
-.acq-adj { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2px; background: var(--border-subtle); }
-.acq-adj__params, .acq-adj__3d { background: var(--bg-void); display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
-.acq-adj__subhead { flex: 0 0 auto; height: 18px; padding: 0 8px; display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); }
-.acq-params { flex: 1; overflow-y: auto; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-content: start; }
-.acq-param { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.acq-param--full { grid-column: 1 / -1; }
-.acq-param__k { font-size: var(--fs-micro); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
-.acq-param__v { font-size: 0.78rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acq-params__empty { color: var(--text-muted); font-size: 0.72rem; padding: 8px; grid-column: 1 / -1; }
-.acq-adj__3d { position: relative; }
-.acq-adj__3d .acq3d { position: absolute; left: 0; right: 0; top: 18px; bottom: 0; width: auto; height: auto; min-height: 0; border: 0; background: #0a1018; }
-.acq-adj__3d .acq3d__body { position: absolute; inset: 0; }
-.acq-adj__3d .acq3d__tag { position: absolute; top: 4px; left: 6px; z-index: 2; }
+/* Comandos flutuantes da aquisição. A barra inicia no centro inferior da
+   tela Exame, sobre a divisória dos quadrantes inferiores, como o console
+   físico: próxima da ação sem encobrir o topograma. */
+.acq-command-float {
+  position: absolute; z-index: 20; left: 50%; bottom: 8px;
+  width: min(520px, calc(100% - 32px)); transform: translateX(-50%);
+  overflow: hidden; border: 1px solid var(--border-strong); border-radius: 10px;
+  background: rgba(10, 16, 24, 0.96); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.52);
+}
+.acq-command-float__drag {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 22px; padding: 3px 8px; color: var(--text-secondary);
+  background: var(--bg-panel-raised); border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; cursor: grab; user-select: none;
+  -webkit-user-select: none; touch-action: none;
+}
+.acq-command-float__drag:active { cursor: grabbing; }
+.acq-command-float__grip { color: var(--text-muted); font-size: 1rem; letter-spacing: 0; }
+.acq-command-float__body { padding: 8px; }
+.acq-command-float .acq-seq__foot {
+  display: flex; flex: 0 0 auto; flex-flow: row wrap; justify-content: center;
+  gap: 8px; width: 100%; margin: 0;
+}
+.acq-command-float .ws-btn { min-width: 100px; }
+/* A barra flutuante é o comando operacional imediato da TC. Relatório e
+   exportação continuam disponíveis apenas fora dela, sem disputar esse fluxo. */
+.acq-command-float #ws-exam-report,
+.acq-command-float #ws-exam-dicom { display: none !important; }
 
-/* O HUD NAO ENTRA NO QUADRANTE DO EXAME.
-   O viewport 3D e emprestado para ca durante a aquisicao (ver `emprestar` em
-   js/ui-layout.js) e trazia junto o HUD — MESA, VELOC., ALTURA e os quatro
-   indicadores. Numa janela de 1440 isso e uma caixa de 321x115 dentro de um
-   quadrante de 322x310: 37% da imagem coberta por numeros que a tela do exame
-   nao precisa, e que continuam na tela da Sala, onde a mesa e o assunto. */
-#acq3d-body .viewport__hud { display: none; }
-#acq3d-body .viewport__overlay { pointer-events: none; }
+/* --- VOLUME: imagem central e informações sobrepostas nas bordas ---------
+   As informações não participam do fluxo flex do viewer; assim não roubam
+   largura do corte axial e o volume permanece exatamente centralizado. */
+body.is-mobile.mob-aq .acq-quad--vol #ws-slice-viewer {
+  flex-direction: row; align-items: center; justify-content: center; overflow: hidden;
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-viewer__img {
+  position: relative; z-index: 1; max-width: 100%; max-height: 100%; object-fit: contain;
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay {
+  position: absolute; z-index: 5; display: flex; pointer-events: none;
+  padding: 5px 7px; background: rgba(4, 8, 12, 0.68);
+  border: 1px solid rgba(137, 166, 188, 0.28); border-radius: var(--radius-sm);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay > * { pointer-events: auto; }
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--top {
+  top: 7px; left: 7px; right: auto; bottom: auto; width: min(220px, 42%);
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom {
+  top: auto; right: 7px; bottom: 7px; left: auto; width: min(235px, 46%);
+  max-height: calc(100% - 14px); overflow: auto; background: rgba(4, 8, 12, 0.76);
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-series,
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-med,
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-med__saida {
+  padding: 4px 0; border-top: 0;
+}
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-series + .ws-med,
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-med + .ws-med__saida,
+body.is-mobile.mob-aq .acq-quad--vol .ws-overlay--bottom .ws-med__saida + .ws-viewer-ctrl {
+  border-top: 1px solid var(--border-subtle);
+}
 
-/* --- MOBILE PAISAGEM: mantém a grade 2×2 (dashboard já recua faixa+banner) --- */
-/* (herda a grade base; só garantimos que o viewer preencha) */
-body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items: stretch; }
+/* --- MOBILE PAISAGEM: mantém a grade da aquisição (dashboard já recua faixa+banner) --- */
 
 /* --- MOBILE RETRATO: empilha os 4 quadrantes e rola --- */
 @media (orientation: portrait) {
   body.is-mobile.mob-aq .acq4 {
     grid-template-columns: 1fr;
     grid-template-rows: none;
-    grid-template-areas: "topo" "vol" "seq" "adj";
+    grid-template-areas: "topo" "vol" "seq" "room";
     grid-auto-rows: auto;
     height: auto; min-height: 100%;
     overflow-y: auto; overscroll-behavior: contain;
@@ -1806,9 +1787,11 @@ body.is-mobile.mob-aq .acq4 #ws-slice-viewer { flex-direction: row; align-items:
   body.is-mobile.mob-aq .acq4 .acq-quad--topo,
   body.is-mobile.mob-aq .acq4 .acq-quad--vol { height: 300px; }
   body.is-mobile.mob-aq .acq4 .acq-quad--seq { height: 330px; overflow: visible; }
-  body.is-mobile.mob-aq .acq4 .acq-quad--adj { height: 220px; }
-  body.is-mobile.mob-aq .acq4 .acq-adj { grid-template-columns: 1fr 1fr; }
+  body.is-mobile.mob-aq .acq4 .acq-quad--3d { height: 220px; }
   body.is-mobile.mob-aq .acq4 .acq-seq { overflow-y: auto; }
+  .acq-command-float { bottom: 8px; width: min(420px, calc(100% - 24px)); }
+  .acq-command-float__body { padding: 6px; }
+  .acq-command-float .ws-btn { min-width: 88px; }
 }
 
 /* Seletor de séries reconstruídas.

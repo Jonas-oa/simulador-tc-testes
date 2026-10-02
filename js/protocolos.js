@@ -2,8 +2,7 @@
  * js/protocolos.js
  * Simulador Educacional de TC — Tela de Protocolos.
  *
- * Mapa corporal SVG interativo, CRUD de protocolos (catalogo canonico
- * com 16 entradas + criacao livre), editor em quadrante completo e
+ * Protocolo de crânio fixo, apresentado em uma única região, e
  * persistencia em IndexedDB. Atualiza SimTC.examProtocol que e consumido
  * pela tela de Aquisicao.
  *
@@ -226,28 +225,10 @@
       });
     }
 
-    // Catalogo canonico de protocolos por regiao (fixos — NAO podem ser
-    // apagados). Nomes didaticos definidos pelo operador; os parametros dos
-    // demais ficam em branco ate ele preencher/validar. ensureCatalog roda a
-    // cada carga: recria o que faltar e re-preenche o cranio se vier em
-    // branco (auto-recuperacao contra estados antigos do banco).
+    // O simulador usa somente o protocolo de Crânio. O catálogo fica limitado
+    // a essa referência, inclusive para bancos criados em versões anteriores.
     var CATALOGO = [
-      { id: "cranio",   nome: "Crânio",           regiao: "Crânio" },
-      { id: "face",     nome: "Face",             regiao: "Crânio" },
-      { id: "saf",      nome: "Seios da face",    regiao: "Crânio" },
-      { id: "orbitas",  nome: "Órbitas",          regiao: "Crânio" },
-      { id: "atm",      nome: "ATM",              regiao: "Crânio" },
-      { id: "pescoco",  nome: "Pescoço",          regiao: "Pescoço" },
-      { id: "torax",    nome: "Tórax",            regiao: "Tórax" },
-      { id: "torax_ar", nome: "Tórax AR (HRCT)",  regiao: "Tórax" },
-      { id: "abd_total", nome: "Abdome total",    regiao: "Abdome" },
-      { id: "abd_sup",  nome: "Abdome superior",  regiao: "Abdome" },
-      { id: "pelve",    nome: "Pelve",            regiao: "Pelve" },
-      { id: "col_cerv", nome: "Coluna cervical",  regiao: "Coluna" },
-      { id: "col_tor",  nome: "Coluna torácica",  regiao: "Coluna" },
-      { id: "col_lomb", nome: "Coluna lombar",    regiao: "Coluna" },
-      { id: "memb_sup", nome: "Membro superior",  regiao: "Membros" },
-      { id: "memb_inf", nome: "Membro inferior",  regiao: "Membros" }
+      { id: "cranio", nome: "Crânio", regiao: "Crânio" }
     ];
 
     function ensureCatalog() {
@@ -267,7 +248,7 @@
       p.bloqueado = true;   // referencia didatica: duplique para variar
       return p;
     }
-    function seedDefaults() { return [cranioSeed(), blank("torax", "Tórax", "Tórax")]; }
+    function seedDefaults() { return [cranioSeed()]; }
     function persist(o) { if (memoryFallback) return Promise.resolve(); return SimTC.dbStorePut("protocolos", o).catch(function () { memoryFallback = true; }); }
 
     /**
@@ -741,9 +722,12 @@
       SimTC.showMessage("Protocolos em modo temporário: " + err.message, "info");
       return seedDefaults();
     }).then(function (list) {
-      protocols = migrarParaTipado(list);
+      // Protocolos antigos continuam intactos no armazenamento local, mas não
+      // fazem parte deste simulador de Crânio e não são disponibilizados aqui.
+      protocols = migrarParaTipado(list).filter(function (p) { return p.id === "cranio"; });
       ensureCatalog();
       selectRegion("Crânio");
+      selectProtocol("cranio");
     });
   }
 

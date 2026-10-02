@@ -215,36 +215,71 @@
    * @param {number} [limiarHU=-500]
    * @returns {{cc:[number,number], perp:[number,number]}} frações da imagem
    */
+  /**
+   * Menor intervalo de indices que contem `fracao` da massa do histograma.
+   *
+   * Existe porque MIN/MAX e um estimador fragil: um punhado de voxels soltos
+   * decide a resposta inteira. Medido no cranio do acervo: entre -500 e -300 HU
+   * ha 298 voxels de RUIDO (ar ruidoso chega a -400), e eles esticavam a caixa
+   * de 150 para 183 mm em x e de 199 para 226 mm em y. Com isso, o validador
+   * recusava o proprio protocolo de cranio de referencia — que e travado, de
+   * modo que o operador nao tinha nem como corrigir.
+   *
+   * Aparar 0,25% de cada ponta descarta o ruido e nao toca na anatomia: num
+   * corte de cabeca sao ~11 mil voxels ocupados, entao 0,25% sao 27 — menos do
+   * que o ruido, e nada perto de qualquer estrutura de verdade.
+   */
+  function faixaRobusta(cont, total, fracao) {
+    var apararCada = Math.floor(total * (1 - fracao) / 2);
+    var i, acc = 0, ini = 0, fim = cont.length - 1;
+    for (i = 0; i < cont.length; i++) {
+      acc += cont[i];
+      if (acc > apararCada) { ini = i; break; }
+    }
+    acc = 0;
+    for (i = cont.length - 1; i >= 0; i--) {
+      acc += cont[i];
+      if (acc > apararCada) { fim = i; break; }
+    }
+    if (fim < ini) { ini = 0; fim = cont.length - 1; }
+    return [ini, fim];
+  }
+
   Volume.prototype.limitesAnatomicos = function (orientacao, limiarHU) {
     var lim = limiarHU == null ? -500 : limiarHU;
     var nx = this.dims[0], ny = this.dims[1], nz = this.dims[2];
     var lateral = orientacao !== "frontal";
+    var perpN = lateral ? ny : nx;
 
-    // Extensão ocupada no eixo crânio-caudal (z).
-    var zMin = nz, zMax = -1;
-    // e no eixo perpendicular visível no scout (y no lateral, x no frontal).
-    var pMin = lateral ? ny : nx, pMax = -1;
+    // Quantos voxels de tecido ha em cada indice de cada eixo. Contar, e nao
+    // so marcar o primeiro e o ultimo, e o que permite aparar o ruido depois.
+    //
+    // O limiar continua em -500 HU de proposito: no TORAX o pulmao mora entre
+    // -850 e -700, e subir o limiar para fugir do ruido apagaria o pulmao do
+    // mapa. Quem trata o ruido e a apara, nao o limiar.
+    var contZ = new Float64Array(nz);
+    var contP = new Float64Array(perpN);
+    var total = 0;
 
     for (var z = 0; z < nz; z++) {
       var base = z * this._nxy;
-      var achouZ = false;
       for (var y = 0; y < ny; y++) {
         for (var x = 0; x < nx; x++) {
           if (this.dados[base + y * nx + x] <= lim) continue;
-          achouZ = true;
-          var p = lateral ? y : x;
-          if (p < pMin) pMin = p;
-          if (p > pMax) pMax = p;
+          contZ[z]++;
+          contP[lateral ? y : x]++;
+          total++;
         }
       }
-      if (achouZ) { if (z < zMin) zMin = z; if (z > zMax) zMax = z; }
     }
 
-    if (zMax < 0) return { cc: [0, 1], perp: [0, 1] };
-    var perpN = lateral ? ny : nx;
+    if (!total) return { cc: [0, 1], perp: [0, 1] };
+
+    var fz = faixaRobusta(contZ, total, 0.995);
+    var fp = faixaRobusta(contP, total, 0.995);
     return {
-      cc: [zMin / nz, (zMax + 1) / nz],
-      perp: [pMin / perpN, (pMax + 1) / perpN]
+      cc: [fz[0] / nz, (fz[1] + 1) / nz],
+      perp: [fp[0] / perpN, (fp[1] + 1) / perpN]
     };
   };
 

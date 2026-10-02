@@ -361,6 +361,10 @@
       // um modelo importado tem a espessura que tem. Comeca no valor da figura
       // procedural e e reescrito se um modelo entrar no lugar.
       var PATIENT_HALF_THICKNESS = 0.12;
+      // Distância do centro geométrico atual do paciente até a origem da
+      // mesa. Ela muda de acordo com o decúbito: no lateral, por exemplo, a
+      // largura do corpo passa a ser a dimensão vertical.
+      var PATIENT_CENTER_OFFSET_Y = 0.02 + PATIENT_HALF_THICKNESS;
 
       // -----------------------------------------------------------
       // Suporte da mesa — estilo Somatom (base retangular escalonada):
@@ -465,6 +469,10 @@
       cushion.receiveShadow = true;
       tableGroup.add(cushion);
 
+      // Tampo: 4 cm centrados em y=0 (topo em 2 cm); colchão: 2,5 cm sobre
+      // ele. Esta é a primeira superfície que o corpo pode tocar.
+      var TABLE_CUSHION_TOP_Y = 0.045;
+
       // A figura do paciente mora em js/sala/paciente.js: e geometria, e
       // saiu daqui na ETAPA 6. O ESTADO de posicionamento fica logo abaixo,
       // porque e estado — e disso a sala nao abre mao.
@@ -552,16 +560,12 @@
           patientPose.add(patient);
           patient.rotation.set(0, 0, 0);
         }
-        // O corpo é montado com o centro do torso a ~TORSO_R acima do plano
-        // do tampo. Para que a rotação de decúbito (roll/yaw) gire o corpo
-        // em torno do seu PRÓPRIO eixo central — e não em torno do plano do
-        // tampo (o que jogaria o corpo para baixo no ventral ou para o lado
-        // nas laterais) — colocamos o eixo de rotação (patientPose) na
-        // altura do centro do corpo e baixamos o corpo dentro dele pela
-        // mesma quantia.
-        var bodyCenter = TORSO_R;      // altura do eixo do corpo acima do tampo
-        patientPose.position.y = 0.02 + bodyCenter; // eixo na altura do centro
-        patient.position.set(0, -bodyCenter, 0);    // corpo desce até apoiar
+        // Primeiro posicionamos a origem do modelo no eixo de rotação. A
+        // altura definitiva é calculada abaixo a partir da caixa real do
+        // corpo já girado — uma constante de espessura só funciona em dorsal;
+        // em ventral e nos laterais atravessava o colchão e o tampo.
+        patientPose.position.set(0, 0, 0);
+        patient.position.set(0, 0, 0);
 
         // ENTRADA = qual extremidade entra PRIMEIRO no gantry.
         //
@@ -585,6 +589,31 @@
         var roll = (DECUBITO_ROLL[currentDecubito] || 0) * (yaw ? -1 : 1);
 
         patientPose.rotation.set(0, yaw, roll);
+
+        // No lateral, o braço que ficaria entre o tronco e o colchão é levado
+        // para o lado superior antes de medir a caixa e apoiar o paciente.
+        // Dorsal e ventral mantêm a pose original do asset.
+        if (SimTC.Sala3D.ajustarBracosNoLateral) {
+          SimTC.Sala3D.ajustarBracosNoLateral(
+            patient, patientPose, currentDecubito === "lateral-d" || currentDecubito === "lateral-e");
+        }
+
+        // Encosta a menor face da caixa do paciente no TOPO do colchão para
+        // qualquer decúbito. Trabalhamos em coordenadas de mundo porque a
+        // mesa pode já estar elevada, e depois trazemos o deslocamento de
+        // volta para o grupo que é filho dela.
+        patientPose.updateMatrixWorld(true);
+        var patientBox = new THREE.Box3().setFromObject(patient);
+        var cushionTopWorld = tableGroup.localToWorld(new THREE.Vector3(0, TABLE_CUSHION_TOP_Y, 0));
+        patientPose.position.y += cushionTopWorld.y - patientBox.min.y;
+        patientPose.updateMatrixWorld(true);
+
+        // O mostrador e o núcleo usam o centro do corpo de verdade, não a
+        // metade da espessura do decúbito dorsal.
+        patientBox.setFromObject(patient);
+        var patientCenter = patientBox.getCenter(new THREE.Vector3());
+        var tableOriginWorld = tableGroup.localToWorld(new THREE.Vector3(0, 0, 0));
+        PATIENT_CENTER_OFFSET_Y = patientCenter.y - tableOriginWorld.y;
 
         if (displayPositionEl) {
           displayPositionEl.textContent = decubitoLabel(currentDecubito) + " / " + entradaLabel(currentEntrada);
@@ -624,9 +653,7 @@
         var iso = null;
         try {
           if (patientPlaced && patientPose) {
-            var v = new THREE.Vector3();
-            patientPose.getWorldPosition(v);
-            iso = (v.y - ISO_Y) * 100;
+            iso = (FisicaMesa.getY() + PATIENT_CENTER_OFFSET_Y - ISO_Y) * 100;
           }
         } catch (e) { iso = null; }
         try {
@@ -838,7 +865,7 @@
 
       function updateLasers() {
         if (!laserGroup.visible) return;
-        var yFallback = FisicaMesa.getY() + 0.02; // topo do tampo como piso do laser
+        var yFallback = FisicaMesa.getY() + TABLE_CUSHION_TOP_Y;
         // Sagital central (12h): plano vertical x=0, pinta o topo do corpo.
         updateLongitudinalLine(longCentralLine, laserOriginTop, 0, yFallback);
         // Coronais laterais (3h/9h): plano HORIZONTAL na altura do
@@ -1259,12 +1286,10 @@
         escrever(hudHeightEl, "hudHeight", heightText + " <small>cm</small>", true);
         escrever(displayHeightEl, "dispHeight", heightText + " cm", false);
 
-        // Alinhamento no isocentro: o centro do corpo do paciente fica
-        // ~12 cm (metade da espessura) acima do topo do tampo. O tampo
-        // (tableY) precisa estar ~14 cm abaixo do isocentro para que o
-        // centro do paciente coincida com os 80 cm. Isso ensina o aluno
-        // a "descer a mesa" para centralizar o paciente.
-        var patientCenterY = FisicaMesa.getY() + 0.02 + PATIENT_HALF_THICKNESS;
+        // Alinhamento no isocentro: a altura do centro vem da caixa real já
+        // posicionada. Assim a indicação permanece correta em dorsal,
+        // ventral e nos dois decúbitos laterais.
+        var patientCenterY = FisicaMesa.getY() + PATIENT_CENTER_OFFSET_Y;
         var isoDelta = Math.abs(patientCenterY - ISO_Y);
         if (simulationRunning) {
           estadoMostrador = (isoDelta <= 0.01) ? "ISOCENTRO OK"

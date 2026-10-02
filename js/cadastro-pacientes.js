@@ -1,10 +1,9 @@
 /**
  * js/cadastro-pacientes.js
- * Simulador Educacional de TC — Lista de trabalho e exames realizados.
+ * Simulador Educacional de TC — Cadastro de pacientes e exames realizados.
  *
- * Passa a ser a CAMADA DE TELA da worklist do núcleo (core/model/patient.js).
- * Toda a regra de "quem está em exame" vive lá; aqui só se desenha e se
- * escuta o barramento.
+ * A regra de "quem está em exame" vive no núcleo (core/model/patient.js).
+ * Aqui se desenha o cadastro e se escuta o barramento.
  *
  * Corrige:
  *   B-10  o exame era do ÚLTIMO paciente cadastrado, inferido em silêncio;
@@ -32,8 +31,6 @@
     var fRegiao = document.getElementById("pac-regiao");
     var btnAdd = document.getElementById("pac-add");
     var btnLimpar = document.getElementById("pac-limpar");
-    var wlEl = document.getElementById("wl-list");
-    var wlContagem = document.getElementById("wl-contagem");
     var listEl = document.getElementById("pac-list");
     var estudoEl = document.getElementById("estudo-list");
     var examList = document.getElementById("ws-patient-list");
@@ -85,7 +82,7 @@
       if (!p) {
         nm.textContent = "Nenhum paciente em exame";
         meta.textContent = worklist.quantidade()
-          ? "Selecione o paciente na lista de trabalho"
+          ? "Selecione um paciente cadastrado"
           : "Cadastre o paciente para iniciar";
       } else {
         nm.textContent = p.nome + (p.prontuario ? " · " + p.prontuario : "");
@@ -144,8 +141,8 @@
           // Confirmação do app (js/ui/confirmar.js), não a do navegador: esta
           // diz o que se perde, e o foco começa no Cancelar.
           SimTC.confirmar({
-            titulo: "Excluir o paciente da lista de trabalho?",
-            texto: "\"" + p.nome + "\" sai da lista. Os exames já realizados " +
+            titulo: "Excluir paciente cadastrado?",
+            texto: "\"" + p.nome + "\" sai do cadastro. Os exames já realizados " +
                    "continuam no histórico, mas deixam de apontar para um paciente " +
                    "cadastrado. Se houver um exame em curso com ele, o exame é interrompido.",
             acao: "Excluir paciente"
@@ -161,7 +158,7 @@
           // Clicar no paciente em exame o retira de exame (sem apagá-lo).
           if (p.id === (worklist.selecionado() && worklist.selecionado().id)) {
             worklist.encerrarExame();
-            SimTC.showMessage("Exame encerrado. O paciente continua na lista de trabalho.", "info");
+            SimTC.showMessage("Exame encerrado. O paciente continua cadastrado.", "info");
           } else {
             worklist.selecionar(p.id);
             SimTC.showMessage("Paciente em exame: " + p.nome + ".", "success");
@@ -311,74 +308,6 @@
     });
 
     // ---- cadastro --------------------------------------------------------
-    // ---- WORKLIST DO DIA ------------------------------------------------
-    //
-    // A lista que chegaria do RIS. Selecionar uma linha PREENCHE o formulario
-    // e nao cadastra: conferir a identidade do paciente contra a requisicao e
-    // um ato do operador, e o simulador nao vai pular esse ato por ele.
-    //
-    // Uma linha ja cadastrada continua na lista, marcada — o aluno ve o que ja
-    // passou pela sala sem que a agenda mude de tamanho no meio do turno.
-    var agenda = (window.SimTC && SimTC.worklistExemplo) || [];
-
-    function jaCadastrado(item) {
-      return worklist.todos().some(function (p) {
-        return p.prontuario && p.prontuario === item.prontuario;
-      });
-    }
-
-    function carregarDaWorklist(item) {
-      if (fPront) fPront.value = item.prontuario;
-      fNome.value = item.nome;
-      if (fSexo) fSexo.value = item.sexo;
-      if (fIdade) fIdade.value = String(item.idade);
-      if (fPeso) fPeso.value = String(item.pesoKg);
-      if (fAltura) fAltura.value = String(item.alturaCm);
-      if (fRegiao) fRegiao.value = item.regiao;
-      renderWorklist();
-      // O foco vai para o NOME, que e o campo que se confere olhando para a
-      // pessoa — nao para o botao de cadastrar.
-      fNome.focus();
-      fNome.select();
-      SimTC.showMessage(
-        "Carregado da worklist: " + item.nome + " · " + item.regiao + " · " +
-        item.indicacao + " Confira a identidade e cadastre.", "info");
-    }
-
-    function renderWorklist() {
-      if (!wlEl) return;
-      wlEl.innerHTML = "";
-      var pendentes = 0;
-      agenda.forEach(function (item) {
-        var feito = jaCadastrado(item);
-        if (!feito) pendentes++;
-        var li = document.createElement("li");
-        li.className = "wl-item" + (feito ? " is-feito" : "") +
-          (item.prioridade === "urgente" ? " is-urgente" : "");
-        li.innerHTML =
-          '<button type="button" class="wl-item__botao">' +
-            '<span class="wl-item__hora">' + SimTC.esc(item.hora) + '</span>' +
-            '<span class="wl-item__corpo">' +
-              '<span class="wl-item__nome">' + SimTC.esc(item.nome) + '</span>' +
-              '<span class="wl-item__meta">' + SimTC.esc(item.prontuario) + ' · ' +
-                SimTC.esc(item.sexo[0]) + ' · ' + item.idade + ' anos · ' +
-                item.pesoKg + ' kg · ' + item.alturaCm + ' cm</span>' +
-              '<span class="wl-item__indic">' + SimTC.esc(item.regiao) + ' — ' +
-                SimTC.esc(item.indicacao) + '</span>' +
-            '</span>' +
-            '<span class="wl-item__selo">' +
-              (feito ? "cadastrado" : (item.prioridade === "urgente" ? "urgente" : "")) +
-            '</span>' +
-          '</button>';
-        li.querySelector(".wl-item__botao").addEventListener("click", function () {
-          carregarDaWorklist(item);
-        });
-        wlEl.appendChild(li);
-      });
-      if (wlContagem) {
-        wlContagem.textContent = pendentes + " de " + agenda.length + " a fazer";
-      }
-    }
 
     function limparFormulario() {
       if (fPront) fPront.value = "";
@@ -411,7 +340,7 @@
       // Cadastrar NÃO coloca em exame — a seleção é um ato separado.
       worklist.adicionar(novo);
       persist(novo).then(function () {
-        renderList(); renderExamList(); renderWorklist();
+        renderList(); renderExamList();
         limparFormulario();
         SimTC.showMessage(
           "Paciente \"" + novo.nome + "\" cadastrado" + (memoryFallback ? " (temporário)" : "") +
@@ -427,8 +356,8 @@
     // ---- barramento: a tela apenas reage --------------------------------
     Core.bus.on(EV.EXAME_SELECIONADO, function () { renderList(); renderExamList(); });
     Core.bus.on(EV.EXAME_ENCERRADO, function () { renderList(); renderExamList(); });
-    Core.bus.on(EV.PACIENTE_ADICIONADO, function () { renderList(); renderWorklist(); });
-    Core.bus.on(EV.PACIENTE_REMOVIDO, function () { renderList(); renderExamList(); renderWorklist(); });
+    Core.bus.on(EV.PACIENTE_ADICIONADO, function () { renderList(); });
+    Core.bus.on(EV.PACIENTE_REMOVIDO, function () { renderList(); renderExamList(); });
 
     // ---- carga inicial ---------------------------------------------------
     Promise.all([
@@ -441,7 +370,7 @@
     ]).then(function (r) {
       worklist.carregar(r[0] || []);
       estudos = r[1] || [];
-      renderList(); renderExamList(); renderEstudos(); renderWorklist();
+      renderList(); renderExamList(); renderEstudos();
     });
   }
 

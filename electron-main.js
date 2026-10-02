@@ -28,8 +28,9 @@ function registerSimuladorProtocol() {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    // Abre ocupando todo o monitor: sem barra de abas/endereço do navegador,
+    // sem menu nativo e sem a barra de tarefas do Windows sobre a simulação.
+    fullscreen: true,
     minWidth: 900,
     minHeight: 600,
     title: "Simulador TC Educacional",
@@ -39,11 +40,25 @@ function createWindow() {
       contextIsolation: true,
       // Sem preload — o app e puro frontend
     },
-    // Sem menu nativo (mais parecido com app dedicado)
+    // Sem menu nativo (mais parecido com app dedicado).
     autoHideMenuBar: true,
   });
 
+  win.setMenuBarVisibility(false);
   win.loadURL("simulador://app/index.html");
+
+  // F11 alterna a tela cheia e Esc permite sair dela, caso seja necessário
+  // acessar outra janela sem encerrar o simulador.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+    if (input.key === "F11") {
+      win.setFullScreen(!win.isFullScreen());
+      event.preventDefault();
+    } else if (input.key === "Escape" && win.isFullScreen()) {
+      win.setFullScreen(false);
+      event.preventDefault();
+    }
+  });
 
   // Em desenvolvimento, abre as DevTools automaticamente:
   // win.webContents.openDevTools();

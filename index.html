@@ -10,10 +10,10 @@
   <meta name="theme-color" content="#0a0e14" />
   <link rel="icon" href="icons/icon-192.png" />
 
-  <link rel="stylesheet" href="css/style.css?v=20260910cmd2" />
-  <link rel="stylesheet" href="css/mobile-tabs.css?v=20260910cmd2" />
+  <link rel="stylesheet" href="css/style.css?v=20261002volume-centralizado" />
+  <link rel="stylesheet" href="css/mobile-tabs.css?v=20261002comandos-flutuantes" />
 </head>
-<body data-theme="dark">
+<body class="is-mobile mob-3d" data-theme="dark">
 
   <!--
     A BARRA DE STATUS SAIU.
@@ -65,7 +65,6 @@
     <button class="mobile-switch__btn" id="mob-view-mpr" type="button" data-mobile-view="mpr">
       <span class="mobile-switch__icon" aria-hidden="true">▤</span><span>MPR</span>
     </button>
-    <button class="mobile-switch__exit" id="mob-exit" type="button" aria-label="Sair do modo celular" title="Sair do modo celular">✕</button>
   </nav>
   <div class="mobile-rotate" id="mobile-rotate" aria-hidden="true">↺ Use a horizontal na Sala 3D</div>
   <div class="mobile-banner" id="mobile-banner" role="status" aria-live="polite">Sem paciente em exame</div>
@@ -164,21 +163,6 @@
       <header class="dash-pane__head"><h2 class="dash-pane__title">Cadastro de pacientes</h2></header>
       <div class="dash-pane__body">
 
-        <!-- A WORKLIST VEM PRIMEIRO, e nao e ordem de tela: e ordem de
-             trabalho. Num tomografo o dia comeca na lista que chegou do RIS;
-             digitar paciente e a excecao, nao a regra. Ver js/worklist-exemplo.js. -->
-        <section class="cad-bloco cad-bloco--worklist">
-          <header class="cad-bloco__head">
-            <h3 class="cad-bloco__titulo">Worklist do dia</h3>
-            <span class="cad-bloco__contagem" id="wl-contagem"></span>
-          </header>
-          <p class="cad-bloco__dica">
-            Agendamentos recebidos do RIS. Clique para carregar no cadastro —
-            <strong>conferir a identidade antes de cadastrar é parte do exame.</strong>
-          </p>
-          <ul class="wl-list" id="wl-list"></ul>
-        </section>
-
         <section class="cad-bloco cad-bloco--form">
           <header class="cad-bloco__head">
             <h3 class="cad-bloco__titulo">Cadastro</h3>
@@ -257,10 +241,6 @@
             </div>
             <span class="acq-quad__ph" id="acq-topo-ph">Topograma não adquirido</span>
             <p class="ws-topo-readout" id="ws-topo-readout" hidden></p>
-            <!-- Faixa de comandos: recebe os botões da aquisição (Iniciar/Stop/
-                 Mover/Relatório) por reparenting SÓ no celular (aba Exame). No
-                 desktop fica vazia/oculta e os botões seguem na Sequência. -->
-            <div class="acq-topo-cmds" id="acq-topo-cmds" hidden></div>
           </div>
         </section>
 
@@ -283,23 +263,6 @@
                 <h3 class="ws-report__title">Relatório do exame — didático</h3>
                 <div class="ws-report__body" id="ws-report-body"></div>
                 <div class="ws-actions"><button class="ws-btn ws-btn--primary" id="ws-report-close" type="button">Ver cortes</button></div>
-              </div>
-
-              <!-- RESUMO DO QUE VAI SER IRRADIADO.
-                   Era um portao: depois do topograma, Iniciar abria um modal e
-                   so o "Confirmar e adquirir" disparava o volume. Dois cliques
-                   para a mesma decisao, e o segundo chegava quando o operador
-                   ja tinha decidido.
-                   O portao saiu; a INFORMACAO ficou, e melhorou de lugar — em
-                   vez de aparecer no instante do clique, fica na tela durante
-                   todo o planejamento, que e quando ela muda alguma coisa: e
-                   ajustando a faixa que se ve o DLP subir. -->
-              <div class="ws-report ws-confirm" id="ws-confirm" hidden>
-                <h3 class="ws-report__title">O que será irradiado</h3>
-                <div class="ws-report__body" id="ws-confirm-body"></div>
-                <div class="ws-actions">
-                  <button class="ws-btn ws-btn--ghost" id="ws-confirm-cancel" type="button">Cancelar exame</button>
-                </div>
               </div>
 
               <div class="ws-overlay ws-overlay--top" aria-label="Paciente em exame">
@@ -330,20 +293,11 @@
           </div>
         </section>
 
-        <!-- Q3 · SEQUÊNCIA DOS PROTOCOLOS (inferior esquerdo) -->
-        <section class="acq-quad acq-quad--seq" aria-label="Sequência dos protocolos">
-          <header class="acq-quad__head">Sequência dos protocolos</header>
+        <!-- Q3 · AQUISIÇÃO (inferior esquerdo) -->
+        <section class="acq-quad acq-quad--seq" aria-label="Aquisição">
+          <header class="acq-quad__head">Aquisição</header>
           <div class="acq-quad__body acq-seq-wrap">
             <ul class="acq-seq" id="acq-seq"></ul>
-            <!-- O QUE FALTA PARA INICIAR.
-                 O nucleo sempre soube dizer; ate agora so dizia DEPOIS de o
-                 operador apertar Iniciar, numa faixa fina no rodape, e numa
-                 tela diferente daquela que resolve. Agora aparece antes, aqui,
-                 e cada item leva a etapa que o resolve. -->
-            <div class="acq-faltas" id="acq-faltas" hidden>
-              <span class="acq-faltas__titulo">Para iniciar, falta:</span>
-              <ul class="acq-faltas__lista" id="acq-faltas-lista"></ul>
-            </div>
             <div class="acq-seq__foot ws-actions ws-actions--center">
               <button class="ws-btn" id="ws-exam-move" type="button" hidden>Mover</button>
               <button class="ws-btn" id="ws-exam-report" type="button" hidden>Relatório</button>
@@ -351,90 +305,47 @@
               <button class="ws-btn ws-btn--primary" id="ws-exam-start" type="button">Iniciar</button>
               <button class="ws-btn ws-btn--danger" id="ws-exam-stop" type="button" disabled>Stop</button>
             </div>
-            <p class="ws-note" id="ws-viewer-caption">Volume real anonimizado de TC de crânio, licença livre. Janela apenas de exibição — não é interpretação diagnóstica.</p>
           </div>
         </section>
 
-        <!-- Q4 · AJUSTE DO PROTOCOLO + SALA 3D (inferior direito) -->
-        <section class="acq-quad acq-quad--adj" aria-label="Ajuste do protocolo e sala 3D">
-          <header class="acq-quad__head">Ajuste do protocolo<span class="acq-quad__tag">· Sala 3D</span></header>
-          <div class="acq-quad__body acq-adj">
-            <div class="acq-adj__params">
-              <div class="acq-adj__subhead">Parâmetros</div>
-              <div class="acq-params" id="acq-params"></div>
-            </div>
-            <div class="acq-adj__3d">
-              <div class="acq-adj__subhead">Sala 3D</div>
-              <div class="acq3d" id="acq3d" hidden><span class="acq3d__tag">mesa em movimento</span><div class="acq3d__body" id="acq3d-body"></div></div>
-              <div class="pip" id="pip-3d" hidden>
-                <div class="pip__bar" id="pip-bar"><span>Sala 3D — mesa em movimento</span><button class="pip__hide" id="pip-hide" type="button" title="Ocultar janela">—</button></div>
-                <div class="pip__body" id="pip-body"></div>
-              </div>
+        <!-- Q4 · SALA 3D (inferior direito) -->
+        <section class="acq-quad acq-quad--3d" aria-label="Sala 3D">
+          <header class="acq-quad__head">Sala 3D<span class="acq-quad__tag">mesa em movimento</span></header>
+          <div class="acq-quad__body">
+            <div class="acq3d" id="acq3d" hidden>
+              <span class="acq3d__tag">mesa em movimento</span>
+              <div class="acq3d__body" id="acq3d-body"></div>
             </div>
           </div>
         </section>
 
       </div>
+      <!-- Comandos da aquisição: o conteúdo é movido da Sequência enquanto a
+           tela Exame está ativa. A posição inicial fica centralizada no rodapé. -->
+      <aside class="acq-command-float" id="acq-command-float" hidden aria-label="Comandos da aquisição">
+        <div class="acq-command-float__drag" id="acq-command-float-drag" title="Arraste para reposicionar os comandos">
+          <span>Comandos da aquisição</span><span class="acq-command-float__grip" aria-hidden="true">⠿</span>
+        </div>
+        <div class="acq-command-float__body" id="acq-command-float-body"></div>
+      </aside>
     </section>
 
     <div class="dash-gutter dash-gutter--h" id="dash-gutter-h-right" role="separator" aria-orientation="horizontal" aria-label="Redimensionar altura da coluna direita"></div>
 
-    <section class="dash-pane dash-pane--proto" id="pane-proto" aria-label="Cadastro e seleção de protocolos">
-      <header class="dash-pane__head"><h2 class="dash-pane__title">Protocolos</h2></header>
+    <section class="dash-pane dash-pane--proto" id="pane-proto" aria-label="Cadastro e seleção do protocolo de crânio">
+      <header class="dash-pane__head"><h2 class="dash-pane__title">Protocolo</h2></header>
       <div class="dash-pane__body">
         <div class="proto2">
           <div class="proto2__model">
-            <svg class="bodymap" viewBox="0 0 140 320" role="group" aria-label="Modelo do corpo — toque numa região">
-              <rect class="bodymap__zone" data-region="Membros" x="26" y="68" width="15" height="90" rx="7"><title>Membros</title></rect>
-              <rect class="bodymap__zone" data-region="Membros" x="99" y="68" width="15" height="90" rx="7"><title>Membros</title></rect>
-              <rect class="bodymap__zone" data-region="Membros" x="51" y="185" width="17" height="122" rx="8"><title>Membros</title></rect>
-              <rect class="bodymap__zone" data-region="Membros" x="72" y="185" width="17" height="122" rx="8"><title>Membros</title></rect>
-              <ellipse class="bodymap__zone" data-region="Crânio" cx="70" cy="32" rx="20" ry="24"><title>Crânio</title></ellipse>
-              <rect class="bodymap__zone" data-region="Pescoço" x="61" y="54" width="18" height="12" rx="3"><title>Pescoço</title></rect>
-              <rect class="bodymap__zone" data-region="Tórax" x="44" y="66" width="52" height="46" rx="8"><title>Tórax</title></rect>
-              <rect class="bodymap__zone" data-region="Abdome" x="48" y="113" width="44" height="40" rx="6"><title>Abdome</title></rect>
-              <rect class="bodymap__zone" data-region="Pelve" x="47" y="154" width="46" height="30" rx="7"><title>Pelve</title></rect>
+            <svg class="bodymap" viewBox="35 0 70 64" role="img" aria-label="Região disponível: Crânio">
+              <ellipse class="bodymap__zone is-active" cx="70" cy="32" rx="20" ry="24"><title>Crânio</title></ellipse>
             </svg>
-            <div class="bodymap__chips"><button type="button" class="bodymap__chip" data-region="Coluna">Coluna</button></div>
           </div>
 
           <div class="proto2__side">
-            <div class="proto2__region" id="proto-region-label">Selecione uma região no modelo</div>
+            <div class="proto2__region" id="proto-region-label">Crânio</div>
             <ul class="proto-list" id="proto-list"></ul>
-            <p class="ws-note" id="proto-empty" hidden>Nenhum protocolo nesta região ainda.</p>
-            <div class="ws-actions" id="ws-actions-view">
-              <button class="ws-btn" id="ws-protocol-edit" type="button" hidden>Editar</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-new" type="button" hidden>+ Novo protocolo</button>
-            </div>
-
-            <!-- Gestor de protocolos. Aparece quando ha um protocolo escolhido:
-                 duplicar para experimentar sem estragar a referencia, comparar
-                 para ver o que muda, exportar/importar para o professor
-                 distribuir um conjunto. -->
-            <div class="ws-actions proto-gestor" id="proto-gestor" hidden>
-              <button class="ws-btn ws-btn--ghost" id="proto-dup" type="button"
-                      title="Cria uma cópia editável deste protocolo">Duplicar</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-fav" type="button"
-                      aria-pressed="false" title="Marcar como favorito">☆ Favorito</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-lock" type="button"
-                      aria-pressed="false" title="Proteger contra edição">🔓 Travar</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-cmp" type="button"
-                      title="Ver o que difere entre dois protocolos">Comparar</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-exp" type="button"
-                      title="Gravar um arquivo .json com os protocolos desta região">Exportar</button>
-              <button class="ws-btn ws-btn--ghost" id="proto-imp" type="button"
-                      title="Ler um arquivo .json de protocolos">Importar</button>
-              <input type="file" id="proto-file" accept="application/json,.json" hidden>
-            </div>
-
-            <div class="proto-cmp" id="proto-compare" hidden>
-              <div class="proto-cmp__head">
-                <label class="proto-cmp__rot" for="proto-cmp-alvo">Comparar com</label>
-                <select class="proto-cmp__sel" id="proto-cmp-alvo"></select>
-                <button class="ws-btn ws-btn--ghost" id="proto-cmp-fechar" type="button">Fechar</button>
-              </div>
-              <div class="proto-cmp__corpo" id="proto-cmp-corpo"></div>
-            </div>
+            <p class="ws-note" id="proto-empty" hidden>O protocolo de crânio não está disponível.</p>
           </div>
         </div>
 
@@ -479,8 +390,7 @@
           </div>
           <p class="ws-note">Valores técnicos definidos e validados por você; salvos no dispositivo
             como números, com unidade e faixa. <strong>A dose não se digita:</strong> CTDIvol e DLP
-            são calculados a partir de kV, mAs, pitch e do comprimento da faixa, e aparecem na
-            confirmação antes de irradiar.</p>
+            são calculados a partir de kV, mAs, pitch e do comprimento da faixa.</p>
         </div>
       </div>
     </section>
@@ -562,9 +472,8 @@
   <script src="js/sala/gantry.js?v=20260910cmd2"></script>
   <script src="js/fisica-mesa.js?v=20260910cmd2"></script>
   <script src="js/sala-exame.js?v=20260910cmd2"></script>
-  <script src="js/worklist-exemplo.js?v=20260910cmd2"></script>
-  <script src="js/cadastro-pacientes.js?v=20260910cmd2"></script>
-  <script src="js/protocolos.js?v=20260910cmd2"></script>
+  <script src="js/cadastro-pacientes.js?v=20261001cadastro"></script>
+  <script src="js/protocolos.js?v=20261001cranio"></script>
   <!-- Origem das imagens: volumes de TC reais em HU (Fase 3) -->
   <script src="js/fonte-volume.js?v=20260910cmd2"></script>
   <script src="js/motor-imagem.js?v=20260910cmd2"></script>
@@ -574,10 +483,10 @@
   <script src="js/aquisicao/som.js?v=20260910cmd2"></script>
   <script src="js/aquisicao/box-planejamento.js?v=20260910cmd2"></script>
   <script src="js/aquisicao/maquina-fases.js?v=20260910cmd2"></script>
-  <script src="js/aquisicao/painel.js?v=20260910cmd2"></script>
-  <script src="js/aquisicao.js?v=20260910cmd2"></script>
+  <script src="js/aquisicao/painel.js?v=20261002etapas-aquisicao"></script>
+  <script src="js/aquisicao.js?v=20261001sem-resumo"></script>
   <script src="js/mpr.js?v=20260910cmd2"></script>
-  <script src="js/ui-layout.js?v=20260910cmd2"></script>
+  <script src="js/ui-layout.js?v=20261002comandos-flutuantes"></script>
 
   <!-- Orquestrador: chama init() de cada módulo na ordem certa -->
   <script src="script.js?v=20260910cmd2"></script>

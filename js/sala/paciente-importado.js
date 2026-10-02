@@ -216,6 +216,75 @@
   }
 
   /**
+   * O GLB de paciente exportado pelo projeto separa cada braço em nós .arm.L
+   * e .arm.R. Reagrupamos suas partes para poder deslocar o braço dependente
+   * como uma unidade no decúbito lateral, sem deformar o resto do corpo.
+   */
+  function agruparBracos(obj) {
+    var grupos = { L: new THREE.Group(), R: new THREE.Group() };
+    grupos.L.name = "braco-importado.L";
+    grupos.R.name = "braco-importado.R";
+    var encontrou = { L: false, R: false };
+    var filhos = obj.children.slice();
+
+    filhos.forEach(function (filho) {
+      var lado = /\.arm\.([LR])$/.exec(filho.name || "");
+      if (!lado) return;
+      var grupo = grupos[lado[1]];
+      grupo.add(filho);
+      encontrou[lado[1]] = true;
+    });
+
+    ["L", "R"].forEach(function (lado) {
+      if (!encontrou[lado]) return;
+      obj.add(grupos[lado]);
+      grupos[lado].userData.posicaoRepouso = grupos[lado].position.clone();
+    });
+    return encontrou.L && encontrou.R ? grupos : null;
+  }
+
+  function restaurarBracos(bracos) {
+    if (!bracos) return;
+    [bracos.L, bracos.R].forEach(function (braco) {
+      if (!braco || !braco.userData.posicaoRepouso) return;
+      braco.position.copy(braco.userData.posicaoRepouso);
+    });
+  }
+
+  /**
+   * Em lateral, o braço dependente ficava preso entre o tronco e a mesa. Ele
+   * passa para o lado superior, alinhado ao outro braço e com folga mínima,
+   * para ambos seguirem visíveis e fora do colchão. Em dorsal/ventral a pose
+   * exportada é restaurada sem qualquer deslocamento.
+   */
+  function ajustarBracosNoLateral(corpo, pose, eLateral) {
+    var bracos = corpo.userData.bracosImportados;
+    restaurarBracos(bracos);
+    if (!bracos || !eLateral) return;
+
+    pose.updateMatrixWorld(true);
+    var caixaL = caixa(bracos.L);
+    var caixaR = caixa(bracos.R);
+    var centroL = caixaL.getCenter(new THREE.Vector3());
+    var centroR = caixaR.getCenter(new THREE.Vector3());
+    var inferior = centroL.y <= centroR.y ? bracos.L : bracos.R;
+    var superior = inferior === bracos.L ? bracos.R : bracos.L;
+    var caixaInferior = inferior === bracos.L ? caixaL : caixaR;
+    var caixaSuperior = superior === bracos.L ? caixaL : caixaR;
+    var centroInferior = caixaInferior.getCenter(new THREE.Vector3());
+    var centroSuperior = caixaSuperior.getCenter(new THREE.Vector3());
+
+    // Translada no mundo para o lado superior. O pequeno avanço longitudinal
+    // evita que as duas malhas coincidam exatamente uma sobre a outra.
+    var destinoMundo = inferior.getWorldPosition(new THREE.Vector3());
+    destinoMundo.y += (centroSuperior.y - centroInferior.y) + 0.035;
+    destinoMundo.z += 0.08;
+    inferior.parent.worldToLocal(destinoMundo);
+    inferior.position.copy(destinoMundo);
+    pose.updateMatrixWorld(true);
+  }
+
+  /**
    * Tenta trocar a figura procedural pelo modelo da pasta.
    *
    * Nunca rejeita: um problema vira um relatório, e a figura procedural fica.
@@ -247,6 +316,7 @@
         // na tela em vez de sumir e deixar a mesa vazia.
         while (corpo.children.length) corpo.remove(corpo.children[0]);
         corpo.add(lido.objeto);
+        corpo.userData.bracosImportados = agruparBracos(lido.objeto);
 
         return {
           trocou: true, avisos: avisos, medidas: medidas,
@@ -265,6 +335,7 @@
   window.SimTC = window.SimTC || {};
   SimTC.Sala3D = window.SimTC.Sala3D || {};
   SimTC.Sala3D.tentarImportarPaciente = tentarImportar;
+  SimTC.Sala3D.ajustarBracosNoLateral = ajustarBracosNoLateral;
   SimTC.Sala3D.PASTA_PACIENTE = PASTA;
 
 })();

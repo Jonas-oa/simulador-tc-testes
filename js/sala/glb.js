@@ -255,7 +255,11 @@
 
     if (no.mesh != null) obj.add(montarMalha(g, bin, no.mesh, avisos));
     if (no.skin != null) {
-      avisos.push("o modelo tem esqueleto; a malha vem na POSE DE BIND (sem animação).");
+      var avisoPele = "o modelo tem esqueleto; a malha vem na POSE DE BIND (sem animação).";
+      // Um rig pode associar dezenas de nós de malha ao mesmo esqueleto. O
+      // operador precisa saber da limitação, mas não receber a mesma frase
+      // repetida uma vez por parte do corpo.
+      if (avisos.indexOf(avisoPele) === -1) avisos.push(avisoPele);
     }
     (no.children || []).forEach(function (f) {
       var filho = montarNo(g, bin, f, avisos, vistos);

@@ -580,7 +580,6 @@
       if (moveBtn) moveBtn.hidden = true;
       if (reportBtn) reportBtn.hidden = true;
       if (reportEl) reportEl.hidden = true;
-      hideConfirm();
       if (stopBtn) stopBtn.disabled = true;
       counter.textContent = "—";
       topoImg.style.clipPath = "";
@@ -876,7 +875,6 @@
     function toVolAcq() {
       MaquinaFases.definirFase("volAcq"); loaded = false;
       definirPlanoNoNucleo();   // a faixa que sera irradiada, registrada no exame
-      hideConfirm();
       if (topo) topo.hidden = true;
       if (readout) readout.hidden = true;
       img.hidden = false; ctrl.hidden = false;
@@ -1316,70 +1314,6 @@
       }
     });
 
-    // Iniciar é contextual: em idle adquire o topograma; em plan (com a
-    // caixa válida — senão fica travado) inicia a aquisição do volume.
-    // Confirmação pré-aquisição: resumo do exame + checklist de segurança
-    // (paciente, posicionamento, faixa/FOV, isocentro) antes de irradiar.
-    function buildConfirm() {
-      var bodyEl = document.getElementById("ws-confirm-body");
-      if (!bodyEl) return;
-      var pac = (SimTC.examSessionApi && SimTC.examSessionApi.get) ? SimTC.examSessionApi.get() : null;
-      var prot = protocoloVigente();
-      var pp = protocolParams();
-      var scanLen = Math.max(20, (rangeSpan() / 100) * topoLenMm());
-      // Um só DLP nesta tela, e calculado — ver dosePrevista().
-      var rel = dosePrevista();
-      var iso = (SimTC.tableDriveApi && SimTC.tableDriveApi.getIsoOffsetCm) ? SimTC.tableDriveApi.getIsoOffsetCm() : null;
-      function chk(ok, txt) { return '<span class="' + (ok ? "is-good" : "is-bad") + '">' + (ok ? "✓" : "⚠") + " " + txt + "</span>"; }
-      var modoTxt = pp.modo === "sequencial" ? "axial sequencial" : "helicoidal";
-      var rows = [];
-      rows.push("<strong>Paciente:</strong> " + (pac ? esc(pac.nome) + (pac.prontuario ? " · Pront. " + esc(pac.prontuario) : "") : "—"));
-      var scoutTxt = pp.scout === "frontal" ? "frontal/AP" : "lateral";
-      var fovLbl = pp.scout === "frontal" ? "FOV R-L" : "FOV A-P";
-      rows.push("<strong>Protocolo:</strong> " + (prot ? esc(prot.nome) : "—") + " · scout " + scoutTxt + " · " + modoTxt + (pp.tiltDeg ? (", tilt " + SimTC.fmt.graus(pp.tiltDeg)) : "") + " · " + (pp.direcao === "craniocaudal" ? "crânio-caudal" : "caudo-cranial"));
-      rows.push("<strong>Faixa:</strong> " + Math.round(scanLen) + " mm · <strong>" + fovLbl + ":</strong> " + SimTC.fmt.pct(Math.max(0, fovSpan())));
-      if (rel && rel.ctdivol != null && rel.dlp != null) {
-        rows.push("<strong>Dose prevista:</strong> CTDIvol " + SimTC.fmt.mGy(rel.ctdivol) +
-          " · DLP " + SimTC.fmt.mGycm(rel.dlp) +
-          " <small>(calculado de kV, mAs, pitch e faixa)</small>");
-      } else {
-        rows.push("<strong>Dose prevista:</strong> não calculada — informe kV e mAs no protocolo.");
-      }
-      rows.push("<br><strong>Checklist pré-aquisição</strong>");
-      rows.push(chk(!!pac, "Paciente cadastrado"));
-      rows.push(chk(!SimTC.tableDriveApi || SimTC.tableDriveApi.isPatientOnTable(), "Paciente posicionado na mesa"));
-      rows.push(chk(problems().length === 0, "Faixa e FOV válidos"));
-      if (iso != null) rows.push(chk(Math.abs(iso) <= 4, "Isocentro (" + SimTC.fmt.cm(iso) + " do centro)"));
-      // ---- ACHADOS DO MOTOR DE VALIDACAO (Fase 10) ---------------------
-      // Confirmacao INFORMADA, nao bloqueio: o aluno ve a consequencia
-      // prevista e decide. So ERRO impede — e erro aqui significa
-      // incoerencia interna ou impossibilidade fisica, nao opiniao.
-      var vd = validarExameAtual();
-      if (vd) {
-        if (vd.erros.length) {
-          rows.push("<br><strong>Impedimentos</strong>");
-          vd.erros.forEach(function (a) {
-            rows.push('<span class="is-bad">⛔ ' + esc(a.texto) + '</span>' +
-              (a.consequencia ? '<br><small>' + esc(a.consequencia) + '</small>' : ""));
-          });
-        }
-        if (vd.avisos.length) {
-          rows.push("<br><strong>Consequências previstas</strong>");
-          vd.avisos.forEach(function (a) {
-            rows.push('<span class="is-warn">⚠ ' + esc(a.texto) + '</span>' +
-              (a.consequencia ? '<br><small>' + esc(a.consequencia) + '</small>' : ""));
-          });
-        }
-        if (vd.infos.length) {
-          vd.infos.forEach(function (a) {
-            rows.push('<small>ℹ ' + esc(a.texto) +
-              (a.consequencia ? " — " + esc(a.consequencia) : "") + '</small>');
-          });
-        }
-      }
-      rows.push("<em>Confira antes de irradiar — treinamento de operação.</em>");
-      bodyEl.innerHTML = rows.join("<br>");
-    }
     /**
      * Roda o motor de validacao sobre o protocolo e o plano atuais.
      * Devolve null quando o nucleo nao esta disponivel — a tela nunca inventa
@@ -1522,8 +1456,35 @@
       var pr = Core.model.normalizarProtocolo(cru);
       var faixa = faixaEmMm();
       var vol = SimTC.FonteVolume && SimTC.FonteVolume.volume(regiaoDoProtocolo());
-      var lim = vol && SimTC.FonteVolume.limitesAnatomicos(regiaoDoProtocolo(), isFrontal() ? "frontal" : "lateral");
-      var larguraPac = (vol && lim) ? (lim.perp[1] - lim.perp[0]) * vol.extentMm()[0] : null;
+
+      // LARGURA DO PACIENTE PARA O FOV — a maior dimensao NO PLANO AXIAL.
+      //
+      // Estava errado de duas formas, e as duas apareciam juntas num cranio.
+      //
+      // 1. O EIXO. `limitesAnatomicos` devolve `perp` como fracao do eixo
+      //    perpendicular AO TOPOGRAMA: y (profundidade antero-posterior) no
+      //    scout lateral, x (largura) no frontal. O codigo multiplicava sempre
+      //    por `extentMm()[0]`, o extent de X — de modo que, num scout
+      //    lateral, uma fracao do eixo Y era escalada pelo tamanho do eixo X.
+      //
+      // 2. A GRANDEZA. O FOV e um circulo no plano axial: ele tem de caber a
+      //    secao INTEIRA, nao a dimensao que o topograma do momento mostra.
+      //    Com a conta antiga, trocar o scout de lateral para frontal mudava
+      //    se o FOV "cabia" — e isso nao quer dizer nada: ou o FOV cobre a
+      //    cabeca, ou nao cobre.
+      //
+      // Agora sao as duas medidas, cada uma escalada pelo seu eixo, e vale a
+      // maior. As duas ja vem do cache do FonteVolume.
+      var larguraPac = null;
+      if (vol && SimTC.FonteVolume.limitesAnatomicos) {
+        var reg = regiaoDoProtocolo();
+        var ext = vol.extentMm();
+        var limX = SimTC.FonteVolume.limitesAnatomicos(reg, "frontal");  // perp = x
+        var limY = SimTC.FonteVolume.limitesAnatomicos(reg, "lateral");  // perp = y
+        var wx = limX ? (limX.perp[1] - limX.perp[0]) * ext[0] : 0;
+        var wy = limY ? (limY.perp[1] - limY.perp[0]) * ext[1] : 0;
+        if (wx || wy) larguraPac = Math.max(wx, wy);
+      }
       var comprimento = Math.abs(faixa.fimMm - faixa.inicioMm);
       var rel = dosePrevista();
       return Core.validacao.validar(pr, {
@@ -1534,23 +1495,6 @@
       });
     }
 
-    function showConfirm() {
-      buildConfirm();
-      var el = document.getElementById("ws-confirm");
-      if (el) el.hidden = false;
-      // ERRO impede irradiar; AVISO nao. O botao muda de texto para deixar
-      // claro que o operador esta assumindo a consequencia.
-      var vd = validarExameAtual();
-      var ok = document.getElementById("ws-confirm-ok");
-      if (ok) {
-        var temErro = !!(vd && vd.erros.length);
-        ok.disabled = temErro;
-        ok.textContent = temErro ? "Corrija os impedimentos"
-          : (vd && vd.avisos.length ? "Executar mesmo assim" : "Confirmar e iniciar");
-      }
-    }
-    function hideConfirm() { var el = document.getElementById("ws-confirm"); if (el) el.hidden = true; }
-
     function onStart() {
       if (MaquinaFases.atual() === "plan") {
         if (problems().length) { renderReadout(); return; }
@@ -1558,9 +1502,16 @@
           SimTC.showMessage("Use MOVER para levar a mesa à posição inicial da faixa antes de iniciar.", "warning");
           return;
         }
-        // Confirmação pré-aquisição (como no console real): resumo + checklist
-        // antes de irradiar. O disparo do volume só ocorre no "Confirmar".
-        showConfirm();
+        // Erros de validação impedem irradiar; os demais parâmetros seguem
+        // disponíveis nos controles da tela de exame.
+        var vd = validarExameAtual();
+        if (vd && vd.erros.length) {
+          SimTC.showMessage("Nao e possivel irradiar: " +
+            vd.erros.map(function (x) { return x.mensagem || x.texto || String(x); }).join(" "),
+            "error");
+          return;
+        }
+        toVolAcq();
         return;
       }
       if (MaquinaFases.atual() !== "idle") return;
@@ -1570,9 +1521,8 @@
       // A tela tinha a sua própria lista, e ela não incluía o protocolo. Sem
       // protocolo selecionado o exame começava assim mesmo: caía no fantoma
       // procedural, rodava com pitch e modo padrão, sem kV e sem mAs, e a
-      // confirmação informada — que existe justamente para mostrar a
-      // consequência antes de irradiar — exibia três vistos verdes e liberava
-      // o botão, porque sem protocolo não há o que validar.
+      // a tela de aquisição poderia exibir dados incoerentes e liberar o
+      // botão, porque sem protocolo não há o que validar.
       //
       // O núcleo já sabia dizer o que faltava, com o texto certo, e nunca era
       // perguntado. Agora é. A lista antiga fica como reserva para o caso de o
@@ -1715,13 +1665,6 @@
       ].forEach(function (ev) { Core.bus.on(ev, renderFaltas); });
       renderFaltas();
     })();
-    var confirmOk = document.getElementById("ws-confirm-ok");
-    var confirmCancel = document.getElementById("ws-confirm-cancel");
-    if (confirmOk) confirmOk.addEventListener("click", function () {
-      hideConfirm();
-      if (MaquinaFases.atual() === "plan") toVolAcq();
-    });
-    if (confirmCancel) confirmCancel.addEventListener("click", hideConfirm);
     var reportClose = document.getElementById("ws-report-close");
     if (reportClose) reportClose.addEventListener("click", function () { if (reportEl) reportEl.hidden = true; });
     if (reportBtn) reportBtn.addEventListener("click", function () {

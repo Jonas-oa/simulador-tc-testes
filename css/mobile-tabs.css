@@ -280,50 +280,16 @@ body.is-mobile.mob-3d #pane-sim .console .panel .panel__resize {
 }
 
 /* =====================================================================
-   COMANDOS DA AQUISIÇÃO NA LATERAL DO TOPOGRAMA (celular, ambas orientações)
-   No celular (aba Exame) os botões Iniciar/Stop/Mover/Relatório são
-   reparentados (JS) para a faixa #acq-topo-cmds, à DIREITA do quadrante do
-   Topograma. Aqui só o estilo: o corpo do Topograma vira linha (imagem +
-   faixa de comandos) e os botões empilham na vertical. No desktop a faixa
-   fica oculta/vazia (os botões seguem no rodapé da Sequência).
+   TOPOGRAMA CENTRALIZADO (celular, ambas orientações)
+   Os comandos ficam na barra flutuante da tela Exame. O primeiro quadrante
+   permanece livre para a imagem e as marcações de planejamento.
    ===================================================================== */
 body.is-mobile.mob-aq .acq-quad--topo .acq-quad__body {
-  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
 }
 body.is-mobile.mob-aq #acq-topo-body > .ws-topo { flex: 0 1 auto; min-width: 0; }
 body.is-mobile.mob-aq #acq-topo-body > .acq-quad__ph { flex: 0 1 auto; text-align: center; }
-body.is-mobile.mob-aq #acq-topo-cmds {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  justify-content: center;
-  align-self: stretch;
-  gap: 8px;
-  padding: 4px 2px;
-  margin-left: auto; /* encosta a faixa na borda direita do quadrante */
-}
-body.is-mobile.mob-aq #acq-topo-cmds[hidden] { display: none; }
-body.is-mobile.mob-aq #acq-topo-cmds .acq-seq__foot {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  width: 100%;
-}
-body.is-mobile.mob-aq #acq-topo-cmds .ws-btn {
-  min-height: 0;
-  padding: 10px 14px;
-  font-size: 0.78rem;
-  white-space: nowrap;
-  width: 100%;
-}
-/* Readout da faixa não corre por baixo da faixa de comandos */
-body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
-  max-width: calc(100% - 96px);
-}
 
 /* =====================================================================
    ETAPA B — Modo celular em PAISAGEM (uso horizontal, estilo console)
@@ -379,7 +345,7 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
     grid-auto-rows: 1fr;
     align-content: stretch;
     gap: 4px;
-    padding-top: 42px; /* reserva o topo da faixa para o botão Sair (✕) */
+    padding-top: 5px;
     border-radius: 14px;
   }
   body.is-mobile .mobile-switch__btn {
@@ -389,16 +355,6 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
     border-radius: 9px;
   }
   .mobile-switch__icon { font-size: 0.95rem; margin-bottom: 1px; }
-
-  /* O ✕ é filho da faixa (que tem backdrop-filter e vira bloco de
-     contenção do position:fixed): fica no topo, centralizado, sem
-     sobrepor os itens de navegação abaixo. */
-  body.is-mobile .mobile-switch__exit {
-    top: 6px;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-  }
 
   /* --- Dashboard: sem barra na base; conteúdo recuado da faixa lateral
      e empurrado para baixo do banner de contexto. --- */
@@ -468,7 +424,7 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile.mob-aq .acq-quad__head { height: 20px; padding: 0 8px; font-size: var(--fs-micro); }
   body.is-mobile.mob-aq .acq-quad__ph { font-size: var(--fs-mini); }
 
-  /* Q3 · Sequência dos protocolos */
+  /* Q3 · Aquisição */
   body.is-mobile.mob-aq .acq-seq-wrap { padding: 6px; gap: 5px; }
   body.is-mobile.mob-aq .acq-step { padding: 4px 7px; gap: 6px; }
   body.is-mobile.mob-aq .acq-step__num { width: 16px; height: 16px; font-size: var(--fs-micro); }
@@ -478,13 +434,6 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile.mob-aq .acq-seq-wrap .ws-note { font-size: var(--fs-micro); }
   body.is-mobile.mob-aq .acq-seq__foot .ws-btn { min-height: 0; padding: 6px 12px; font-size: 0.74rem; }
 
-  /* Q4 · Ajuste do protocolo */
-  body.is-mobile.mob-aq .acq-adj__subhead { height: 16px; font-size: var(--fs-micro); }
-  body.is-mobile.mob-aq .acq-params { padding: 6px; gap: 4px 8px; }
-  body.is-mobile.mob-aq .acq-param__k { font-size: var(--fs-micro); }
-  body.is-mobile.mob-aq .acq-param__v { font-size: var(--fs-mini); }
-  body.is-mobile.mob-aq .acq-params__empty { font-size: var(--fs-micro); padding: 6px; }
-
   /* Q2 · Volumes: overlay do paciente/placeholder/controles compactos */
   body.is-mobile.mob-aq .ws-viewer__placeholder { font-size: var(--fs-mini); }
   body.is-mobile.mob-aq .ws-list--overlay .ws-list__name { font-size: 0.7rem; }
@@ -492,17 +441,17 @@ body.is-mobile.mob-aq .acq-quad--topo .ws-topo-readout {
   body.is-mobile.mob-aq .ws-slice-counter { font-size: var(--fs-micro); min-width: 0; }
   body.is-mobile.mob-aq .ws-plane__btn { padding: 2px 9px; font-size: var(--fs-micro); }
 
-  /* Sala 3D (dentro do quadrante Ajuste): remove as informações suspensas
-     que sobrepõem a imagem — HUD (MESA/VELOC/ALTURA) e etiqueta de estado.
-     O banner do topo já traz posição/velocidade/status. */
-  body.is-mobile.mob-aq .acq-adj__3d .viewport__overlay,
-  body.is-mobile.mob-aq .acq-adj__3d .acq3d__tag { display: none !important; }
+  /* Sala 3D no quadrante de aquisição: o banner já traz o contexto. */
+  body.is-mobile.mob-aq #acq3d-body .viewport__overlay { display: none !important; }
 
-  /* Paciente & Protocolo lado a lado (como no PC): cadastro à esquerda,
-     protocolo à direita. Em retrato ficam empilhados (regra fora daqui). */
+  /* Paciente & Protocolo lado a lado, em duas metades iguais. */
   body.is-mobile.mob-pacproto .dashboard { flex-direction: row; }
-  body.is-mobile.mob-pacproto #pane-pac { flex: 0 0 clamp(280px, 38%, 420px); height: auto; }
-  body.is-mobile.mob-pacproto #pane-proto { flex: 1 1 auto; height: auto; }
+  body.is-mobile.mob-pacproto #pane-pac,
+  body.is-mobile.mob-pacproto #pane-proto {
+    flex: 1 1 0;
+    min-width: 0;
+    height: auto;
+  }
 
   /* MPR: coronal e sagital lado a lado, aproveitando a largura. */
   body.is-mobile.mob-mpr .mpr-body { flex-direction: row; align-items: stretch; }
